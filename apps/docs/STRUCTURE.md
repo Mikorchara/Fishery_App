@@ -25,6 +25,7 @@ Fishery_Management/
 │   └── docs/                      # 当前操作、开发合同与历史设计
 ├── scripts/
 │   ├── dev/                       # 一行启动、独立管理测试
+│   ├── maintenance/               # 受控数据迁移维护，非日常启动
 │   ├── packaging/                 # MIG-2发行模板/白名单staging检查
 │   ├── qualification/             # 管理专用显式资格CLI
 │   └── manual_real_tests/          # 用户主动真实测试，默认dry-run
@@ -34,6 +35,6 @@ Fishery_Management/
 
 管理依赖为 Web → AI service → Backend；AI service 的业务 Handler 查询同一 Monitoring / Knowledge 服务。Monitoring 不依赖 AI；Backend 不依赖 Flask、SQLite 或业务模块。执行循环不复制。
 
-正式数据将放用户应用数据目录，与代码/凭据分离；本轮只使用 outputs 下隔离实例。没有 src/fishery_ai、旧根 tests 或旧 outputs。知识固定 JSON 仅为测试与资格夹具，正式内容唯一权威为所选实例 knowledge.sqlite3。
+正式用户实例已迁移，显式 `--user-data` 使用 `%LOCALAPPDATA%\FisheryManagement`；开发用 `--data-root` 指向隔离实例。代码为兼容旧合同保留仓库相对默认路径，日常不要省略数据根参数。凭据使用独立私有 Store，不在业务实例根。没有 src/fishery_ai、旧根 tests 或旧 outputs 运行依赖。知识固定 JSON 仅为测试与资格夹具，正式内容唯一权威为所选实例 knowledge.sqlite3。
 
-Tool、Prompt、Scope 和安全边界见 [开发指南](deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。当前命令见 [BUILD_RUN](BUILD_RUN.md)；旧目录地图存于 history/，只是来源记录。
+用户操作与数据位置见 [使用指南](USER_GUIDE.md)；Tool、Prompt、Scope 和安全边界见 [开发指南](deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。当前工程命令见 [BUILD_RUN](BUILD_RUN.md)；旧目录地图存于 history/，只是来源记录。

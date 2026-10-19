@@ -1,5 +1,7 @@
 # MIG-3：独立项目迁移记录
 
+> 历史阶段快照：本文的“本轮未迁移”“待初始提交”“后续”等描述指 MIG-3 结束时，保留作为当时证据。当前已有独立提交 `6e67202` 与 MIG-4 提交 `9666ae7`；业务数据迁移见 [MIG-4](MIG4_DATA_MIGRATION.md)，MIG-5 凭据及基本网页验收由用户确认完成。日常操作改看 [使用指南](../USER_GUIDE.md) 和 [BUILD_RUN](../BUILD_RUN.md)，不要按本文旧待办重复初始化或迁移。
+
 源基线：MIG-1 `dfa60db`、MIG-2 `2b099cf`；源工作树干净。新项目位于 `D:\CodexProject\Fishery_Management`，采用独立 Git 初始基线，不引入旧提交历史。
 
 ## 复制与调整边界

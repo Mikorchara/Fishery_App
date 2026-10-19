@@ -1,6 +1,8 @@
 # MIG-4B：正式业务数据受控迁移
 
-当前阶段：**正式业务数据迁移及独立只读复核已完成，人工页面验收待进行**。用户在独立 PowerShell 执行得到 MIGRATED_AND_VERIFIED，随后 --verify 返回 VERIFIED_READ_ONLY。正式目标已经存在，不应再次执行 dry-run/apply 迁移流程；下方迁移命令保留为操作记录。
+当前阶段：**正式业务数据迁移及独立只读复核已完成；后续凭据准备与基本网页人工验收也已由用户确认完成（MIG-5）**。用户在独立 PowerShell 执行得到 MIGRATED_AND_VERIFIED，随后 --verify 返回 VERIFIED_READ_ONLY。正式目标已经存在，不应再次执行 dry-run/apply 迁移流程；下方迁移命令、数量、PID 和设置值只保留为当时操作记录，不是当前运行状态或可复用的批准。
+
+日常启动与备份边界以 [使用指南](../USER_GUIDE.md) 和 [BUILD_RUN](../BUILD_RUN.md) 为准。本次文档更新只记录用户验收反馈，没有再读取数据库、凭据或重新运行真实请求，不构成新的 Provider 资格。
 
 Codex 中此前用户目录安全检查返回 ENV_PERMISSION_ERROR；用户独立 PowerShell 检查通过后完成迁移。没有修改 AppData ACL、Credential Store 或安全规则。
 
@@ -24,7 +26,7 @@ Codex 中此前用户目录安全检查返回 ENV_PERMISSION_ERROR；用户独�
 
 用户提供的独立 --verify 输出确认五个文件通过。随后 Codex 只读核对备份回执、正式五文件的SHA-256，全部与 verification.json 一致，未再次迁移或写入用户数据。SQLite文件哈希相对源库发生变化符合Backup API行为，逻辑数据与Schema核验通过；三份JSON哈希与源完全一致。
 
-本次代码侧仅新增迁移脚本、专项测试和本文档；18项虚构数据离线安全测试通过。尚未自动启动Web、Simulator或进行网页Key测试。下一步仅进行下文“页面验收与启动”的只浏览验收，保留备份；真实Provider测试与Simulator写入另行执行。
+MIG-4 代码侧仅新增迁移脚本、专项测试和本文档；18项虚构数据离线安全测试通过。当时没有自动启动 Web、Simulator 或进行网页 Key 测试，后续基本人工验收现已由用户确认完成。下文“页面验收与启动”保留迁移当时的分步说明；日常使用不需要重走该流程，备份继续保留。
 
 ## 文件边界
 

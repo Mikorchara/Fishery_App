@@ -1,5 +1,7 @@
 # MIG-2：独立发行与实例数据准备
 
+> 历史准备方案：下文“当前根 pyproject”“未来 MIG-3”“原工作区”等均指当时的混合源仓库。现在 Fishery_Management 已独立，使用本仓库根 `pyproject.toml` 构建；MIG-4 数据已迁移，MIG-5 凭据和基本网页验收由用户确认完成。当前命令见 [BUILD_RUN](../BUILD_RUN.md)，日常操作见 [使用指南](../USER_GUIDE.md)。此处保留准备过程，不作为重新复制旧工程或迁移真实数据的指令。
+
 本阶段只在原仓库准备工程能力，没有创建 Fishery_Management、迁移真实数据或更改 Credential 身份。MIG-1 后正式管理链已不依赖旧包；Prototype 保留独立实验定位。
 
 ## 发行边界
