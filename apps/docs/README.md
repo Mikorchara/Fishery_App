@@ -4,6 +4,7 @@
 
 - [使用与学习指南（用户入口）](USER_GUIDE.md)
 - [启动、安装、实例与测试](BUILD_RUN.md)
+- [两项目启动方式比较与统一边界](deep-dive/LAUNCHER_COMPARISON.md)
 - [目录与职责](STRUCTURE.md)
 - [监测与业务数据合同](INTEGRATION.md)
 - [历史趋势图、归一化与布局](deep-dive/HISTORY_CHART_UI.md)

@@ -1,10 +1,12 @@
 """Real Windows consoles/process trees and ten-second data, isolated data only."""
 import ctypes
+from contextlib import closing
 from ctypes import wintypes as wt
 import json
 import os
 from pathlib import Path
 import socket
+import sqlite3
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -83,17 +85,31 @@ class WindowsDemoLifecycleTests(unittest.TestCase):
             time.sleep(.1)
         self.fail('owned session condition timed out')
 
-    def start(self):
+    def start(self, *, interactive=False, menu_input=None, wait_running=True):
         pid_file = self.root/'supervisor.pid'
         pid_file.unlink(missing_ok=True)
         # Record the executing Python PID (the venv bootstrap has another PID).
-        code = ('import os,sys,runpy;from pathlib import Path;'
-                'Path(sys.argv.pop(1)).write_text(str(os.getpid()));'
-                'script=sys.argv.pop(1);sys.argv[0]=script;'
-                'runpy.run_path(script,run_name="__main__")')
+        # A pipe supplies fictional keyboard input to the real console wrapper.
+        # Production keeps its own console input handle; no product test hook.
+        code = '''import os,sys,runpy,json,subprocess
+from pathlib import Path
+Path(sys.argv.pop(1)).write_text(str(os.getpid()))
+menu_input=json.loads(sys.argv.pop(1))
+original_launch=subprocess.Popen
+def launch(command, **options):
+    controlled=menu_input is not None and '--console-role' in command and command[command.index('--console-role')+1]=='simulator'
+    if controlled: options['stdin']=subprocess.PIPE
+    child=original_launch(command, **options)
+    if controlled:
+        child.stdin.write(menu_input.encode());child.stdin.close()
+    return child
+subprocess.Popen=launch
+script=sys.argv.pop(1);sys.argv[0]=script
+runpy.run_path(script,run_name='__main__')'''
         output = (self.root/'session.log').open('wb'); self.addCleanup(output.close)
-        child = subprocess.Popen([sys.executable, '-I', '-B', '-u', '-c', code, str(pid_file),
+        child = subprocess.Popen([sys.executable, '-I', '-B', '-u', '-c', code, str(pid_file), json.dumps(menu_input),
             str(ROOT/'scripts/dev/local_session.py'), '--show-terminals', '--no-assistant',
+            *(['--interactive-scenario'] if interactive else []),
             '--port', str(self.port), '--data-root', str(self.paths.data_root)],
             cwd=ROOT, stdout=output, stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW)
         # No external process is ever killed: this is the PID we just created.
@@ -104,11 +120,57 @@ class WindowsDemoLifecycleTests(unittest.TestCase):
                 child.terminate()
             child.wait(timeout=8)
         self.addCleanup(cleanup)
+        self.wait_until(lambda: pid_file.exists() or child.poll() is not None)
+        self.assertTrue(pid_file.exists())
+        if not wait_running:
+            return child, int(pid_file.read_text())
         from scripts.dev.local_session import ready
         self.wait_until(lambda: child.poll() is not None or ready(self.port))
         self.assertIsNone(child.poll(), (self.root/'session.log').read_text(errors='replace'))
         self.wait_until(lambda: len(descendants(int(pid_file.read_text()))) >= 4)
         return child, int(pid_file.read_text())
+
+    def batches(self):
+        with closing(sqlite3.connect(self.paths.monitoring.as_uri()+'?mode=ro', uri=True)) as db:
+            return db.execute('SELECT session_id,sequence FROM batches ORDER BY rowid').fetchall()
+
+    def test_menu_waits_without_reporting_and_closing_either_console_reaps_session(self):
+        for role in ('Simulator', 'Web'):
+            with self.subTest(close=role):
+                child, pid = self.start(interactive=True)
+                owned = descendants(pid)|{pid}
+                time.sleep(10.5)
+                self.assertEqual(self.batches(), [])
+                self.close_console(role)
+                child.wait(timeout=12)
+                self.assertEqual(child.returncode, 0)
+                self.wait_until(lambda: not any(alive(p) for p in owned))
+                self.wait_until(self.port_free)
+
+    def test_menu_zero_exits_without_reports_or_orphans(self):
+        child, pid = self.start(interactive=True, menu_input='0\n', wait_running=False)
+        child.wait(timeout=20)
+        self.assertEqual(child.returncode, 0)
+        self.assertEqual(self.batches(), [])
+        self.wait_until(lambda: not descendants(pid))
+        self.wait_until(self.port_free)
+
+    def test_menu_invalid_then_enter_and_new_scenario_preserve_history_with_new_session(self):
+        before = []
+        for answer in ('bad\n\n', '2\n'):
+            child, pid = self.start(interactive=True, menu_input=answer)
+            owned = descendants(pid)|{pid}
+            self.wait_until(lambda: len(self.batches())>len(before), timeout=16)
+            after = self.batches()
+            self.assertEqual(after[:len(before)], before)
+            self.assertEqual(after[len(before)][1], 0)
+            if before:self.assertNotEqual(after[len(before)][0], before[-1][0])
+            self.close_console('Simulator')
+            child.wait(timeout=12)
+            self.assertEqual(child.returncode, 0)
+            self.wait_until(lambda: not any(alive(p) for p in owned))
+            self.wait_until(self.port_free)
+            before = self.batches()
 
     @staticmethod
     def kill_owned(pid):

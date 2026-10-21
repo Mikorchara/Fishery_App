@@ -11,17 +11,19 @@
     [switch]$UserData,
     [switch]$Demo,
     [switch]$ShowTerminals,
+    [switch]$InteractiveScenario,
     [switch]$OpenBrowser,
     [switch]$Detach,
     [switch]$DialogErrors
 )
 $ErrorActionPreference = 'Stop'
 try {
+if ($InteractiveScenario -and -not $ShowTerminals) { throw 'LOCAL_SCENARIO_MENU_REQUIRES_TERMINALS' }
 if ($Detach) {
     # Keep only the two service consoles visible. No elevated execution/policy bypass.
     $detachedArgs = @('-NoLogo','-NoProfile','-File',('"{0}"' -f $PSCommandPath),
         '-DialogErrors','-Scenario',$Scenario,'-Port',"$Port",'-Seed',"$Seed")
-    foreach ($name in @('Demo','ShowTerminals','OpenBrowser','NoAssistant','NoStreaming','NoMultiRound','NoHistory','UserData')) {
+    foreach ($name in @('Demo','ShowTerminals','InteractiveScenario','OpenBrowser','NoAssistant','NoStreaming','NoMultiRound','NoHistory','UserData')) {
         if (Get-Variable -Name $name -ValueOnly) { $detachedArgs += ('-' + $name) }
     }
     if ($DataRoot) { $detachedArgs += @('-DataRoot',('"{0}"' -f $DataRoot)) }
@@ -41,6 +43,7 @@ if ($NoMultiRound) { $launchArgs += '--no-multi-round' }
 if ($NoHistory) { $launchArgs += '--no-history' }
 if ($Demo) { $launchArgs += '--demo' }
 if ($ShowTerminals) { $launchArgs += '--show-terminals' }
+if ($InteractiveScenario) { $launchArgs += '--interactive-scenario' }
 if ($OpenBrowser) { $launchArgs += '--open-browser' }
 # Approved Qwen unified trial follows History/transport switches in the supervisor.
 # Foreground supervisor owns only its two children; no Provider call on startup.

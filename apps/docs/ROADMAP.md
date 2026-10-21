@@ -2,6 +2,8 @@
 
 ## 当前
 
+2026-10-21：双击演示在 Simulator 窗口先选择六场景，Enter 默认、0退出；原非交互 CLI 保持兼容，复用 Job/启动锁和原模拟器。BUILD_RUN 增加快速入口，项目差异见 [启动比较](deep-dive/LAUNCHER_COMPARISON.md)。
+
 2026-10-21：经 Prototype 实验与人工认可，选择性同步五档历史范围、分档节点、三指标归一化与原值 Tooltip；首页两列底边对齐、事件底部通栏，保留 Management 品牌、启动器和数据隔离。实现边界见 [图表说明](deep-dive/HISTORY_CHART_UI.md)。
 
 2026-10-21：新增双击演示入口 `scripts/dev/启动演示系统.cmd`，复用原启动器打开两个终端并回收整组子进程；`outputs/demo-instance` 首次只复制正式知识，后续保留编辑。网页名称更新为“AI 监测系统”，模型试用范围不变。

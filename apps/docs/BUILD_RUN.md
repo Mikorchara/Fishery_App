@@ -4,6 +4,49 @@
 
 日常操作、页面用法与学习记录见 [USER_GUIDE](USER_GUIDE.md)。MIG-1～MIG-5 主要迁移与人工验收已完成；本页区分正式用户实例与隔离开发实例，历史迁移命令不属于日常启动。
 
+## 快速开始 / 常用指令
+
+本节在 **Management** 的普通 PowerShell 执行：
+
+```powershell
+Set-Location -LiteralPath 'D:\CodexProject\Fishery_Management'
+```
+
+最常用：资源管理器双击 `scripts/dev/启动演示系统.cmd`，或运行一行：
+
+```powershell
+.\scripts\dev\启动演示系统.cmd
+```
+
+Web 就绪后自动打开浏览器，**Simulator 专用窗口**先显示六场景菜单：1 正常、2 低氧、3 疑似疾病、4 摄食减少、5 复合异常、6 设备离线。输入数字确认；Enter 默认正常；无效输入重新提示；**0（或7）退出并停止本次两个服务**。选择前不上报，选择后第一个完整窗口约10秒；窗口显示当前场景和原模拟器的实际发送状态。
+
+脚本/自动化仍可无交互启动，以下使用已初始化隔离实例：
+
+```powershell
+.\scripts\dev\run_local.ps1 -Scenario low_oxygen -DataRoot "$PWD\outputs\dev-instance"
+```
+
+日常只看正式用户实例，不启动模拟器/HTTP 上报/AI：
+
+```powershell
+.\.venv\Scripts\python.exe -I -B -m apps.management_web --project-root "$PWD" --user-data
+```
+
+| 常用参数 | 用途 |
+|---|---|
+| `-Demo` | 复用 `outputs/demo-instance`；首次仅复制正式知识，详见下节 |
+| `-DataRoot '绝对路径'` | 使用已有隔离实例，与 `-Demo/-UserData` 互斥；不自动初始化 |
+| `-Scenario low_oxygen` | 非交互场景，六种与菜单一致；默认 normal |
+| `-ShowTerminals -InteractiveScenario` | 显式开启终端菜单；不指定 InteractiveScenario 时绝不等待输入 |
+| `-Port 8767` / `-Seed 42` | 端口 / 种子，Web-only 对应 `--port` |
+| `-NoAssistant` | 关闭 AI，其他场景和上报功能照常 |
+| `-NoStreaming/-NoMultiRound/-NoHistory` | 原试用范围开关，联动规则保持不变 |
+| `-OpenBrowser` | Web 就绪后打开浏览器，失败则提示地址 |
+
+访问 **http://127.0.0.1:8766**。双终端模式可在任一窗口 Ctrl+C 或关闭窗口，回收本次整组进程；前台非交互命令在启动 PowerShell 按 Ctrl+C。正式 Web-only 的 AI 启用命令见下方专节，不把 `-UserData` 交给模拟启动器。菜单不清库、不重置历史；重新启动沿用原模拟器新 session、sequence 从0开始，旧历史保留并按会话断线。
+
+详细安全边界、知识副本与排错继续见下文；两项目的操作共性与必须保留的差异见 [启动方式比较](deep-dive/LAUNCHER_COMPARISON.md)。
+
 ## 环境
 
 ```powershell
@@ -16,7 +59,7 @@ python -m venv .venv
 
 ## 双击演示：两个终端 + 独立知识副本
 
-在资源管理器中双击 `scripts/dev/启动演示系统.cmd`（可从任意工作目录启动）。它复用 `run_local.ps1`，自动定位项目 `.venv`，分别打开 Web / Simulator 两个窗口，并打开 http://127.0.0.1:8766 。首个完整模拟窗口约需10秒，之后每10秒更新水质和视觉统计。关闭任一服务窗口或在其中按 Ctrl+C，会停止本次两个服务及其 Python 子进程；重复启动遇到端口占用会拒绝，不结束其他进程。
+双击操作与场景菜单见上方快速入口。该入口可从任意工作目录启动，复用 `run_local.ps1` 并自动定位 `.venv`；Web 先就绪，再由 Simulator 窗口选场景，之后每10秒更新水质和视觉统计。重复启动遇到端口占用会拒绝，不结束其他进程。
 
 首次使用在 `outputs/demo-instance` 建立独立的空 Monitoring，通过 SQLite Backup API **只读复制** `%LOCALAPPDATA%\FisheryManagement\knowledge.sqlite3` 的完整知识记录、版本、状态、来源与迁移标记。正式知识库须正常关闭、无 SQLite 日志或写入连接；忙碌/缺失/不兼容时明确报错，不建立空白替代库。当前正式库为32条，但启动器不写死条数。
 
@@ -25,12 +68,12 @@ python -m venv .venv
 排错时在项目根用前台命令查看具体原因：
 
 ```powershell
-.\scripts\dev\run_local.ps1 -Demo -ShowTerminals -OpenBrowser
+.\scripts\dev\run_local.ps1 -Demo -ShowTerminals -InteractiveScenario -OpenBrowser
 # 只演示监测，不装配 AI / 私有凭据
 .\scripts\dev\run_local.ps1 -Demo -ShowTerminals -NoAssistant
 ```
 
-端口可用 `-Port 8767` 改变；两个窗口标题会显示所选端口。Windows 无法提供进程组回收保护时拒绝启动。`.ps1` 保留 UTF-8 BOM 兼容 Windows PowerShell 5.1；不更改执行策略或申请管理员权限。双击启动失败会显示提示，按上述前台命令可查看错误代码。
+端口可用 `-Port 8767` 改变；两个窗口标题会显示所选端口。Windows 无法提供进程组回收保护时拒绝启动。`.ps1` 保留 UTF-8 BOM 兼容 Windows PowerShell 5.1；不更改执行策略或申请管理员权限。双击启动失败会显示提示，按上述前台命令可查看错误代码。菜单是本次启动选择，不在运行中热切换；交互模式下菜单选择覆盖 `-Scenario`，Enter 始终为 normal。
 
 **业务数据隔离不等于凭据隔离。** 演示 AI 使用当前新项目已有的私有 Credential Store，不复制或新建密钥；启动、打开页面不调用模型，用户点击发送/测试连接仍可能计费。自动验证只用虚构凭据、Fake SDK 和隔离实例。演示内保存的偏好/预算属于演示 Settings，不继承正式 Settings；修改密钥属于项目私有凭据操作，不能当作演示数据编辑。
 

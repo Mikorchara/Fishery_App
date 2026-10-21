@@ -121,8 +121,9 @@ Fishery_Management/
 | `test_instance.py` | 数据路径、缺库拒绝、空实例初始化、防覆盖发布、启动装配及发行包边界回归。 |
 | `test_data_migration.py` | 五文件迁移的只读源冻结、备份、暂存、发布竞争、摘要和失败保留，仅使用虚构数据。 |
 | `test_local_session.py` | 原启动器参数、10 秒 HTTP 上报、端口冲突与仅回收自有进程回归。 |
+| `test_scenario_menu.py` | 六场景菜单映射、默认/无效/退出、原控制台包装层 dry-run 与非交互兼容回归。 |
 | `test_demo_launcher.py` | 演示知识完整复制、复用不覆盖、空库/忙碌源拒绝，以及 Fake SDK 三工具试用回归。 |
-| `test_windows_demo_lifecycle.py` | Windows 双终端实际进程测试：持续上报、关闭任一窗口、重启、端口拒绝及进程树回收。 |
+| `test_windows_demo_lifecycle.py` | Windows 双终端实际进程测试：菜单等待不上报、0退出、重启保留历史/新session、持续上报、端口拒绝及进程树回收。 |
 
 ### 2.6 前端 Node 回归与夹具 — `apps/management_web/tests/`
 
@@ -352,9 +353,9 @@ Fishery_Management/
 
 | 文件 | 功能简介 |
 |---|---|
-| `启动演示系统.cmd` | Windows 双击入口，调用同目录 PowerShell 脚本，选择演示实例、双终端并打开浏览器。 |
+| `启动演示系统.cmd` | Windows 双击入口，启用演示实例、双终端及 Simulator 场景菜单，并打开浏览器。 |
 | `run_local.ps1` | 定位本项目 .venv，传递场景/数据根/AI 开关，支持双终端、后台监护与错误提示。 |
-| `local_session.py` | 复用 Web/Simulator CLI，生成临时接入 Token，检查端口/就绪，启动与回收自有服务。 |
+| `local_session.py` | 复用 Web/Simulator CLI，显式场景菜单、临时接入 Token、端口/就绪检查与自有服务回收。 |
 | `windows_job.py` | Windows Job Object 生命周期保护，将监护进程及后代纳入同组，退出时回收子进程。 |
 | `demo_instance.py` | 首次创建独立空监测库、只读备份正式知识和建立演示授权，后续复用并拒绝空库静默覆盖。 |
 | `run_management_tests.py` | 独立管理回归入口，要求隔离 Python，阻断旧 Prototype 导入并复用测试发现。 |
