@@ -6,6 +6,7 @@
 - [启动、安装、实例与测试](BUILD_RUN.md)
 - [目录与职责](STRUCTURE.md)
 - [监测与业务数据合同](INTEGRATION.md)
+- [历史趋势图、归一化与布局](deep-dive/HISTORY_CHART_UI.md)
 - [AI Backend 与 Assistant 开发指南](deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)
 - [后续路线](ROADMAP.md)
 - [MIG-3 迁移记录与边界](deep-dive/MIG3_STANDALONE.md)
