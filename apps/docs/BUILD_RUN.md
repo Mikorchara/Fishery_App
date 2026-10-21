@@ -14,6 +14,26 @@ python -m venv .venv
 
 安装依赖可能访问 Python 包索引，不请求 LLM。开发环境只允许本项目自己的 editable 安装。
 
+## 双击演示：两个终端 + 独立知识副本
+
+在资源管理器中双击 `scripts/dev/启动演示系统.cmd`（可从任意工作目录启动）。它复用 `run_local.ps1`，自动定位项目 `.venv`，分别打开 Web / Simulator 两个窗口，并打开 http://127.0.0.1:8766 。首个完整模拟窗口约需10秒，之后每10秒更新水质和视觉统计。关闭任一服务窗口或在其中按 Ctrl+C，会停止本次两个服务及其 Python 子进程；重复启动遇到端口占用会拒绝，不结束其他进程。
+
+首次使用在 `outputs/demo-instance` 建立独立的空 Monitoring，通过 SQLite Backup API **只读复制** `%LOCALAPPDATA%\FisheryManagement\knowledge.sqlite3` 的完整知识记录、版本、状态、来源与迁移标记。正式知识库须正常关闭、无 SQLite 日志或写入连接；忙碌/缺失/不兼容时明确报错，不建立空白替代库。当前正式库为32条，但启动器不写死条数。
+
+不复制正式 Monitoring、Settings、Policy、Credential 或 Trace。新演示实例通过现有 Policy Store 建立三工具授权；模型仍为已有 Qwen Normal / Streaming `local_experimental` 范围。以后启动直接复用演示知识、设置和授权，不读取正式源、不重置编辑；若已有实例知识为空或缺库，明确停止等待人工核对，不覆盖或重建。
+
+排错时在项目根用前台命令查看具体原因：
+
+```powershell
+.\scripts\dev\run_local.ps1 -Demo -ShowTerminals -OpenBrowser
+# 只演示监测，不装配 AI / 私有凭据
+.\scripts\dev\run_local.ps1 -Demo -ShowTerminals -NoAssistant
+```
+
+端口可用 `-Port 8767` 改变；两个窗口标题会显示所选端口。Windows 无法提供进程组回收保护时拒绝启动。`.ps1` 保留 UTF-8 BOM 兼容 Windows PowerShell 5.1；不更改执行策略或申请管理员权限。双击启动失败会显示提示，按上述前台命令可查看错误代码。
+
+**业务数据隔离不等于凭据隔离。** 演示 AI 使用当前新项目已有的私有 Credential Store，不复制或新建密钥；启动、打开页面不调用模型，用户点击发送/测试连接仍可能计费。自动验证只用虚构凭据、Fake SDK 和隔离实例。演示内保存的偏好/预算属于演示 Settings，不继承正式 Settings；修改密钥属于项目私有凭据操作，不能当作演示数据编辑。
+
 ## 正式用户实例：只启动 Web
 
 先进入 `D:\CodexProject\Fishery_Management`，使用已迁移实例：

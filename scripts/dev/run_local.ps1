@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('normal','low_oxygen','suspected_disease','reduced_feeding','combined_anomaly','device_offline')]
     [string]$Scenario = 'normal',
     [ValidateRange(1,65535)][int]$Port = 8766,
@@ -8,21 +8,53 @@ param(
     [switch]$NoMultiRound,
     [switch]$NoHistory,
     [string]$DataRoot,
-    [switch]$UserData
+    [switch]$UserData,
+    [switch]$Demo,
+    [switch]$ShowTerminals,
+    [switch]$OpenBrowser,
+    [switch]$Detach,
+    [switch]$DialogErrors
 )
 $ErrorActionPreference = 'Stop'
+try {
+if ($Detach) {
+    # Keep only the two service consoles visible. No elevated execution/policy bypass.
+    $detachedArgs = @('-NoLogo','-NoProfile','-File',('"{0}"' -f $PSCommandPath),
+        '-DialogErrors','-Scenario',$Scenario,'-Port',"$Port",'-Seed',"$Seed")
+    foreach ($name in @('Demo','ShowTerminals','OpenBrowser','NoAssistant','NoStreaming','NoMultiRound','NoHistory','UserData')) {
+        if (Get-Variable -Name $name -ValueOnly) { $detachedArgs += ('-' + $name) }
+    }
+    if ($DataRoot) { $detachedArgs += @('-DataRoot',('"{0}"' -f $DataRoot)) }
+    Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $detachedArgs -WindowStyle Hidden -ErrorAction Stop | Out-Null
+    exit 0
+}
 $workspaceRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $pythonPath = Join-Path $workspaceRoot '.venv/Scripts/python.exe'
 if (-not (Test-Path -LiteralPath $pythonPath -PathType Leaf)) { throw 'LOCAL_VENV_REQUIRED' }
-$launchArgs = @((Join-Path $PSScriptRoot 'local_session.py'),'--scenario',$Scenario,'--port',"$Port",'--seed',"$Seed")
-if ($DataRoot -and $UserData) { throw 'DATA_ROOT_OPTIONS_CONFLICT' }
+$launchArgs = @('-I','-B','-u',(Join-Path $PSScriptRoot 'local_session.py'),'--scenario',$Scenario,'--port',"$Port",'--seed',"$Seed")
+if (($DataRoot -and $UserData) -or ($Demo -and ($DataRoot -or $UserData))) { throw 'DATA_ROOT_OPTIONS_CONFLICT' }
 if ($DataRoot) { $launchArgs += @('--data-root',$DataRoot) }
 if ($UserData) { $launchArgs += '--user-data' }
 if ($NoAssistant) { $launchArgs += '--no-assistant' }
 if ($NoStreaming) { $launchArgs += '--no-streaming' }
 if ($NoMultiRound) { $launchArgs += '--no-multi-round' }
 if ($NoHistory) { $launchArgs += '--no-history' }
+if ($Demo) { $launchArgs += '--demo' }
+if ($ShowTerminals) { $launchArgs += '--show-terminals' }
+if ($OpenBrowser) { $launchArgs += '--open-browser' }
 # Approved Qwen unified trial follows History/transport switches in the supervisor.
 # Foreground supervisor owns only its two children; no Provider call on startup.
 & $pythonPath @launchArgs
-exit $LASTEXITCODE
+$result = $LASTEXITCODE
+if ($result -ne 0 -and $DialogErrors) {
+    Add-Type -AssemblyName PresentationFramework
+    [System.Windows.MessageBox]::Show('演示启动失败或服务异常退出。请在项目根的 PowerShell 执行 .\scripts\dev\run_local.ps1 -Demo -ShowTerminals 查看具体错误。不要清空或重新初始化已有数据。','AI 监测系统') | Out-Null
+}
+exit $result
+} catch {
+    if ($DialogErrors) {
+        Add-Type -AssemblyName PresentationFramework
+        [System.Windows.MessageBox]::Show('无法启动演示系统。请检查 .venv、启动脚本权限和数据路径，或在 PowerShell 中运行 run_local.ps1 查看错误。','AI 监测系统') | Out-Null
+    } else { Write-Error $_ }
+    exit 1
+}

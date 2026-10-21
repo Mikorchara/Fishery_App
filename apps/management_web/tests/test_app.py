@@ -20,7 +20,7 @@ class ManagementTests(unittest.TestCase):
     def test_independent_shell_and_assets(self):
         page=self.client.get('/')
         self.assertEqual(page.status_code,200)
-        self.assertIn('鱼境',page.get_data(as_text=True))
+        self.assertIn('AI 监测系统',page.get_data(as_text=True))
         for asset in ('app.js','components.js','view-model.js','services.js','styles.css'):
             response=self.client.get('/static/'+asset)
             self.assertEqual(response.status_code,200);response.close()

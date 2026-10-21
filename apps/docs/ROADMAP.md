@@ -2,6 +2,8 @@
 
 ## 当前
 
+2026-10-21：新增双击演示入口 `scripts/dev/启动演示系统.cmd`，复用原启动器打开两个终端并回收整组子进程；`outputs/demo-instance` 首次只复制正式知识，后续保留编辑。网页名称更新为“AI 监测系统”，模型试用范围不变。
+
 MIG-1 领域依赖闭包、MIG-2 独立发行/数据路径、MIG-3 独立项目与初始提交、MIG-4 业务数据迁移已完成。MIG-5 凭据准备与真实网页基本验收完成状态由用户确认；本轮文档整理不重做真实连接或生成新的资格记录。
 
 当前保留独立 Backend、统一监测/模拟、知识内容管理、Settings、三个只读 Tool 和 Qwen 本地 Normal/Streaming 范围。迁移不新增模型资格；`PROTOTYPE` 规则与 `local_experimental` 模型范围仍保留原边界。日常使用见 [使用指南](USER_GUIDE.md)。
