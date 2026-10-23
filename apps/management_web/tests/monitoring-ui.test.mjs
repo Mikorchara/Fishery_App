@@ -26,6 +26,7 @@ function page(data=fixture(),handler=null){
     createTextNode:text=>{const n=new Element('text');n.textContent=text;return n;},
     querySelector:s=>s==='.environment'?env:skip,querySelectorAll:()=>node('navigation').children,addEventListener:()=>{}};
   const context=vm.createContext({document,Node:Element,URLSearchParams,Intl,Date,console,location:{hash:'#dashboard'},
+    crypto:{randomUUID:()=> '00000000-0000-4000-8000-000000000001'},
     window:{addEventListener:(type,fn)=>events[type]=fn,scrollTo:()=>{}},
     setInterval:(fn,ms)=>{timers.push({fn,ms});return timers.length;},clearInterval:()=>{},
     fetch:async (url,options)=>{requests.push(url);if(handler)return handler(url,options,current);if(current instanceof Error)throw current;
@@ -39,6 +40,35 @@ function page(data=fixture(),handler=null){
   return {context,node,timers,events,requests,env,document,setData:d=>{current=d;},run:code=>vm.runInContext(code,context),
     ready:async()=>{await new Promise(r=>setImmediate(r));}};
 }
+
+test('SIMPLIFY-1 uses server cycles on homepage and list, then fetches the original detail',async()=>{
+  const d=fixture();d.event_management={enabled:true,ack_enabled:true};
+  const original={...d.events[0],id:'critical',device_id:'sim-pond-1',channel:'water',code:'OXYGEN_CRITICAL_LOW',title:'溶氧低 (2.2 mg/L)',lifecycle_state:'ACTIVE'};
+  d.events=[{...original,id:'low',code:'OXYGEN_LOW'},original];
+  const cycle={...original,title:'溶解氧偏低风险',deletable:false,cycle_summary:{key:'stable-cycle',count:2,
+    member_ids:['low','critical'],detail_event_id:'critical',ended:false,reading_label:'最新异常观测',reading:original.title}};
+  d.event_cycles=[cycle];const queries=[];
+  const p=page(d,async(url)=>{
+    if(url.startsWith('/api/bootstrap'))return {ok:true,json:async()=>structuredClone(d)};
+    if(url.startsWith('/api/events?')){queries.push(new URL(url,'http://localhost').searchParams);return {ok:true,json:async()=>({items:d.event_cycles,total:1,offset:0,limit:50})};}
+    if(url==='/api/events/critical')return {ok:true,json:async()=>structuredClone(original)};
+    return {ok:true,json:async()=>({items:[]})};
+  });
+  await p.ready();assert.match(p.node('content').textContent,/2 条原始记录/);
+  p.run("location.hash='#events';render()");await p.ready();
+  assert.equal(queries.at(-1).get('view'),'cycles');
+  assert.match(p.node('content').textContent,/共 1 条符合条件/);
+  assert.match(p.node('content').textContent,/异常中/);
+  await p.run('showEventDetail(state.data.event_cycles[0])');
+  assert.equal(p.node('dialog-title').textContent,original.title);
+  assert.match(p.node('dialog-body').textContent,/critical/);
+  cycle.lifecycle_state='RESOLVED';cycle.status='closed';cycle.resolved_at=d.monitoring.observed_at;
+  Object.assign(cycle.cycle_summary,{ended:true,reading_label:'异常时读数'});
+  await p.run('refresh()');p.run("location.hash='#events';render()");await p.ready();
+  assert.match(p.node('content').textContent,/已恢复/);
+  assert.match(p.node('content').textContent,/异常时读数/);
+  assert.match(p.node('content').textContent,/历史最高等级/);
+});
 
 test('uniform server state renders dashboard, monitoring and visual summaries with no fake video',async()=>{
   const p=page();await p.ready();
@@ -70,10 +100,12 @@ test('EVT-2 homepage collapses risk grades but retains unknown evidence and orig
   assert.match(overview.textContent,/当前等级未知/);assert.doesNotMatch(overview.textContent,/当前未见异常信号/);
 });
 
-function eventPage({conflict=false}={}){
+function eventPage({conflict=false,legacy=false}={}){
   const data=fixture();data.event_management={enabled:true,write_token:'fictional-event-capability'};
   const record={...data.events[0],id:'closed-record',lifecycle_state:'RESOLVED',status:'closed',deletable:true,
     channel:'visual',resolved_at:data.monitoring.observed_at};
+  if(legacy)Object.assign(record,{legacy_closed:true,lifecycle_state:'INDETERMINATE',state_reason:'LEGACY_UNREVIEWED',
+    handling:{state:'PENDING',ended:true,can_ack:false,action_count:0,history:[],unavailable_reason:'LEGACY_OR_UNSUPPORTED_IDENTITY'}});
   data.events=[record];let records=[record];const writes=[],queries=[];
   const p=page(data,async(url,options)=>{
     if(url.startsWith('/api/bootstrap'))return {ok:true,json:async()=>structuredClone(data)};
@@ -82,7 +114,7 @@ function eventPage({conflict=false}={}){
         total:records.length?51:0,limit:50,offset:Number(query.get('offset'))})};}
     if(url.startsWith('/api/events/')){
       writes.push({url,value:JSON.parse(options.body),token:options.headers['X-Management-Events']});
-      if(url.endsWith('deletion-preview'))return {ok:true,json:async()=>({count:1,revision:'f'.repeat(64)})};
+      if(url.endsWith('deletion-preview'))return {ok:true,json:async()=>({count:1,legacy_count:legacy?1:0,revision:'f'.repeat(64)})};
       if(conflict)return {ok:false,json:async()=>({error_code:'EVENT_DELETE_CONFLICT'})};
       records=[];data.events=[];return {ok:true,json:async()=>({deleted_count:1})};
     }
@@ -92,6 +124,94 @@ function eventPage({conflict=false}={}){
   return {...p,writes,queries,walk,findButton:(root,text)=>walk(root).find(n=>n.tagName==='button'&&n.textContent===text),
     open:async()=>{await p.ready();p.run("location.hash='#events';render()");await p.ready();}};
 }
+
+function ackPage({conflict=false,legacy=false,ended=false,cycleDelete=false}={}){
+  const data=fixture();data.event_management={enabled:true,ack_enabled:true,write_token:'fictional-event-token'};
+  const item={...data.events[0],device_id:'sim-pond-1',channel:'visual',lifecycle_state:ended?'RESOLVED':'ACTIVE',
+    status:ended?'closed':'pending',deletable:false,can_delete_ack_cycle:ended&&cycleDelete,deletion_block_reason:ended?'ACK_AUDIT_RETAINED':null,
+    handling:{state:'PENDING',ended,can_ack:!legacy&&!ended,cycle_id:'a'.repeat(64),grade_token:'b'.repeat(64),
+      grade_version:'fixture-grades-v1',revision:0,action_count:0,history:[],unavailable_reason:legacy?'LEGACY_OR_UNSUPPORTED_IDENTITY':null}};
+  data.events=[item];const writes=[];
+  const p=page(data,async(url,options)=>{
+    if(url.startsWith('/api/bootstrap'))return {ok:true,json:async()=>structuredClone(data)};
+    if(url.startsWith('/api/events?'))return {ok:true,json:async()=>({items:structuredClone(data.events),total:1,limit:50,offset:0})};
+    if(url==='/api/events/deletion-preview')return {ok:true,json:async()=>({count:2,ack_count:2,revision:'c'.repeat(64)})};
+    if(url==='/api/events/delete'){
+      writes.push({value:JSON.parse(options.body),headers:options.headers});
+      if(conflict)return {ok:false,json:async()=>({error_code:'EVENT_DELETE_CONFLICT'})};
+      data.events=[];return {ok:true,json:async()=>({deleted_count:2,deleted_ack_count:2})};
+    }
+    if(url==='/api/events/ack'){
+      writes.push({value:JSON.parse(options.body),headers:options.headers});
+      if(conflict)return {ok:false,json:async()=>({error_code:'EVENT_ACK_CONFLICT'})};
+      item.handling={...item.handling,state:'ACKNOWLEDGED',can_ack:false,revision:1,acked_at:data.monitoring.observed_at,
+        latest_ack_at:data.monitoring.observed_at,actor_kind:'local_visitor',action_count:1,
+        history:[{acted_at:data.monitoring.observed_at,event_title:'疑似病灶检测信号',grade_code:'SUSPECTED_LESION',actor_kind:'local_visitor'}]};
+      return {ok:true,json:async()=>({status:'ACK_RECORDED'})};
+    }
+    if(url==='/api/events/'+item.id)return {ok:true,json:async()=>structuredClone(item)};
+    return {ok:true,json:async()=>({items:[],total:0})};
+  });
+  const walk=node=>[node,...node.children.flatMap(walk)];
+  const find=(root,text)=>walk(root).find(n=>n.tagName==='button'&&n.textContent===text);
+  return {...p,writes,item,find,walk,open:async()=>{await p.ready();p.run('eventDetail(state.data.events[0])');}};
+}
+
+test('EVT-3A explicit ACK confirmation, cancellation and reload preserve separate observation state',async()=>{
+  const p=ackPage();await p.open();
+  assert.match(p.node('content').textContent,/待确认/);
+  assert.ok(p.find(p.node('dialog-body'),'确认已知晓'));
+  assert.equal(p.walk(p.node('content')).filter(n=>n.tagName==='button'&&n.textContent==='确认已知晓').length,0);
+  p.find(p.node('dialog-body'),'确认已知晓').events.click();
+  assert.equal(p.writes.length,0);assert.match(p.node('dialog-body').textContent,/不代表经过认证/);
+  p.find(p.node('dialog-body'),'取消').events.click();assert.equal(p.writes.length,0);
+  p.find(p.node('dialog-body'),'确认已知晓').events.click();
+  p.find(p.node('dialog-body'),'确认知晓此风险').events.click();await p.ready();
+  assert.equal(p.writes.length,1);assert.equal(p.writes[0].headers['X-Management-Events'],'fictional-event-token');
+  assert.equal(p.writes[0].value.grade_token,'b'.repeat(64));assert.equal(p.writes[0].value.revision,0);
+  assert.match(p.node('dialog-body').textContent,/已知晓/);assert.match(p.node('dialog-body').textContent,/本机操作（未认证访客）/);
+  assert.match(p.node('dialog-body').textContent,/异常持续/);
+  assert.equal(p.find(p.node('dialog-body'),'确认已知晓'),undefined);
+  await p.run('refresh()');assert.match(p.node('content').textContent,/已知晓/);
+  p.run("location.hash='#events';render()");await p.ready();assert.match(p.node('content').textContent,/已知晓/);
+});
+
+test('EVT-3A conflicts never retry; unsupported legacy and protected audit records cannot ACK or delete',async()=>{
+  const p=ackPage({conflict:true});await p.open();
+  p.find(p.node('dialog-body'),'确认已知晓').events.click();p.find(p.node('dialog-body'),'确认知晓此风险').events.click();await p.ready();
+  assert.equal(p.writes.length,1);assert.match(p.node('dialog-title').textContent,/确认未完成/);
+  assert.match(p.node('dialog-body').textContent,/未自动重试/);assert.match(p.node('content').textContent,/待确认/);
+  const old=ackPage({legacy:true});await old.open();
+  assert.equal(old.find(old.node('dialog-body'),'确认已知晓'),undefined);assert.match(old.node('dialog-body').textContent,/仅供查看/);
+  const ended=ackPage({ended:true});ended.item.handling.action_count=1;
+  ended.item.handling.history=[{acted_at:'2026-10-23T00:00:00Z',grade_code:'SUSPECTED_LESION'}];
+  await ended.open();assert.match(ended.node('dialog-body').textContent,/历史已知晓/);
+  assert.equal(ended.find(ended.node('dialog-body'),'确认已知晓'),undefined);
+  ended.run("location.hash='#events';render()");await ended.ready();
+  assert.match(ended.node('content').textContent,/知晓审计留存，不可删除/);
+});
+
+test('ended ACK cycle deletion previews both counts, cancellation keeps data, explicit commit uses revision',async()=>{
+  const p=ackPage({ended:true,cycleDelete:true});p.item.handling.confirmed=true;await p.open();
+  p.run("location.hash='#events';render()");await p.ready();
+  assert.match(p.node('content').textContent,/是否确认/);assert.match(p.node('content').textContent,/已确认/);
+  await p.find(p.node('content'),'删除已结束周期').events.click();
+  assert.match(p.node('dialog-body').textContent,/预计删除 2 条/);
+  assert.match(p.node('dialog-body').textContent,/2 条确认历史/);
+  p.find(p.node('dialog-body'),'取消').events.click();assert.equal(p.writes.length,0);
+  p.run('eventDetail(state.data.events[0])');
+  await p.find(p.node('dialog-body'),'删除已结束周期').events.click();
+  await p.find(p.node('dialog-body'),'确认删除周期及确认历史').events.click();await p.ready();
+  assert.equal(p.writes.length,1);assert.equal(p.writes[0].value.scope,'ack_cycle');
+  assert.equal(p.writes[0].value.revision,'c'.repeat(64));
+  assert.match(p.node('refresh-status').textContent,/及 2 条确认历史/);
+  const active=ackPage({cycleDelete:true});await active.open();
+  assert.equal(active.find(active.node('dialog-body'),'删除已结束周期'),undefined);
+  const conflict=ackPage({ended:true,cycleDelete:true,conflict:true});await conflict.open();
+  await conflict.find(conflict.node('dialog-body'),'删除已结束周期').events.click();
+  await conflict.find(conflict.node('dialog-body'),'确认删除周期及确认历史').events.click();await conflict.ready();
+  assert.equal(conflict.writes.length,1);assert.match(conflict.node('dialog-title').textContent,/删除未完成/);
+});
 
 test('EVT wording is consistent in homepage, list, detail and family member rows',async()=>{
   const cases=[
@@ -170,6 +290,29 @@ test('EVT-2 bulk clear has two confirmations, global scope and cancellable final
   await p.findButton(p.node('dialog-body'),'确认清理 1 条记录').events.click();await p.ready();
   const commit=p.writes.find(w=>w.url.endsWith('/delete'));
   assert.deepEqual(Object.keys(commit.value).sort(),['revision','scope']);assert.equal(commit.value.scope,'all_resolved');
+});
+
+test('legacy ended history explains closure and cleanup without offering ACK or silently deleting',async()=>{
+  const p=eventPage({legacy:true});await p.open();
+  assert.match(p.node('content').textContent,/旧版已结束（未复核）/);
+  assert.doesNotMatch(p.node('content').textContent,/恢复状态待确认/);
+  p.run('eventDetail(state.data.events[0])');
+  assert.match(p.node('dialog-body').textContent,/未经新版规则复核/);
+  assert.match(p.node('dialog-body').textContent,/不支持人工知晓确认/);
+  assert.equal(p.findButton(p.node('dialog-body'),'确认已知晓'),undefined);
+  p.node('details-dialog').close();
+  p.findButton(p.node('content'),'删除记录').events.click();await p.ready();
+  assert.match(p.node('dialog-body').textContent,/其中 1 条为旧版已结束记录/);
+  assert.match(p.node('dialog-body').textContent,/清理不表示已验证恢复/);
+  p.findButton(p.node('dialog-body'),'取消').events.click();
+  assert.equal(p.writes.filter(w=>w.url.endsWith('/delete')).length,0);
+  p.findButton(p.node('content'),'清理全部已结束事件').events.click();await p.ready();
+  assert.match(p.node('dialog-body').textContent,/其中 1 条为旧版已结束记录/);
+  assert.equal(p.findButton(p.node('dialog-body'),'确认清理 1 条记录'),undefined);
+  p.findButton(p.node('dialog-body'),'继续核对').events.click();
+  assert.match(p.node('dialog-body').textContent,/包含符合条件的旧版已结束记录/);
+  p.findButton(p.node('dialog-body'),'取消').events.click();
+  assert.equal(p.writes.filter(w=>w.url.endsWith('/delete')).length,0);
 });
 
 test('EVT-2 conflicting deletion stays explicit, never retries or clears local data',async()=>{

@@ -122,7 +122,7 @@ Fishery_Management/
 | `test_instance.py` | 数据路径、缺库拒绝、空实例初始化、防覆盖发布、启动装配及发行包边界回归。 |
 | `test_data_migration.py` | 五文件迁移的只读源冻结、备份、暂存、发布竞争、摘要和失败保留，仅使用虚构数据。 |
 | `test_local_session.py` | 原启动器参数、10 秒 HTTP 上报、端口冲突与仅回收自有进程回归。 |
-| `test_scenario_menu.py` | 六场景菜单映射、默认/无效/退出、原控制台包装层 dry-run 与非交互兼容回归。 |
+| `test_scenario_menu.py` | 七场景菜单映射、默认/无效/退出、原控制台包装层 dry-run 与非交互兼容回归。 |
 | `test_demo_launcher.py` | 演示知识完整复制、复用不覆盖、空库/忙碌源拒绝，以及 Fake SDK 三工具试用回归。 |
 | `test_windows_demo_lifecycle.py` | Windows 双终端实际进程测试：菜单等待不上报、0退出、重启保留历史/新session、持续上报、端口拒绝及进程树回收。 |
 
@@ -492,3 +492,19 @@ Fishery_Management/
 | 查当前操作或历史决策 | 当前看 BUILD_RUN / USER_GUIDE / INTEGRATION；历史看 research / history，不直接套用旧路径。 |
 
 新增、删除或迁移源码文件时应同步详细版。当前用户操作见 [使用指南](USER_GUIDE.md)，工程命令见 [BUILD_RUN](BUILD_RUN.md)，Tool、Prompt、Scope 和安全合同见 [开发指南](deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。
+
+## EVT 收尾新增模块
+
+| 文件 | 功能 |
+|---|---|
+| `monitoring/event_cycles.py` | 全留存数据按稳定风险周期汇总后筛选、分页。 |
+| `monitoring/event_handling.py` | 周期及等级版本 ACK、幂等请求、人工状态投影。 |
+| `monitoring/event_cycle_deletion.py` | 可靠已结束周期与全部 ACK 的显式事务删除、成员及外部引用检查。 |
+| `monitoring/schema.py` | v2 表、RESTRICT 外键及实例兼容校验。 |
+| `monitoring/migrate.py` | 手工显式 v1→v2 维护，防覆盖备份和逻辑摘要检查；普通启动不调用。 |
+| `monitoring/tests/test_event_ack.py` | ACK 等级、重启、权限、并发及保留保护。 |
+| `monitoring/tests/test_ack_cycle_deletion.py` | 周期删除、回滚、引用、其他周期及观测保全。 |
+| `monitoring/tests/test_event_cycles.py` | 周期汇总、全库筛选分页与原接口兼容。 |
+| `monitoring/tests/test_event_legacy.py` | 旧事件状态投影与受控清理兼容。 |
+| `monitoring/tests/test_monitoring_migration.py` | 隔离 v1 升级、备份、拒绝覆盖与故障回滚。 |
+| `docs/deep-dive/EVT_SYNC_ACCEPTANCE.md` | 本轮同步范围、真实库只读核查及待审批升级。 |

@@ -16,12 +16,13 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# Deliberately limited to the six user-facing demos; fault-injection scenarios
+# Deliberately limited to the seven user-facing demos; fault-injection scenarios
 # remain available only through the original Simulator CLI.
 DEMO_SCENARIOS = (
     ('normal', '正常水质'), ('low_oxygen', '低溶解氧'),
     ('suspected_disease', '疑似疾病'), ('reduced_feeding', '摄食减少'),
     ('combined_anomaly', '复合异常'), ('device_offline', '设备离线'),
+    ('oxygen_drop_recovery', '溶解氧快速下降后逐步回升'),
 )
 
 
@@ -29,19 +30,19 @@ def choose_scenario(*, read=input, emit=print):
     emit('请选择模拟场景（开始发送数据前选择）：')
     for number, (key, label) in enumerate(DEMO_SCENARIOS, 1):
         emit(f'  {number}. {label} ({key})')
-    emit('  0. 退出（7 也可退出）')
+    emit('  0. 退出（8 也可退出）')
     while True:
         try:
-            value = read('输入 1–6，Enter 默认正常水质，0 退出：').strip()
+            value = read('输入 1–7，Enter 默认正常水质，0 退出：').strip()
         except (EOFError, KeyboardInterrupt):
             return None
-        if value in ('0', '7'):
+        if value in ('0', '8'):
             return None
         if value == '':
             return DEMO_SCENARIOS[0]
         if value in tuple(str(i) for i in range(1, len(DEMO_SCENARIOS)+1)):
             return DEMO_SCENARIOS[int(value)-1]
-        emit('输入无效，请输入 1–6 或 0；直接 Enter 选择正常水质。')
+        emit('输入无效，请输入 1–7 或 0；直接 Enter 选择正常水质。')
 
 
 def require_free_port(port):

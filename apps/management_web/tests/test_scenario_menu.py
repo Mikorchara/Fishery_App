@@ -11,10 +11,10 @@ from scripts.dev import local_session as entry
 
 
 class ScenarioMenuTests(unittest.TestCase):
-    def test_six_labels_map_to_existing_simulator_scenarios(self):
+    def test_seven_labels_map_to_existing_simulator_scenarios(self):
         self.assertEqual([key for key, _ in entry.DEMO_SCENARIOS], [
             'normal', 'low_oxygen', 'suspected_disease', 'reduced_feeding',
-            'combined_anomaly', 'device_offline'])
+            'combined_anomaly', 'device_offline', 'oxygen_drop_recovery'])
         for index, (key, label) in enumerate(entry.DEMO_SCENARIOS, 1):
             self.assertIn(key, SCENARIOS)
             output = []
@@ -22,7 +22,7 @@ class ScenarioMenuTests(unittest.TestCase):
             self.assertTrue(any(label in line and key in line for line in output))
 
     def test_enter_default_invalid_retry_and_exit(self):
-        for final, expected in [('', entry.DEMO_SCENARIOS[0]), ('2', entry.DEMO_SCENARIOS[1]), ('0', None), ('7', None)]:
+        for final, expected in [('', entry.DEMO_SCENARIOS[0]), ('2', entry.DEMO_SCENARIOS[1]), ('0', None), ('8', None)]:
             with self.subTest(final=final):
                 answers = iter(['no', '99', '-1', final]); output = []
                 choice = entry.choose_scenario(read=lambda _:next(answers), emit=output.append)
@@ -43,7 +43,7 @@ class ScenarioMenuTests(unittest.TestCase):
         probe.assert_not_called()
 
     @unittest.skipUnless(os.name == 'nt', 'Windows console wrapper')
-    def test_real_console_wrapper_input_runs_all_six_dry_scenarios_and_cancels_without_send(self):
+    def test_real_console_wrapper_input_runs_all_seven_dry_scenarios_and_cancels_without_send(self):
         command = [sys.executable, '-X', 'utf8', '-I', '-B', '-u', str(Path(entry.__file__)),
             '--console-role', 'simulator', '--interactive-scenario', '--', '-m', 'apps.simulator',
             '--scenario', 'normal', '--server', 'http://127.0.0.1:8766', '--interval', '10', '--dry-run', '--windows', '1']
@@ -54,7 +54,7 @@ class ScenarioMenuTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn(f'当前场景：{label} ({scenario})', result.stdout)
                 self.assertIn('window 1: dry-run', result.stdout)
-        for answer in ('0\n', '7\n', ''):
+        for answer in ('0\n', '8\n', ''):
             with self.subTest(cancel=answer):
                 result = subprocess.run(command, input=answer, text=True, encoding='utf-8',
                     cwd=entry.ROOT, capture_output=True, timeout=10)

@@ -10,9 +10,25 @@ class EventRecordError(ValueError):
         self.code, self.status = code, status
 
 
-def deletable(event, linked=False, referenced=False):
-    return (not linked and not referenced and event.get('lifecycle_state') == 'RESOLVED' and event.get('status') == 'closed'
-            and parse_time(event.get('resolved_at')) is not None)
+def deletable(event, linked=False, referenced=False, audited=False):
+    if linked or referenced or audited or event.get('status') != 'closed':
+        return False
+    end = parse_time(event.get('resolved_at'))
+    if event.get('lifecycle_state') == 'RESOLVED':
+        return end is not None
+    if not legacy_closed_record(event):
+        return False
+    # An old recorded closure permits cleanup, never a new recovery assertion.
+    # Missing, naive or contradictory historical timestamps remain protected.
+    start = parse_time(event.get('occurred_at'))
+    last = parse_time(event.get('last_observed_at'))
+    return bool(start and end and start <= end and (
+        event.get('last_observed_at') is None or last and start <= last <= end))
+
+
+def legacy_closed_record(event):
+    """Use stored structure, never a UI flag, to identify an old recorded closure."""
+    return 'lifecycle_state' not in event and event.get('status') == 'closed'
 
 
 def parse_time(value):
@@ -24,8 +40,8 @@ def parse_time(value):
 
 
 def validate_delete(scope, event_id):
-    if scope not in ('single', 'all_resolved') or (scope == 'all_resolved' and event_id is not None) or (
-            scope == 'single' and (not isinstance(event_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', event_id))):
+    if scope not in ('single', 'all_resolved', 'ack_cycle') or (scope == 'all_resolved' and event_id is not None) or (
+            scope in ('single', 'ack_cycle') and (not isinstance(event_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', event_id))):
         raise EventRecordError('INVALID_EVENT_DELETE')
 
 
@@ -38,7 +54,7 @@ def query_records(events, *, now, lookback_minutes=None, q='', severity='', stat
     cutoff = now - timedelta(minutes=lookback_minutes) if lookback_minutes else None
     result = []
     for event in events:
-        if q.strip().casefold() not in ' '.join(str(event.get(k, '')) for k in ('title', 'device', 'code')).casefold():
+        if q.strip().casefold() not in (' '.join(str(event.get(k, '')) for k in ('title', 'device', 'code'))+' '+event.get('cycle_summary', {}).get('search_text','')).casefold():
             continue
         if severity and event.get('severity') != severity or status and status not in (event.get('status'), event.get('lifecycle_state')):
             continue

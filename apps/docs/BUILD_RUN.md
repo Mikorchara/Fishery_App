@@ -4,6 +4,10 @@
 
 日常操作、页面用法与学习记录见 [USER_GUIDE](USER_GUIDE.md)。MIG-1～MIG-5 主要迁移与人工验收已完成；本页区分正式用户实例与隔离开发实例，历史迁移命令不属于日常启动。
 
+## 当前数据库升级提示
+
+本轮同步 EVT-3A / SIMPLIFY-1，Monitoring 要求 Schema v2。2026-10-23 只读检查：正式及 demo-instance 均仍为 v1；普通启动会拒绝，不会自动升级。**先等待用户批准数据库维护，不要直接双击演示，也不要重新初始化或删除旧库。** 隔离副本已验证升级，步骤及回退见 [EVT 同步验收](deep-dive/EVT_SYNC_ACCEPTANCE.md)。以下日常启动命令在对应实例批准升级后使用。
+
 ## 快速开始 / 常用指令
 
 本节在 **Management** 的普通 PowerShell 执行：
@@ -18,7 +22,7 @@ Set-Location -LiteralPath 'D:\CodexProject\Fishery_Management'
 .\scripts\dev\启动演示系统.cmd
 ```
 
-Web 就绪后自动打开浏览器，**Simulator 专用窗口**先显示六场景菜单：1 正常、2 低氧、3 疑似疾病、4 摄食减少、5 复合异常、6 设备离线。输入数字确认；Enter 默认正常；无效输入重新提示；**0（或7）退出并停止本次两个服务**。选择前不上报，选择后第一个完整窗口约10秒；窗口显示当前场景和原模拟器的实际发送状态。
+Web 就绪后自动打开浏览器，**Simulator 专用窗口**先显示七场景菜单：1 正常、2 低氧、3 疑似疾病、4 摄食减少、5 复合异常、6 设备离线、7 溶解氧快速下降后逐步回升。输入数字确认；Enter 默认正常；无效输入重新提示；**0（或8）退出并停止本次两个服务**。选择前不上报，选择后第一个完整窗口约10秒；窗口显示当前场景和原模拟器的实际发送状态。
 
 脚本/自动化仍可无交互启动，以下使用已初始化隔离实例：
 
@@ -36,7 +40,7 @@ Web 就绪后自动打开浏览器，**Simulator 专用窗口**先显示六场�
 |---|---|
 | `-Demo` | 复用 `outputs/demo-instance`；首次仅复制正式知识，详见下节 |
 | `-DataRoot '绝对路径'` | 使用已有隔离实例，与 `-Demo/-UserData` 互斥；不自动初始化 |
-| `-Scenario low_oxygen` | 非交互场景，六种与菜单一致；默认 normal |
+| `-Scenario low_oxygen` | 非交互场景，七种与菜单一致；默认 normal |
 | `-ShowTerminals -InteractiveScenario` | 显式开启终端菜单；不指定 InteractiveScenario 时绝不等待输入 |
 | `-Port 8767` / `-Seed 42` | 端口 / 种子，Web-only 对应 `--port` |
 | `-NoAssistant` | 关闭 AI，其他场景和上报功能照常 |
@@ -154,3 +158,13 @@ Preview 未通过 Commit Gate 不进入成功 History；Stop、断流、超时�
 ## 真实测试
 
 `scripts/manual_real_tests/` 只委托现有管理资格 CLI，默认 dry-run；真实执行需具体计划与次数批准。网页发送和密钥测试则由用户点击明确发起。文档核对不代替真实验收，也不授予新模型资格。历史操作记录在 history/，不作为新项目启动前提。
+
+### 新场景：快速下降后逐步回升
+
+批准升级后，可在演示菜单选7，或在已初始化的隔离 v2 实例使用：
+
+```powershell
+.\scripts\dev\run_local.ps1 -Scenario oxygen_drop_recovery -DataRoot "$PWD\outputs\dev-instance"
+```
+
+0–20秒约6.4mg/L；20–50秒快速降至2.2；50–90秒低氧保持；90–180秒升至4.2；180–300秒继续升至6.4，此后保持正常、不重复。原生成器仍叠加波动并按窗口求均值；事件由 Monitoring 原规则判断。Prototype 没有交互菜单，Management 菜单仍复用原启动器。只生成不上报：`.\.venv\Scripts\python.exe -I -B -m apps.simulator --scenario oxygen_drop_recovery --seed 42 --windows 36 --dry-run`。

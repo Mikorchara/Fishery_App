@@ -1,8 +1,42 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {routes,routeFor,metricText,filterItems,chartGeometry,timeText,validateBootstrap,eventStateName,eventStateReasonName} from '../static/view-model.js';
+import {routes,routeFor,metricText,filterItems,chartGeometry,timeText,validateBootstrap,eventStateName,eventStateReasonName,eventHandlingName,cycleConfirmationName} from '../static/view-model.js';
 import fs from 'node:fs';
 import {execFileSync} from 'node:child_process';
+
+test('cycle confirmation uses current or last grade rather than any previous ACK history',()=>{
+  assert.equal(cycleConfirmationName({handling:{confirmed:true,ended:true,state:'PENDING'}}),'已确认');
+  assert.equal(cycleConfirmationName({handling:{confirmed:false,action_count:3}}),'未确认');
+  assert.equal(cycleConfirmationName({handling:{state:'ACKNOWLEDGED'}}),'已确认');
+  assert.equal(cycleConfirmationName({}),'未确认');
+});
+
+test('cycle primary states are simple while legacy unverified endings stay distinct',()=>{
+  for(const [lifecycle_state,label] of [['ACTIVE','异常中'],['INDETERMINATE','状态待核实'],['RESOLVED','已恢复']]){
+    assert.equal(eventStateName({cycle_summary:{},lifecycle_state}),label);
+  }
+  assert.equal(eventStateName({cycle_summary:{},legacy_closed:true,status:'closed',lifecycle_state:'INDETERMINATE'}),'旧版已结束（未复核）');
+});
+
+test('legacy recorded closure is distinct from verified recovery and a current unknown risk',()=>{
+  const old={status:'closed',lifecycle_state:'INDETERMINATE',state_reason:'LEGACY_UNREVIEWED',
+    legacy_closed:true,handling:{ended:true,can_ack:false,action_count:0}};
+  assert.equal(eventStateName(old),'旧版已结束（未复核）');
+  assert.match(eventStateReasonName(old),/原记录已结束/);
+  assert.match(eventStateReasonName(old),/未经新版规则复核/);
+  assert.equal(eventHandlingName(old),'无确认记录');
+  assert.equal(eventStateName({...old,status:'pending',legacy_closed:false}),'恢复状态待确认');
+  assert.equal(eventStateName({status:'closed',lifecycle_state:'RESOLVED'}),'规则条件已消退');
+});
+
+test('manual acknowledgement never replaces observation state or invents a legacy timestamp',()=>{
+  assert.equal(eventHandlingName({lifecycle_state:'INDETERMINATE'}),'待确认');
+  const event={lifecycle_state:'INDETERMINATE',handling:{state:'ACKNOWLEDGED',action_count:1}};
+  assert.equal(eventHandlingName(event),'已知晓');assert.equal(eventStateName(event),'恢复状态待确认');
+  assert.equal(eventHandlingName({...event,lifecycle_state:'RESOLVED'}),'历史已知晓');
+  assert.equal(eventHandlingName({lifecycle_state:'RESOLVED'}),'无确认记录');
+  assert.equal(eventHandlingName({...event,handling:{state:'PENDING',action_count:1}}),'待确认');
+});
 
 test('event wording distinguishes structured grade changes, uncertainty and interruption',()=>{
   const unknown={lifecycle_state:'INDETERMINATE'};
