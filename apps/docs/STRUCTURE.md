@@ -79,6 +79,7 @@ Fishery_Management/
 | `__init__.py` | Web 包标识；实际服务由显式入口启动。 |
 | `__main__.py` | python -m apps.management_web 入口；解析实例、端口、数据接入和 AI 开关，校验已有库并装配服务。 |
 | `app.py` | Flask create_app()、Host/Origin 保护、安全响应头、数据上报、监测/事件、AI 请求与取消路由。 |
+| `event_api.py` | 本机事件维护能力令牌、严格请求校验及已恢复历史的预览/删除 HTTP 入口。 |
 | `contracts.py` | Web 消费的监测、AI、视频展示、资料与事件服务 Protocol；监测事实复用公共合同。 |
 | `ai_adapter.py` | 将业务 Assistant 接到 Web，管理浏览器 Token、请求控制句柄及 Normal/Streaming 准备。 |
 | `instance.py` | 显式初始化空实例，检查路径、SQLite 完整性和 Schema；已有实例缺库时拒绝静默建库。 |
@@ -142,6 +143,7 @@ Fishery_Management/
 | `chart-ui.test.mjs` | 实际页面图表的时间间距、断点、会话、刻度和窄屏布局回归。 |
 | `knowledge-ui.test.mjs` | 知识搜索防抖/输入法、编辑草稿、版本冲突、导出及详情焦点保持回归。 |
 | `monitoring-ui.test.mjs` | 监测/视觉/事件页面、轮询、设备切换、缺失数据和历史范围展示回归。 |
+| `event_preview.py` | 十分钟有界的临时 SQLite 事件预览，虚构数据，不装配 AI、凭据或上报服务。 |
 | `settings-ui.test.mjs` | 设置草稿、显式测试/保存、凭据不回显、预算和默认偏好交互回归。 |
 | `tool-policy.test.mjs` | Tool 授权保存、配置刷新、会话保留和运行中延迟刷新回归。 |
 | `view-model.test.mjs` | 路由、筛选、北京时间、数据质量、图表几何及安全展示纯函数回归。 |
@@ -296,6 +298,8 @@ Fishery_Management/
 | `diagnosis.py` | 水质诊断阈值、风险判断和规则版本的业务所有者。 |
 | `rules.py` | 将观测、质量与诊断组织成带证据/规则身份的判断，不复制阈值或访问数据库。 |
 | `events.py` | 事件 ACTIVE/RESOLVED/INDETERMINATE 纯迁移与只读投影，不是人工处理工作流。 |
+| `event_families.py` | 水质同指标风险等级关联、有限变化证据与当前等级只读投影；不改变诊断阈值。 |
+| `event_records.py` | 事件关注区间筛选、分页、严格删除参数和历史删除资格合同。 |
 | `current.py` | 当前水质事实读取及视图，不生成模拟值、不改数据、不用 Demo 填补缺失。 |
 | `history.py` | 有界历史查询合同、时间范围与区间统计，不执行当前诊断或数据库 I/O。 |
 | `repository.py` | SQLite 当前值、历史、批次、事件、活动关联和联络时间；处理事务、去重、乱序及留存。 |
@@ -306,6 +310,9 @@ Fishery_Management/
 | 文件 | 功能简介 |
 |---|---|
 | `test_business_services.py` | 共享分析、纯事件迁移、事务回滚、重复/乱序不错误触发事件回归。 |
+| `test_event_lifecycle.py` | 视觉三窗恢复、Session/缺测中断、重启、活动留存及固定 Seed 回归。 |
+| `test_event_management.py` | 事件族等级、完整留存查询、五档筛选及历史删除的并发/引用保护。 |
+| `test_event_wording.py` | 文案所需只读投影、旧记录兼容、原 payload 不变及三类 HTTP 读取一致性。 |
 | `test_history_projection.py` | 重启、乱序、同时间观测和留存清理后的只读历史投影回归。 |
 | `test_local_http.py` | 本机真实 HTTP 周期上报、重启与网页读取端到端测试，不连外部设备/模型。 |
 | `test_pipeline.py` | 上报校验、窗口统计、视觉有效帧、生命周期和无数据不回退 Demo 的统一链路回归。 |
@@ -394,6 +401,8 @@ Fishery_Management/
 | `USER_GUIDE.md` | 页面操作、启动/关闭、业务数据/凭据边界、备份和日常使用学习指南。 |
 | `STRUCTURE.md` | 本页，包含简略分层图与逐文件职责索引。 |
 | `INTEGRATION.md` | 统一监测协议、HTTP DTO、规则/事件、AI 与前端集成合同及边界。 |
+| `deep-dive/EVENT_LIFECYCLE.md` | 视觉三窗恢复、Session/缺测、持久化、活动留存和首页异常概况。 |
+| `deep-dive/EVENT_MANAGEMENT.md` | 水质事件族等级、准确状态文案、关注区间筛选和受控历史硬删除。 |
 | `ROADMAP.md` | 已完成阶段、当前能力与待选择方向，不把规划当作已实现功能。 |
 
 ### 2.26 开发、资格与迁移说明 — `apps/docs/deep-dive/`

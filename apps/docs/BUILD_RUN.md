@@ -135,6 +135,8 @@ Credentials 保持独立私有 Store，`PROCESS_ENV > PROJECT_ENV > MISSING`。W
 
 专项直接调用 unittest 时，也应把 TEMP/TMP 指向本项目 outputs/test-tmp；使用虚构凭据和隔离数据，不要运行旧混合工程的 PRODUCT/QUALIFICATION 选择项。本仓库 run_tests 的 management 与 management-independent 都是完整管理集，fast 是管理专项小集合。
 
+事件状态、三窗恢复、等级关联、时间筛选和历史硬删除的验收边界见 [事件管理](deep-dive/EVENT_MANAGEMENT.md)。离线完整入口包含事件专项；删除验证只能使用临时数据库，不能针对正式或既有演示实例。
+
 ## Wheel
 
 ```powershell

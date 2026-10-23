@@ -11,6 +11,8 @@ from .contracts import (METRICS, validate_batch, MetricObservation, MonitoringSn
                         water_metric_facts, FindingState, ChannelAnalysis, WaterCapture)
 from .analysis import DomainAnalysisService, reading_from_row
 from .history import validate_history_query, history_range, summarize_water_history
+from .event_families import project_families
+from .event_records import query_records
 
 
 def utcnow():
@@ -141,7 +143,7 @@ class MonitoringService:
                 "observed_at": batch["timestamp"], "received_at": now.isoformat(),
                 "payload": {"window": batch["window"], "data": batch[channel]}} if batch[channel] is not None else None)
             assessments[channel] = self._assess(batch["device_id"], channel, row, now)
-        return self.repository.ingest(batch, now, assessments)
+        return self.repository.ingest(batch, now, assessments, stale_after_s=self.stale_after_s)
 
     def snapshot(self, device_id, view="available"):
         self._device(device_id)
@@ -184,7 +186,10 @@ class MonitoringService:
                 row = self.repository.read(*key)
                 assessments[key] = self._assess(*key, row, self.clock())
             result.append(self.repository.event_service.project(event, assessments[key]))
-        return result
+        return project_families(result)
+
+    def query_events(self, **filters):
+        return query_records(self.events(), now=self.clock(), **filters)
 
     def history(self, device_id, channel, limit=None):
         self._device(device_id)

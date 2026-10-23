@@ -140,6 +140,12 @@ water 或 visual 可以为 null，但不能同时为空。两个通道独立更�
 - snapshot/cameras 不再重复计算时间状态；当前事实先捕获，再选 evaluated_at。同一 events 查询对每 device/channel 只求值一次；不同查询仍按各自时点更新，不建会过期的全局分析缓存。
 - 每通道仍独立，窗口和设备引用明确。本阶段没有增加跨通道关联规则；以后要关联必须校验设备/池映射和时间重叠，不能仅因同一页面或批次到达就认为同步。
 
+### EVT-1 / EVT-2 同步后的事件边界
+
+视觉异常连续三个同 Session、完整有效且 fresh/online 的 CLEAR 窗口才消退；缺测、离线或窗口间断不提供恢复证明。恢复进度复用原 events JSON 和事务，无 Schema 迁移。水质阈值及恢复判定不变；相同指标风险方向的不同等级保留原 code/ID，通过事件族关联展示。
+
+GET /api/events 对完整留存集合按关注区间筛选五档范围，支持组合条件及分页；新增两个受本机能力令牌保护的历史预览/删除 POST，仅允许安全删除已恢复且无活动/替代引用的 events。全部活动关联不受普通 300 条历史上限裁剪。详见 [生命周期](deep-dive/EVENT_LIFECYCLE.md) 和 [事件管理](deep-dive/EVENT_MANAGEMENT.md)。旧 R2B 阶段说明不代表已实现人工处理工作流。
+
 ## 5. 场景编写与连续运行
 
 `apps/simulator/scenarios.py` 用 frozen Phase 列表定义全局 elapsed 时间线；按 at_s 升序，从零开始。相邻数值 Phase 线性插值，加小幅有界随机游走，模拟波动和渐变；连接/缺失/标定为离散开关。

@@ -2,6 +2,8 @@
 
 ## 当前
 
+2026-10-23：经用户批准，选择性同步 Prototype EVT-1/EVT-2 及文案收尾：视觉三窗恢复、风险族等级关联、首页活动提醒、关注区间五档筛选和受控历史硬删除。SQLite Schema 不变，未加入人工确认/关闭/暂缓；Management 保留独立启动与数据路径。[事件管理边界](deep-dive/EVENT_MANAGEMENT.md)。
+
 2026-10-21：双击演示在 Simulator 窗口先选择六场景，Enter 默认、0退出；原非交互 CLI 保持兼容，复用 Job/启动锁和原模拟器。BUILD_RUN 增加快速入口，项目差异见 [启动比较](deep-dive/LAUNCHER_COMPARISON.md)。
 
 2026-10-21：经 Prototype 实验与人工认可，选择性同步五档历史范围、分档节点、三指标归一化与原值 Tooltip；首页两列底边对齐、事件底部通栏，保留 Management 品牌、启动器和数据隔离。实现边界见 [图表说明](deep-dive/HISTORY_CHART_UI.md)。
