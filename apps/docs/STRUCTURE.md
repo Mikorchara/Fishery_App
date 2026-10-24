@@ -508,3 +508,13 @@ Fishery_Management/
 | `monitoring/tests/test_event_legacy.py` | 旧事件状态投影与受控清理兼容。 |
 | `monitoring/tests/test_monitoring_migration.py` | 隔离 v1 升级、备份、拒绝覆盖与故障回滚。 |
 | `docs/deep-dive/EVT_SYNC_ACCEPTANCE.md` | 本轮同步范围、真实库只读核查及待审批升级。 |
+
+## 失联提醒人工结束
+
+| 文件 | 功能 |
+|---|---|
+| `monitoring/manual_end.py` | 周期/旧单条人工结束，JSON人工序号、证据、幂等、事务复查及重新提醒。 |
+| `monitoring/tests/test_manual_end.py` | 合成失联、新HIT、旧记录、Session、并发、校时、删除和留存保护。 |
+| `management_web/tests/event_preview.py --manual-end` | 临时虚构失联记录的限时预览，不读取真实实例或Provider。 |
+| `docs/deep-dive/EVENT_MANUAL_END.md` | 功能边界、API、记录保留与无真实数据的人工预览。 |
+| `docs/deep-dive/MANUAL_END_SYNC.md` | 本次复核、选择性同步与独立回归记录。 |
