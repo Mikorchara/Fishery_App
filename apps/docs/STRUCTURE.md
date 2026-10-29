@@ -524,3 +524,13 @@ Fishery_Management/
 | `management_web/tests/event_preview.py --manual-end` | 临时虚构失联记录的限时预览，不读取真实实例或Provider。 |
 | `docs/deep-dive/EVENT_MANUAL_END.md` | 功能边界、API、记录保留与无真实数据的人工预览。 |
 | `docs/deep-dive/MANUAL_END_SYNC.md` | 本次复核、选择性同步与独立回归记录。 |
+
+## 演示与组员交接入口
+
+| 文件（相对项目根） | 功能 |
+|---|---|
+| `scripts/dev/启动QQ演示系统.cmd` | 三终端薄入口，场景菜单、浏览器、独立 QQ 人工审批。 |
+| `scripts/dev/启动演示系统.cmd` | 原两终端演示入口，保持不变。 |
+| `apps/docs/BUILD_RUN.md` | 日常两种启动与简要操作。 |
+| `apps/docs/deep-dive/MANAGEMENT_HANDOFF.md` | 组员首次环境、隔离配置和本机凭据步骤。 |
+| `apps/docs/deep-dive/BUILD_RUN_REFERENCE.md` | 正式实例、安全边界、测试和打包的详细参考。 |

@@ -5,6 +5,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'management_stack_common.ps1')
 if ($Check -and $Run) { throw 'SELECT_CHECK_OR_RUN' }
+$Request = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Request)
 $taskArguments=@((Join-Path $PSScriptRoot 'management_stack.py'),'--bot-only','--request',$Request)
 if (-not $Run) { $taskArguments+='--check' }
 if ($OfflineDemo) { $taskArguments+='--offline-demo' }

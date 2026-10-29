@@ -2,6 +2,16 @@
 
 2026-10-29，Management 源码工作区。基线 `codex/mig3-baseline / 9d24d632f30624c6646b9d186ef7147c4bf9cb37`（M2 已提交、开始时干净）。本阶段只进行离线/Mock/Windows 本机验收，没有连接真实 QQ/Qwen，没有读取真实凭据或正式数据库，也未改 Prototype。
 
+## 日常演示入口（2026-10-29 操作简化）
+
+日常只看 [BUILD_RUN](../BUILD_RUN.md)：两终端 `启动演示系统.cmd`；三终端 `启动QQ演示系统.cmd`。后者只包装原 Stack，以项目相对位置定位 `outputs/qq-m3-real-config/request.json`，启用已有场景菜单、自动打开浏览器，Web AI 关闭，Bot 仍独立人工审批。无需重新填写本机已批准群/成员。
+
+完整 Stack 新增 `-InteractiveScenario` / `-OpenBrowser`：仅透传到原 `local_session.run_local`，不复制菜单或模拟器。省略交互参数仍按 `-Scenario` 无交互启动；指定菜单时其选择覆盖 `-Scenario`，取消会沿原配对关闭机制结束本次 Stack。菜单只在 Simulator 终端等待，不阻塞 Bot Gateway 心跳。
+
+两个 Start PowerShell 入口现在将 `-Request` 相对路径规范为本机绝对路径后交给原安全检查，不再要求操作者写死盘符；JSON 内路径、设备、Scope 和人工批准规则未变。将整个项目移给组员前请看 [首次配置](MANAGEMENT_HANDOFF.md)，不能照搬包含旧绝对路径的配置、私有凭据或 used 账本。
+
+下文保留初始化、离线验收、授权、故障和实现细节；不是每次启动需要逐条执行的清单。
+
 ## 1. 快速使用：先验收纯离线三终端
 
 在 **Management 根目录**的普通 PowerShell 执行。Python 使用本项目 `.venv`；脚本兼容 Windows PowerShell 5.1，保留 UTF-8 BOM。
@@ -17,7 +27,7 @@ Set-Location -LiteralPath 'D:\CodexProject\Fishery_Management'
 
 ```powershell
 .\scripts\dev\Start-ManagementStack.ps1 -Request .\outputs\qq-m3-config\request.json -WithBot -OfflineDemo -Check
-.\scripts\dev\Start-ManagementStack.ps1 -Request .\outputs\qq-m3-config\request.json -WithBot -OfflineDemo -RunSeconds 60 -NoAssistant
+.\scripts\dev\Start-ManagementStack.ps1 -Request .\outputs\qq-m3-config\request.json -WithBot -OfflineDemo -RunSeconds 60 -NoAssistant -InteractiveScenario
 ```
 
 预期打开 Simulator、Web、Bot 三个独立窗口。Bot 使用 Fake Gateway + Mock Provider，自动确认的是**纯离线测试许可**，不能转换为联网许可。虚构成员自动发一条水质问题；不向 QQ 发消息、不调用模型。Web 地址默认为 `http://127.0.0.1:8766`，Simulator 按原方式每 10 秒上报。
@@ -75,7 +85,7 @@ Set-Location -LiteralPath 'D:\CodexProject\Fishery_Management'
 5. 人工复核本机配置中的群/成员、SIMULATOR 数据披露及预算，然后执行启动命令：
 
 ```powershell
-.\scripts\dev\Start-ManagementStack.ps1 -Request .\outputs\qq-m3-real-config\request.json -WithBot
+.\scripts\dev\Start-ManagementStack.ps1 -Request .\outputs\qq-m3-real-config\request.json -WithBot -NoAssistant -InteractiveScenario -OpenBrowser
 ```
 
 在 **Bot 专用终端**查看模型、实例、设备、Scope、群/成员摘要和费用风险，输入本次显示的 `APPROVE MANAGEMENT <12位摘要>`。没有自动审批参数。拒绝/关闭审批窗口时，Bot 不联网，Web/Simulator 可继续运行。终端中的群/成员使用摘要，完整身份以预先核对的本机 `access.json` 为准。

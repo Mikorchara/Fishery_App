@@ -3,7 +3,9 @@
 这是独立管理项目的文档入口，不需要安装旧 Prototype。MIG-1～MIG-5 的主要迁移与人工验收已完成；旧仓库历史仅作为设计来源，不是运行前提。凭据和真实网页验收完成状态按用户确认记录，不代表新增正式模型资格。
 
 - [使用与学习指南（用户入口）](USER_GUIDE.md)
-- [启动、安装、实例与测试](BUILD_RUN.md)
+- [启动指南：两个入口](BUILD_RUN.md)
+- [组员首次配置与交接](deep-dive/MANAGEMENT_HANDOFF.md)
+- [运行维护、正式实例与开发测试](deep-dive/BUILD_RUN_REFERENCE.md)
 - [两项目启动方式比较与统一边界](deep-dive/LAUNCHER_COMPARISON.md)
 - [目录与职责](STRUCTURE.md)
 - [监测与业务数据合同](INTEGRATION.md)

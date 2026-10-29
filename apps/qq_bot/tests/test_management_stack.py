@@ -10,6 +10,7 @@ import sys
 from tempfile import TemporaryDirectory
 import time
 import unittest
+from unittest.mock import patch
 
 from apps.qq_bot.management_cli import initialize_demo
 from apps.qq_bot.management_config import ROOT
@@ -34,11 +35,12 @@ class ManagementStackTests(unittest.TestCase):
             time.sleep(.1)
         self.fail('owned stack condition timed out')
 
-    def start(self,*,bot=True,only=False,seconds=70,quarantine=False):
+    def start(self,*,bot=True,only=False,seconds=70,quarantine=False,interactive=False,menu_input=None):
         log=self.root/'controller.log'
         output=log.open('wb');self.addCleanup(output.close)
         command=[sys.executable,'-X','utf8','-I','-B','-u',str(ROOT/'scripts/dev/management_stack.py'),
             '--request',str(self.request),'--port',str(self.port),'--offline-demo','--no-assistant','--seconds',str(seconds)]
+        if interactive:command+=['--interactive-scenario']
         if bot:command+=['--with-bot']
         if only:command+=['--bot-only']
         if quarantine:
@@ -73,6 +75,24 @@ subprocess.Popen=launch
 from scripts.dev.management_stack import main
 raise SystemExit(main())'''
             command=[sys.executable,'-X','utf8','-I','-B','-u','-c',inject,str(ROOT),*args]
+        if menu_input is not None:
+            # Feed the real Simulator console menu only, never the Bot approval.
+            script=command.index(str(ROOT/'scripts/dev/management_stack.py'))
+            inject='''import sys,subprocess,runpy,asyncio
+sys.path.insert(0,sys.argv.pop(1))
+answer=sys.argv.pop(1)
+original=subprocess.Popen
+def launch(command,**options):
+    controlled='--role' in command and command[command.index('--role')+1]=='simulator'
+    if controlled:options['stdin']=subprocess.PIPE
+    child=original(command,**options)
+    if controlled:
+        child.stdin.write(answer.encode());child.stdin.close()
+    return child
+subprocess.Popen=launch
+script=sys.argv.pop(1);sys.argv[0]=script
+runpy.run_path(script,run_name='__main__')'''
+            command=[sys.executable,'-X','utf8','-I','-B','-u','-c',inject,str(ROOT),menu_input,*command[script:]]
         child=subprocess.Popen(command,cwd=ROOT,stdout=output,stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW)
         directory=[None]
         def cleanup():
@@ -169,12 +189,67 @@ raise SystemExit(main())'''
         self.assertIsNone(child.poll())
         self.assertTrue(process_fixture.alive(self.status(directory,'web')['pid']))
 
+    def test_menu_waits_before_sending_and_zero_stops_owned_stack(self):
+        before=self.count()
+        child,directory=self.start(interactive=True)
+        self.wait(lambda:'请选择模拟场景' in (directory/'simulator.log').read_text(encoding='utf8')
+                  if (directory/'simulator.log').exists() else False)
+        # Even a full reporting interval must not generate a batch before selection.
+        time.sleep(10.5)
+        self.assertEqual(self.count(),before)
+        self.assertIsNone(child.poll())
+        request_stop(directory,'all');child.wait(timeout=30)
+        cancelled,cancel_directory=self.start(interactive=True,menu_input='0\n')
+        cancelled.wait(timeout=30)
+        self.assertEqual(cancelled.returncode,0,(cancel_directory/'controller.log').read_text())
+        self.assertEqual(self.count(),before)
+        self.assertFalse(any(process_fixture.alive(self.status(cancel_directory,r).get('pid',0))
+                             for r in ('web','simulator','bot')))
+
+    def test_menu_invalid_default_and_selected_scenario_with_new_session(self):
+        from scripts.dev.local_session import DEMO_SCENARIOS
+        for answer,index in [('bad\n\n',0),('7\n',6)]:
+            with self.subTest(scenario=DEMO_SCENARIOS[index][0]):
+                before=self.count()
+                child,directory=self.start(interactive=True,menu_input=answer)
+                self.wait(lambda:self.count()>before,timeout=25)
+                log=(directory/'simulator.log').read_text(encoding='utf8')
+                key,label=DEMO_SCENARIOS[index]
+                self.assertIn(f'当前场景：{label} ({key})',log)
+                if index==0:self.assertIn('输入无效',log)
+                self.assertIsNone(child.poll())
+                request_stop(directory,'all');child.wait(timeout=30)
+                self.assertEqual(child.returncode,0)
+
+    def test_stack_cli_preserves_noninteractive_default_and_threads_options(self):
+        from scripts.dev import management_stack
+        with patch.object(management_stack,'launch_stack',return_value=0) as launch:
+            self.assertEqual(management_stack.main(['--request',str(self.request),'--with-bot',
+                '--scenario','low_oxygen','--interactive-scenario','--open-browser']),0)
+            self.assertTrue(launch.call_args.kwargs['interactive_scenario'])
+            self.assertTrue(launch.call_args.kwargs['open_browser'])
+            self.assertEqual(launch.call_args.kwargs['scenario'],'low_oxygen')
+            self.assertEqual(management_stack.main(['--request',str(self.request),'--with-bot',
+                '--scenario','low_oxygen']),0)
+            self.assertFalse(launch.call_args.kwargs['interactive_scenario'])
+        wrapper=(ROOT/'scripts/dev/启动QQ演示系统.cmd').read_text(encoding='utf8')
+        self.assertIn('%~dp0Start-ManagementStack.ps1',wrapper)
+        self.assertIn('-WithBot -NoAssistant -InteractiveScenario -OpenBrowser',wrapper)
+        self.assertNotIn('APPROVE',wrapper)
+
     def test_powershell_check_missing_config_scope_and_no_network(self):
         command=['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',
             str(ROOT/'scripts/dev/Start-QQBot.ps1'),'-Check','-OfflineDemo','-Request',str(self.request)]
         result=subprocess.run(command,cwd=ROOT,capture_output=True,timeout=15)
         self.assertEqual(result.returncode,0,result.stderr.decode(errors='replace'))
         self.assertIn(b'MANAGEMENT_QQ_CHECKED_APPROVAL_REQUIRED',result.stdout)
+        relative=str(self.request.relative_to(ROOT))
+        for entry in ('Start-QQBot.ps1','Start-ManagementStack.ps1'):
+            extra=['-WithBot','-InteractiveScenario'] if entry=='Start-ManagementStack.ps1' else []
+            checked=subprocess.run(['powershell.exe','-NoProfile','-File',str(ROOT/'scripts/dev'/entry),
+                '-Check','-OfflineDemo','-Request',relative,*extra],cwd=ROOT,capture_output=True,timeout=15)
+            self.assertEqual(checked.returncode,0,checked.stderr.decode(errors='replace'))
+            self.assertIn(b'STACK_PREFLIGHT_OK',checked.stdout)
         invalid=subprocess.run([*command[:-1],str(self.root/'missing.json')],cwd=ROOT,capture_output=True,timeout=15)
         self.assertNotEqual(invalid.returncode,0)
         for name in ('Start-ManagementStack.ps1','Start-QQBot.ps1','Stop-QQBot.ps1','Stop-ManagementStack.ps1'):

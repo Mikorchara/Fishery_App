@@ -56,7 +56,8 @@ def preflight(*,request=None,data_root=None,port=8766,with_bot=False,offline=Fal
     return root,summary
 
 def launch_stack(*,request=None,data_root=None,port=8766,scenario='normal',with_bot=False,
-                 offline=False,bot_only=False,seconds=None,no_assistant=False,emit=print):
+                 offline=False,bot_only=False,seconds=None,no_assistant=False,
+                 interactive_scenario=False,open_browser=False,emit=print):
     from scripts.dev import local_session
     from scripts.dev.windows_job import own_process_tree
     from scripts.dev.console_job import ConsoleJob
@@ -153,7 +154,8 @@ def launch_stack(*,request=None,data_root=None,port=8766,scenario='normal',with_
                     # Bot control is handled independently by its controller/monitor.
                     time.sleep(seconds_to_sleep)
                 result=local_session.run_local(scenario,port,assistant=not no_assistant,
-                    data_root=root,show_terminals=True,launch=launch,sleep=sleep,emit=lambda text:report(dict(code='STACK_WEB_SIMULATOR',message=text)))
+                    data_root=root,show_terminals=True,interactive_scenario=interactive_scenario,
+                    open_browser=open_browser,launch=launch,sleep=sleep,emit=lambda text:report(dict(code='STACK_WEB_SIMULATOR',message=text)))
     except KeyboardInterrupt:result=0
     except Exception as error:
         code=getattr(error,'code',str(error) if isinstance(error,RuntimeError) else 'STACK_START_FAILED')
@@ -194,6 +196,8 @@ def main(argv=None):
     p.add_argument('--with-bot',action='store_true');p.add_argument('--bot-only',action='store_true')
     p.add_argument('--offline-demo',action='store_true');p.add_argument('--check',action='store_true')
     p.add_argument('--seconds',type=int);p.add_argument('--no-assistant',action='store_true')
+    p.add_argument('--interactive-scenario',action='store_true')
+    p.add_argument('--open-browser',action='store_true')
     p.add_argument('--stop-directory',type=Path);p.add_argument('--stop-role',choices=('bot','all'),default='all')
     args=p.parse_args(argv)
     try:
@@ -205,7 +209,8 @@ def main(argv=None):
             root,summary=preflight(request=args.request,data_root=args.data_root,port=args.port,with_bot=args.with_bot,offline=args.offline_demo,bot_only=args.bot_only)
             print(json.dumps(dict(code='STACK_PREFLIGHT_OK',data_root=str(root),bot=args.with_bot,summary=summary),ensure_ascii=False));return 0
         return launch_stack(request=args.request,data_root=args.data_root,port=args.port,scenario=args.scenario,
-            with_bot=args.with_bot,offline=args.offline_demo,bot_only=args.bot_only,seconds=args.seconds,no_assistant=args.no_assistant)
+            with_bot=args.with_bot,offline=args.offline_demo,bot_only=args.bot_only,seconds=args.seconds,no_assistant=args.no_assistant,
+            interactive_scenario=args.interactive_scenario,open_browser=args.open_browser)
     except Exception as error:
         from apps.qq_bot.management_cli import emit
         emit(getattr(error,'code',str(error) if isinstance(error,RuntimeError) else 'STACK_PREFLIGHT_FAILED'));return 1
