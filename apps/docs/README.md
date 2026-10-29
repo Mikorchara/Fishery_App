@@ -3,6 +3,10 @@
 这是独立管理项目的文档入口，不需要安装旧 Prototype。MIG-1～MIG-5 的主要迁移与人工验收已完成；旧仓库历史仅作为设计来源，不是运行前提。凭据和真实网页验收完成状态按用户确认记录，不代表新增正式模型资格。
 
 - [使用与学习指南（用户入口）](USER_GUIDE.md)
+- [技术路线说明（组员阅读版）](TECHNICAL_ROUTE_TEAM.md)
+- [技术路线与逐页提纲（PPT Agent 版）](TECHNICAL_ROUTE_PPT_BRIEF.md)
+- [真实设备接入：数据、视频与接口要求（设计初稿）](deep-dive/plan/REAL_DEVICE_INTEGRATION.md)
+- [当前模拟数据格式与传输方式（简略版）](DEVICE_INTERFACE_QUICK.md)
 - [启动指南：两个入口](BUILD_RUN.md)
 - [组员首次配置与交接](deep-dive/MANAGEMENT_HANDOFF.md)
 - [运行维护、正式实例与开发测试](deep-dive/BUILD_RUN_REFERENCE.md)
