@@ -8,7 +8,7 @@ import threading
 from .runtime.assistant import AssistantRequest, AssistantService, assistant_profile
 from apps.ai_backend.assistant_activity import safe_code
 from apps.ai_backend.credentials import CredentialStore
-from apps.ai_backend.execution import RequestHandle, request_scope, turn_deadline_scope
+from apps.ai_backend.execution import RequestHandle, request_scope, turn_deadline_scope, current_handle
 from apps.ai_backend.model_gateway import GatewayError, ProfileRegistry
 from apps.ai_backend.observability import JsonlTraceSink
 from apps.ai_backend.openai_compatible_adapter import OpenAICompatibleAdapter
@@ -31,20 +31,27 @@ from .normal_selection import (NORMAL_SELECTION_CANDIDATE, resolve_normal_select
     UNIFIED_PRESET, UnifiedToolTrials, load_unified_tool_trials, resolve_unified_tools)
 
 
+from .channel import ChannelAuthorization, ChannelAssistantResult, OfflineChannelProvider, SourceSummary, candidate_decision
+from .channel_presentation import QQ_PROMPT_ID, QQ_SYSTEM_INSTRUCTION
+from .channel_conversation import ChannelHistoryAuthority, ChannelHistorySnapshot, conversation_decision, PROMPT_ID as DIALOGUE_PROMPT_ID, INSTRUCTION as DIALOGUE_INSTRUCTION
+from .business_tools.current_water_quality import CURRENT_WATER_QUALITY
+from apps.ai_backend.tools import ToolDefinition
+from apps.ai_backend.tool_conversation import ToolExecutionMode
+
 PRESETS = ("dashscope-qwen38-flash-r1", "ollama-qwen35-4b-r1")
 
 
 class ManagementAssistantService:
     """One epoch and frozen device/policy/mode per turn; single-round by default."""
 
-    def __init__(self, monitoring, *, credentials, traces, policy_directory,
-                 gateway_factory=OpenAICompatibleAdapter, execution_config=None, streaming_config=None,
-                 history_config=None, unified_config=None, knowledge=None):
-        self.monitoring, self.credentials, self.traces = monitoring, credentials, traces
+    def __init__(self, monitoring, *, credentials, traces, policy_directory, gateway_factory=OpenAICompatibleAdapter, execution_config=None, streaming_config=None, history_config=None, unified_config=None, knowledge=None, offline_channel_provider=None, channel_trial=None, _monitoring_only=False):
+        if knowledge is None and (not _monitoring_only):
+            raise ValueError('KNOWLEDGE_SERVICE_REQUIRED')
+        self.monitoring, self.credentials, self.traces = (monitoring, credentials, traces)
         self.gateway_factory = gateway_factory
-        self.settings_store = None  # Bound once by management settings startup composition.
-        self._unified_config=load_unified_tool_trials() if unified_config is None else unified_config
-        if not isinstance(self._unified_config,UnifiedToolTrials):
+        self.settings_store = None
+        self._unified_config = load_unified_tool_trials() if unified_config is None else unified_config
+        if not isinstance(self._unified_config, UnifiedToolTrials):
             raise GatewayError('INVALID_UNIFIED_TOOL_TRIAL_CONFIG')
         self.epoch = secrets.token_hex(16)
         self._execution_config = load_execution_config() if execution_config is None else execution_config
@@ -55,18 +62,28 @@ class ManagementAssistantService:
             raise GatewayError('INVALID_MANAGEMENT_STREAMING_CONFIG')
         devices = monitoring.devices()
         if not devices:
-            raise ValueError("NO_MONITORING_DEVICE")
-        # Explicit business dependency only: no old Gateway/Registry/Executor.
-        if knowledge is None:
-            raise ValueError("KNOWLEDGE_SERVICE_REQUIRED")
+            raise ValueError('NO_MONITORING_DEVICE')
+        if offline_channel_provider is not None and type(offline_channel_provider) is not OfflineChannelProvider:
+            raise GatewayError('OFFLINE_CHANNEL_PROVIDER_REQUIRED')
+        self._offline_channel_provider = offline_channel_provider
+        from .channel_trial import QwenTrialSession
+        from .channel_session_run import SessionQwenTurn
+        from .channel_hybrid import HybridQwenTurn
+        if channel_trial is not None and (type(channel_trial) not in (HybridQwenTurn,) or offline_channel_provider is not None or knowledge is not None):
+            raise GatewayError('INVALID_QWEN_TRIAL_COMPOSITION')
+        self._channel_trial = channel_trial
+        self._channel_history_authority = None
+        if type(channel_trial) in (SessionQwenTurn,):
+            self._channel_history_authority = channel_trial.authority
+        if type(channel_trial) in (HybridQwenTurn,):
+            self._channel_history_authority = channel_trial.authority
         self.knowledge = knowledge
         from apps.knowledge.service import KnowledgeContentService
-        if isinstance(self.knowledge,KnowledgeContentService):
+        if isinstance(self.knowledge, KnowledgeContentService):
             from .content_binding import content_scope_configs
-            self._execution_config,self._streaming_config,self._unified_config=content_scope_configs(
-                self._execution_config,self._streaming_config,self._unified_config)
-        self.history_registry = bind_tools(monitoring, devices[0]["id"], self.knowledge, include_history=True)
-        self.formal_registry = ToolRegistry([self.history_registry.lookup(name) for name in FORMAL_TOOL_NAMES])
+            self._execution_config, self._streaming_config, self._unified_config = content_scope_configs(self._execution_config, self._streaming_config, self._unified_config)
+        self.history_registry = bind_tools(monitoring, devices[0]['id'], self.knowledge, include_history=self.knowledge is not None, include_knowledge=self.knowledge is not None)
+        self.formal_registry = ToolRegistry([self.history_registry.lookup(name) for name in FORMAL_TOOL_NAMES if name in self.history_registry.registered_names()])
         self.policy_store = UserToolPolicyStore(policy_directory, self.formal_registry)
         self.management_policy = ManagementToolPolicyStore(policy_directory, self.policy_store)
         self._history_config = load_history_config() if history_config is None else history_config
@@ -98,8 +115,9 @@ class ManagementAssistantService:
                                                    streaming=unified_tools_trial and streaming_trial))
 
     def availability(self):
-        return {"connected": True, "mode": "normal", "thinking": "off",
-                "description": "Assistant Runtime · Normal · 水质查询 / 项目知识（按 Policy 授权）"}
+        if self.knowledge is None:
+            return {'connected': True, 'mode': 'normal', 'thinking': 'off', 'description': 'Monitoring-only · offline candidate · 未绑定 Knowledge，未开放真实发送'}
+        return {'connected': True, 'mode': 'normal', 'thinking': 'off', 'description': 'Assistant Runtime · Normal · 水质查询 / 项目知识（按 Policy 授权）'}
 
     def tool_authorization(self):
         from .business_tools.registry import WATER_QUALITY_SCORE
@@ -124,56 +142,47 @@ class ManagementAssistantService:
         self.management_policy.save(value['selected_tools'],expected_revision=value['revision'])
         return self.tool_authorization()
 
-    def _configuration(self, preset_id, device_id, *, transport=ToolModelTransport.NORMAL,
-                       policy_snapshot=None, execution_profile=None, budget_document=None):
+    def _configuration(self, preset_id, device_id, *, transport=ToolModelTransport.NORMAL, policy_snapshot=None, execution_profile=None, budget_document=None):
         if not isinstance(transport, ToolModelTransport):
             raise GatewayError('INVALID_ASSISTANT_REQUEST')
         if preset_id not in PRESETS:
-            raise GatewayError("ASSISTANT_PRESET_NOT_ALLOWED")
+            raise GatewayError('ASSISTANT_PRESET_NOT_ALLOWED')
         if not isinstance(device_id, str):
-            raise GatewayError("INVALID_ASSISTANT_REQUEST")
-        self.monitoring.bind(device_id)  # Validate registered device, never page-global state.
+            raise GatewayError('INVALID_ASSISTANT_REQUEST')
+        self.monitoring.bind(device_id)
         if execution_profile not in (None, HISTORY_PROFILE, NORMAL_SELECTION_CANDIDATE):
             raise GatewayError('INVALID_ASSISTANT_REQUEST')
         historical = execution_profile == HISTORY_PROFILE
         candidate = execution_profile == NORMAL_SELECTION_CANDIDATE
         snapshot = policy_snapshot or self.management_policy.snapshot()
-        unified=(not historical and not candidate and preset_id==UNIFIED_PRESET
-            and set(snapshot.selected_tools).intersection(HISTORY_CANDIDATE_TOOL_NAMES)!=set(FORMAL_TOOL_NAMES) and (
-                self._unified_config.streaming_enabled if transport==ToolModelTransport.STREAMING
-                else self._unified_config.normal_enabled))
-        registry = bind_tools(self.monitoring, device_id, self.knowledge,
-            formal=self.history_registry if historical or candidate or unified else self.formal_registry,
-            include_history=historical or candidate or unified)
-        selected = ToolPolicy("assistant", True, snapshot.selected_tools)
+        if self.knowledge is None:
+            registry = bind_tools(self.monitoring, device_id, None, include_knowledge=False)
+            policy = ToolPolicy('assistant', True, tuple((name for name in snapshot.selected_tools if name == CURRENT_WATER_QUALITY and name in registry.registered_names())))
+            profile = assistant_profile(preset_id)
+            return (profile, policy, candidate_decision(profile, policy, registry, device_id=device_id, epoch=self.epoch, policy_revision=snapshot.revision), registry)
+        unified = not historical and (not candidate) and (preset_id == UNIFIED_PRESET) and (set(snapshot.selected_tools).intersection(HISTORY_CANDIDATE_TOOL_NAMES) != set(FORMAL_TOOL_NAMES)) and (self._unified_config.streaming_enabled if transport == ToolModelTransport.STREAMING else self._unified_config.normal_enabled)
+        registry = bind_tools(self.monitoring, device_id, self.knowledge, formal=self.history_registry if historical or candidate or unified else self.formal_registry, include_history=historical or candidate or unified)
+        selected = ToolPolicy('assistant', True, snapshot.selected_tools)
         bound = {definition.name for definition in registry.model_definitions()}
         names = HISTORY_CANDIDATE_TOOL_NAMES if candidate or unified else selected.exposed_tools
-        policy = ToolPolicy("assistant", selected.llm_tool_calling,
-            tuple(name for name in names if name in bound and name in selected.exposed_tools
-                  and (not historical or name == WATER_QUALITY_HISTORY)))
+        policy = ToolPolicy('assistant', selected.llm_tool_calling, tuple((name for name in names if name in bound and name in selected.exposed_tools and (not historical or name == WATER_QUALITY_HISTORY))))
         profile = assistant_profile(preset_id)
         if candidate:
-            execution = resolve_normal_selection_candidate(profile,selected,registry,self.knowledge,
-                device_id=device_id,epoch=self.epoch,policy_revision=snapshot.revision,transport=transport)
+            execution = resolve_normal_selection_candidate(profile, selected, registry, self.knowledge, device_id=device_id, epoch=self.epoch, policy_revision=snapshot.revision, transport=transport)
         elif historical:
-            execution = resolve_history_candidate(self._history_config,profile,selected,registry,
-                device_id=device_id,epoch=self.epoch,policy_revision=snapshot.revision,transport=transport)
+            execution = resolve_history_candidate(self._history_config, profile, selected, registry, device_id=device_id, epoch=self.epoch, policy_revision=snapshot.revision, transport=transport)
         elif unified:
-            execution=resolve_unified_tools(self._unified_config,profile,policy,registry,self.knowledge,
-                device_id=device_id,epoch=self.epoch,policy_revision=snapshot.revision,transport=transport)
+            execution = resolve_unified_tools(self._unified_config, profile, policy, registry, self.knowledge, device_id=device_id, epoch=self.epoch, policy_revision=snapshot.revision, transport=transport)
         elif transport == ToolModelTransport.STREAMING:
-            execution = resolve_streaming(self._streaming_config,profile,selected,policy,registry,self.knowledge,
-                                          device_id=device_id,epoch=self.epoch)
+            execution = resolve_streaming(self._streaming_config, profile, selected, policy, registry, self.knowledge, device_id=device_id, epoch=self.epoch)
         else:
-            execution = resolve_execution(self._execution_config,profile,selected,policy,registry,self.knowledge,
-                                          device_id=device_id,epoch=self.epoch)
-        if not historical and not candidate and snapshot.source == 'MANAGEMENT_OVERRIDE':
-            execution = replace(execution,profile=replace(execution.profile, revision=_hash({
-                'execution_revision':execution.profile.revision,'management_policy_revision':snapshot.revision})))
-        if not historical and not candidate:
+            execution = resolve_execution(self._execution_config, profile, selected, policy, registry, self.knowledge, device_id=device_id, epoch=self.epoch)
+        if not historical and (not candidate) and (snapshot.source == 'MANAGEMENT_OVERRIDE'):
+            execution = replace(execution, profile=replace(execution.profile, revision=_hash({'execution_revision': execution.profile.revision, 'management_policy_revision': snapshot.revision})))
+        if not historical and (not candidate):
             from .output_budget import apply
-            execution=apply(profile,execution,self.settings_store,document=budget_document)
-        return profile, policy, execution, registry
+            execution = apply(profile, execution, self.settings_store, document=budget_document)
+        return (profile, policy, execution, registry)
 
     def bootstrap(self, device_id: str) -> dict:
         # Read Policy and budget state once so every displayed mode describes
@@ -234,27 +243,34 @@ class ManagementAssistantService:
                                      snapshot.revision, snapshot.source)
 
     def execute_turn(self, prepared: PreparedAssistantTurn, handle: RequestHandle) -> dict:
+        if isinstance(prepared, PreparedAssistantTurn) and prepared.channel_authorization is not None:
+            raise GatewayError('CHANNEL_ENTRY_REQUIRED')
         return self.claim_turn(prepared, handle)()
 
     def claim_turn(self, prepared: PreparedAssistantTurn, handle: RequestHandle):
         """Claim before worker/headers; return one server-only, single-use execution."""
         if not isinstance(prepared, PreparedAssistantTurn) or not isinstance(handle, RequestHandle):
-            raise GatewayError("INVALID_ASSISTANT_REQUEST")
+            raise GatewayError('INVALID_ASSISTANT_REQUEST')
         if prepared.epoch != self.epoch:
-            raise GatewayError("ASSISTANT_SESSION_EXPIRED")
+            raise GatewayError('ASSISTANT_SESSION_EXPIRED')
+        if prepared.channel_authorization is not None:
+            self.validate_channel_turn(prepared)
+            if self._channel_trial is None and type(self._offline_channel_provider) is not OfflineChannelProvider or prepared.execution.profile.release_status != (self._channel_trial.release_status if self._channel_trial else 'candidate') or prepared.execution.profile.mode != ToolExecutionMode.SINGLE_ROUND or (prepared.request.history and prepared.channel_history is None) or (prepared.policy.exposed_tools != (CURRENT_WATER_QUALITY,)):
+                raise GatewayError('INVALID_CHANNEL_CANDIDATE')
         current = self.management_policy.snapshot()
-        if (current.source == 'MANAGEMENT_OVERRIDE' or prepared.policy_source == 'MANAGEMENT_OVERRIDE') \
-                and current.revision != prepared.policy_revision:
+        if (current.source == 'MANAGEMENT_OVERRIDE' or prepared.policy_source == 'MANAGEMENT_OVERRIDE') and current.revision != prepared.policy_revision:
             raise GatewayError('ASSISTANT_EXECUTION_PROFILE_CHANGED')
         if not prepared.execution.can_send:
-            raise GatewayError('ASSISTANT_STREAMING_NOT_RELEASED' if
-                prepared.execution.model_transport == ToolModelTransport.STREAMING else 'ASSISTANT_MULTI_ROUND_SCOPE_MISMATCH')
-        if (prepared.execution.output_budget_revision is not None and self.settings_store is not None
-                and prepared.execution.output_budget_revision!=self.settings_store.document()['budget_revision']):
+            raise GatewayError('ASSISTANT_STREAMING_NOT_RELEASED' if prepared.execution.model_transport == ToolModelTransport.STREAMING else 'ASSISTANT_MULTI_ROUND_SCOPE_MISMATCH')
+        if prepared.execution.output_budget_revision is not None and self.settings_store is not None and (prepared.execution.output_budget_revision != self.settings_store.document()['budget_revision']):
             raise GatewayError('ASSISTANT_EXECUTION_PROFILE_CHANGED')
-        handle.start()  # Replay/cancellation gate before credentials or model I/O.
+        handle.start()
         handle.limit_turn(prepared.profile.total_timeout_s)
-        lock, used = threading.Lock(), False
+        if prepared.channel_authorization is not None:
+            handle.limit_turn(prepared.channel_authorization.budget.turn_timeout_s)
+            if self._channel_trial is not None:
+                self._channel_trial.arm(handle)
+        lock, used = (threading.Lock(), False)
 
         def execute():
             nonlocal used
@@ -262,39 +278,148 @@ class ManagementAssistantService:
                 if used:
                     raise GatewayError('REQUEST_ALREADY_EXECUTED')
                 used = True
-            return self._execute_claimed_turn(prepared,handle)
+            return self._execute_claimed_turn(prepared, handle)
         return execute
 
     def _execute_claimed_turn(self, prepared, handle):
-        turn, device_id = prepared.request, prepared.device_id
-        profile, policy, registry = prepared.profile, prepared.policy, prepared.registry
+        turn, device_id = (prepared.request, prepared.device_id)
+        profile, policy, registry = (prepared.profile, prepared.policy, prepared.registry)
         try:
-            # ContextVar ownership must be established in the actual worker thread.
             with request_scope(handle), turn_deadline_scope(profile.total_timeout_s):
-                runtime = ProfileRegistry([profile], self.credentials).snapshot(profile.profile_id)
+                authorization = prepared.channel_authorization
+                if authorization is not None:
+                    self.validate_channel_turn(prepared)
+                fake_channel = authorization is not None and (self._channel_trial is None or self._channel_trial.offline_test)
+                credentials = CredentialStore(process_env={profile.credential_ref: 'offline-channel-placeholder'}) if fake_channel else self.credentials
+                runtime = ProfileRegistry([profile], credentials).snapshot(profile.profile_id)
                 handle.check()
-                if (runtime.auth_spec == AuthSpec.REQUIRED_BEARER
-                        and runtime.credential.status.availability != "PRESENT"):
-                    raise GatewayError("SECRET_MISSING")
+                if runtime.auth_spec == AuthSpec.REQUIRED_BEARER and runtime.credential.status.availability != 'PRESENT':
+                    raise GatewayError('SECRET_MISSING')
                 decision = prepared.execution
                 if decision.output_budget_contract is not None:
                     from .output_budget import CONTRACT, MAX_TOKENS, eligible, validate_tokens
-                    if decision.output_budget_contract!=CONTRACT or not eligible(profile,decision):
+                    if decision.output_budget_contract != CONTRACT or not eligible(profile, decision):
                         raise GatewayError('INVALID_ASSISTANT_OUTPUT_BUDGET')
                     validate_tokens(decision.max_output_tokens)
-                    runtime=replace(runtime,transport_output_token_limit=decision.max_output_tokens,
-                        transport_output_token_ceiling=MAX_TOKENS)
+                    runtime = replace(runtime, transport_output_token_limit=decision.max_output_tokens, transport_output_token_ceiling=MAX_TOKENS)
                 elif decision.max_output_tokens is not None:
-                    runtime = replace(runtime,transport_output_token_limit=decision.max_output_tokens)
+                    runtime = replace(runtime, transport_output_token_limit=decision.max_output_tokens)
                 mode = decision.profile.mode
-                coordinator = ToolCallingService(self.gateway_factory(), registry, self.traces, policy=policy,
-                    execution_mode=mode,model_transport=decision.model_transport)
-                result = AssistantService(coordinator,execution_mode=mode,
-                    history_projection=DEFAULT_HISTORY_PROJECTION).send(turn, runtime)
-            return {**result.to_dict(), "device_id": device_id, "transport":decision.model_transport.value.lower(),
-                    "execution":prepared.execution.public()}
+                trial = self._channel_trial if authorization is not None else None
+                gateway = (trial.adapter if trial else self._offline_channel_provider) if authorization is not None else self.gateway_factory()
+                traces = trial.guard_traces(self.traces) if trial else self.traces
+                coordinator = ToolCallingService(gateway, registry, traces, policy=policy, execution_mode=mode, model_transport=decision.model_transport)
+                prompt = ((DIALOGUE_PROMPT_ID, DIALOGUE_INSTRUCTION) if prepared.channel_history else (QQ_PROMPT_ID, QQ_SYSTEM_INSTRUCTION)) if authorization is not None else None
+                if self._hybrid_channel():
+                    from .channel_hybrid import PROMPT_ID, INSTRUCTION
+                    prompt = (PROMPT_ID, INSTRUCTION)
+                result = AssistantService(coordinator, execution_mode=mode, history_projection=DEFAULT_HISTORY_PROJECTION, single_round_prompt=prompt).send(turn, runtime)
+                if authorization is not None:
+                    self._check_channel(authorization, prepared.policy_revision)
+                    if self._hybrid_channel():
+                        from .channel_hybrid import build_result
+                        converted = build_result(result, authorization, decision.profile.revision)
+                        trial.source = converted.source
+                        trial.hybrid_result = converted
+                        return converted
+                    summary = SourceSummary.from_result(result, authorization) if result.status.value == 'completed' else None
+                    if trial is not None:
+                        trial.source = summary
+                    return ChannelAssistantResult(result.status.value == 'completed', result.error_code, summary, result.final_text, decision.profile.revision, release_status=decision.profile.release_status, offline_only=trial is None or trial.offline_test)
+            return {**result.to_dict(), 'device_id': device_id, 'transport': decision.model_transport.value.lower(), 'execution': prepared.execution.public()}
         except Exception as error:
-            # Internal errors never reach the HTTP response; mark the same cancellation owner.
-            code = safe_code(getattr(error, "code", None)) or "AI_SERVICE_UNAVAILABLE"
+            code = safe_code(getattr(error, 'code', None)) or 'AI_SERVICE_UNAVAILABLE'
             handle.finish(code)
             raise
+
+    def _check_channel(self, authorization, policy_revision):
+        try:
+            authorization.check()
+            if self._channel_trial is not None:
+                self._channel_trial.check()
+            if self.monitoring.binding_revision != authorization.binding_revision or self.management_policy.snapshot().revision != policy_revision:
+                raise GatewayError('CHANNEL_AUTHORIZATION_CHANGED')
+        except Exception:
+            handle = current_handle()
+            if handle:
+                handle.cancel()
+            raise GatewayError('CHANNEL_AUTHORIZATION_CHANGED') from None
+
+    def bind_offline_conversations(self, authority):
+        if type(authority) is not ChannelHistoryAuthority or self._channel_trial is not None or type(self._offline_channel_provider) is not OfflineChannelProvider or (self._channel_history_authority not in (None, authority)):
+            raise GatewayError('QQ_CONVERSATION_FAKE_ONLY')
+        self._channel_history_authority = authority
+
+    def _history_decision(self, profile, policy, registry, authorization, snapshot, policy_revision):
+        from .channel_hybrid import HybridQwenTurn, HybridHistorySnapshot
+        if type(self._channel_trial) in (HybridQwenTurn,):
+            if type(snapshot) is not HybridHistorySnapshot:
+                raise GatewayError('INVALID_HYBRID_HISTORY')
+            return self._channel_trial.history_decision(profile, policy, registry, authorization, snapshot, epoch=self.epoch, policy_revision=policy_revision)
+        from .channel_session_run import SessionQwenTurn
+        if type(self._channel_trial) in (SessionQwenTurn,):
+            if type(snapshot) is not ChannelHistorySnapshot:
+                raise GatewayError('INVALID_CHANNEL_HISTORY')
+            return self._channel_trial.history_decision(profile, policy, registry, authorization, snapshot, epoch=self.epoch, policy_revision=policy_revision)
+        if type(snapshot) is not ChannelHistorySnapshot or snapshot.authority is not self._channel_history_authority or self._channel_trial is not None or (type(self._offline_channel_provider) is not OfflineChannelProvider):
+            raise GatewayError('QQ_CONVERSATION_FAKE_ONLY')
+        return conversation_decision(profile, policy, registry, authorization, snapshot, epoch=self.epoch, policy_revision=policy_revision)
+
+    def _hybrid_channel(self):
+        from .channel_hybrid import HybridQwenTurn
+        return type(self._channel_trial) in (HybridQwenTurn,)
+
+    def _channel_source_requirement(self):
+        return SourceRequirement.AUTO if self._hybrid_channel() else SourceRequirement.CURRENT_OBSERVATION_QUERY
+
+    def prepare_channel_turn(self, question, authorization, *, history_snapshot=None):
+        """Server API: exact Fake provider or separately approved one-turn Qwen trial."""
+        if type(authorization) is not ChannelAuthorization:
+            raise GatewayError('INVALID_CHANNEL_AUTHORIZATION')
+        if type(self._offline_channel_provider) is not OfflineChannelProvider and self._channel_trial is None:
+            raise GatewayError('OFFLINE_CHANNEL_PROVIDER_REQUIRED')
+        if authorization.preset_id not in PRESETS:
+            raise GatewayError('ASSISTANT_PRESET_NOT_ALLOWED')
+        snapshot = self.management_policy.snapshot()
+        self._check_channel(authorization, snapshot.revision)
+        self.monitoring.bind(authorization.device_id)
+        registry = bind_tools(self.monitoring, authorization.device_id, None, include_knowledge=False)
+        tools = tuple((name for name in authorization.tools if name in snapshot.selected_tools and name in registry.registered_names() and (name == CURRENT_WATER_QUALITY)))
+        if tools != (CURRENT_WATER_QUALITY,):
+            raise GatewayError('CHANNEL_TOOL_NOT_AUTHORIZED')
+        policy = ToolPolicy('assistant', True, tools)
+        entry = registry.lookup(CURRENT_WATER_QUALITY)
+
+        def guarded_water():
+            self._check_channel(authorization, snapshot.revision)
+            result = entry.handler()
+            if self._channel_trial is not None:
+                self._channel_trial.validate_tool_result(result)
+            return result
+        registry = ToolRegistry((ToolDefinition(entry.model_definition, guarded_water),))
+        profile = assistant_profile(authorization.preset_id)
+        decision = self._history_decision(profile, policy, registry, authorization, history_snapshot, snapshot.revision) if history_snapshot is not None else self._channel_trial.decision(profile, policy, registry, authorization, epoch=self.epoch, policy_revision=snapshot.revision) if self._channel_trial is not None else candidate_decision(profile, policy, registry, device_id=authorization.device_id, epoch=self.epoch, policy_revision=snapshot.revision, authorization=authorization)
+        if history_snapshot is not None and question != history_snapshot.question:
+            raise GatewayError('INVALID_CHANNEL_HISTORY')
+        request = AssistantRequest(authorization.preset_id, question, history_snapshot.history if history_snapshot else (), source_requirement=self._channel_source_requirement())
+        return PreparedAssistantTurn(request, authorization.device_id, self.epoch, profile, policy, registry, decision, snapshot.revision, snapshot.source, authorization, history_snapshot)
+
+    def execute_channel_turn(self, prepared, handle):
+        if not isinstance(prepared, PreparedAssistantTurn) or prepared.channel_authorization is None:
+            raise GatewayError('CHANNEL_AUTHORIZATION_REQUIRED')
+        return self.claim_turn(prepared, handle)()
+
+    def validate_channel_turn(self, prepared):
+        if not isinstance(prepared, PreparedAssistantTurn) or prepared.channel_authorization is None:
+            raise GatewayError('CHANNEL_AUTHORIZATION_REQUIRED')
+        authorization = prepared.channel_authorization
+        self._check_channel(authorization, prepared.policy_revision)
+        history = prepared.channel_history
+        expected = self._history_decision(prepared.profile, prepared.policy, prepared.registry, authorization, history, prepared.policy_revision) if history is not None else self._channel_trial.decision(prepared.profile, prepared.policy, prepared.registry, authorization, epoch=self.epoch, policy_revision=prepared.policy_revision) if self._channel_trial is not None else candidate_decision(prepared.profile, prepared.policy, prepared.registry, device_id=prepared.device_id, epoch=self.epoch, policy_revision=prepared.policy_revision, authorization=authorization)
+        if prepared.execution != expected or prepared.profile != assistant_profile(authorization.preset_id) or prepared.device_id != authorization.device_id or (prepared.request.preset_id != authorization.preset_id) or (prepared.request.history if history is None else prepared.request.history != history.history or prepared.request.question != history.question) or (prepared.request.source_requirement != self._channel_source_requirement()) or (prepared.registry.registered_names() != (CURRENT_WATER_QUALITY,)) or (prepared.policy.exposed_tools != (CURRENT_WATER_QUALITY,)):
+            raise GatewayError('INVALID_CHANNEL_CANDIDATE')
+
+    @classmethod
+    def monitoring_only(cls, monitoring, **kwargs):
+        if kwargs.pop('knowledge', None) is not None:raise GatewayError('MONITORING_ONLY_KNOWLEDGE_FORBIDDEN')
+        return cls(monitoring, knowledge=None, _monitoring_only=True, **kwargs)

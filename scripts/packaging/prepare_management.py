@@ -4,7 +4,7 @@ from pathlib import Path
 import shutil
 
 ROOT = Path(__file__).resolve().parents[2]
-PACKAGES = ('ai_backend', 'ai_service', 'knowledge', 'monitoring', 'simulator', 'management_web')
+PACKAGES = ('ai_backend', 'ai_service', 'knowledge', 'monitoring', 'simulator', 'management_web', 'qq_bot')
 
 
 def prepare(destination, *, root=ROOT):

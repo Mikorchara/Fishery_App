@@ -25,6 +25,7 @@ Fishery_Management/
 │   │   ├── development/           # 仅源码人工资格，默认dry-run，不进Wheel
 │   │   └── tests/                 # 新侧回归、Fake SDK用例、固定指纹
 │   ├── ai_backend/                # 通用 Gateway/Adapter/Tool循环/Streaming/请求
+│   ├── qq_bot/                    # M2独立进程候选；Fake Hybrid/只读实例/额度与会话；默认禁网
 │   ├── monitoring/                # 事实、规则、Events、SQLite、历史统计
 │   ├── knowledge/                 # 内容 CRUD、SQLite、TF-IDF、显式迁移
 │   ├── simulator/                 # Scenario、10秒采样窗口、HTTP上报

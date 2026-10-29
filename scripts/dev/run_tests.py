@@ -24,7 +24,8 @@ def build_suite(selection):
     if selection == "fast":
         return loader.loadTestsFromNames(FAST_MODULES)
     groups = ("apps/ai_backend/tests", "apps/ai_service/runtime/tests", "apps/ai_service/tests",
-              "apps/monitoring/tests", "apps/simulator/tests", "apps/knowledge/tests", "apps/management_web/tests")
+              "apps/monitoring/tests", "apps/simulator/tests", "apps/knowledge/tests", "apps/management_web/tests",
+              "apps/qq_bot/tests")
     names = tuple(".".join(path.relative_to(ROOT).with_suffix("").parts)
         for group in groups for path in sorted((ROOT/group).glob("test_*.py")))
     return loader.loadTestsFromNames(names)
