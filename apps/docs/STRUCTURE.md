@@ -26,12 +26,13 @@ Fishery_Management/
 │   │   └── tests/                 # 新侧回归、Fake SDK用例、固定指纹
 │   ├── ai_backend/                # 通用 Gateway/Adapter/Tool循环/Streaming/请求
 │   ├── qq_bot/                    # M2独立进程候选；Fake Hybrid/只读实例/额度与会话；默认禁网
+│   ├── management_process.py      # 仅M3标记隔离实例的跨Web入口写服务锁，无QQ依赖
 │   ├── monitoring/                # 事实、规则、Events、SQLite、历史统计
 │   ├── knowledge/                 # 内容 CRUD、SQLite、TF-IDF、显式迁移
 │   ├── simulator/                 # Scenario、10秒采样窗口、HTTP上报
 │   └── docs/                      # 当前操作、开发合同与历史设计
 ├── scripts/
-│   ├── dev/                       # 双击演示、双终端启动、独立离线测试
+│   ├── dev/                       # 原双终端启动；M3可选三终端/独立Bot/Stop/命名Job；离线测试
 │   ├── maintenance/               # 受控数据迁移维护，非日常启动
 │   ├── packaging/                 # MIG-2发行模板/白名单staging检查
 │   ├── qualification/             # 管理专用显式资格CLI

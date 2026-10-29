@@ -13,6 +13,7 @@
 - [AI Backend 与 Assistant 开发指南](deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)
 - [M1 共享安全基础、兼容性与回滚](deep-dive/M1_SHARED_SAFETY_ACCEPTANCE.md)
 - [M2 独立 QQ Hybrid 离线集成与验收](deep-dive/M2_QQ_HYBRID_OFFLINE_ACCEPTANCE.md)
+- [M3 三终端、独立 Bot、审批与停止](deep-dive/M3_MANAGEMENT_STACK.md)
 - [后续路线](ROADMAP.md)
 - [MIG-3 迁移记录与边界](deep-dive/MIG3_STANDALONE.md)
 - [MIG-4 数据迁移记录与备份边界](deep-dive/MIG4_DATA_MIGRATION.md)

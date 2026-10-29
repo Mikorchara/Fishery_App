@@ -124,8 +124,15 @@ def main(argv=None):
     app = create_app(allowed_hosts=(f"127.0.0.1:{args.port}", f"localhost:{args.port}"),
                      data_service=data_service, ingestion_token=token, knowledge_service=knowledge,
                      settings_service=settings, **ai_options)
-    print(f"Management Web · Local: http://127.0.0.1:{args.port}", flush=True)
-    app.run(host="127.0.0.1", port=args.port, debug=False, load_dotenv=False)
+    # Only newly marked M3 instances join this cooperative lifetime guard.
+    # Existing instances/default startup do not acquire a new lock or import Bot.
+    from apps.management_process import marked_instance_writer, InstanceWriterBusy
+    try:
+        with marked_instance_writer(paths.data_root):
+            print(f"Management Web · Local: http://127.0.0.1:{args.port}", flush=True)
+            app.run(host="127.0.0.1", port=args.port, debug=False, load_dotenv=False)
+    except InstanceWriterBusy as error:
+        parser.error(error.code)
 
 
 if __name__ == "__main__":

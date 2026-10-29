@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "app_id": "123456789",
+  "groups": [{"group_id": "REPLACE_GROUP_OPENID", "device_id": "sim-pond-1", "members": ["REPLACE_MEMBER_OPENID"], "capabilities": ["current"]}]
+}

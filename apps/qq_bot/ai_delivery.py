@@ -9,6 +9,7 @@ import time
 import httpx
 from apps.ai_backend.model_gateway import GatewayError
 from apps.ai_service.channel_presentation import render_channel_reply
+from .live_transport import check_live_gateway
 from .contracts import BotError
 from .adapter import GroupReply
 from .service import plain
@@ -98,7 +99,7 @@ class PassiveReplyOwner:
     """
 
     def __init__(self, gateway, *, clock=None):
-        if type(gateway) not in (OfflineQQGateway,):
+        if type(gateway) not in (OfflineQQGateway,) and not check_live_gateway(gateway):
             raise BotError('OFFLINE_DELIVERY_REQUIRED')
         self.gateway = gateway
         self.clock = clock or (lambda: datetime.now(timezone.utc))
@@ -134,7 +135,7 @@ class DeliveryOwner:
     """
 
     def __init__(self, coordinator, gateway, *, clock=None, monotonic=time.monotonic, receipt_sink=None):
-        if type(gateway) not in (OfflineQQGateway,):
+        if type(gateway) not in (OfflineQQGateway,) and not check_live_gateway(gateway):
             raise BotError('OFFLINE_DELIVERY_REQUIRED')
         self.coordinator, self.gateway = (coordinator, gateway)
         self.clock = clock or (lambda: datetime.now(timezone.utc))
@@ -161,7 +162,7 @@ class DeliveryOwner:
             except GatewayError as error:
                 raise BotError(error.code) from None
         validate()
-        prefix = '离线验收 · 非真实 QQ 交付\n'
+        prefix = '离线验收 · 非真实 QQ 交付\n' if type(self.gateway) is OfflineQQGateway else ''
         if self.coordinator.hybrid:
             rendered, assessment = (result.publication.text, result.publication)
         else:

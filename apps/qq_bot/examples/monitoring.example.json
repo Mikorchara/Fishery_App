@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "instance_id": "management-isolated",
+  "data_root": "D:/CodexProject/Fishery_Management/outputs/qq-m3-instance",
+  "devices": ["sim-pond-1"]
+}

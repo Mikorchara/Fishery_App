@@ -79,7 +79,8 @@ class QQAICoordinator:
         if session_run is not None:
             from .session_run import SessionRun
             from .hybrid_run import HybridRun
-            if type(session_run) not in (SessionRun, HybridRun) or conversation_trial is not None:
+            from .management_run import ManagementRun
+            if type(session_run) not in (SessionRun, HybridRun, ManagementRun) or conversation_trial is not None:
                 raise BotError('SESSION_RUN_COMPOSITION_REQUIRED')
             session_run.bind(self)
         elif conversation_trial is not None:
@@ -96,7 +97,8 @@ class QQAICoordinator:
     @property
     def hybrid(self):
         from .hybrid_run import HybridRun
-        return type(self.session_run) in (HybridRun,)
+        from .management_run import ManagementRun
+        return type(self.session_run) in (HybridRun, ManagementRun)
 
     def classify(self, text, **kwargs):
         if self.hybrid:

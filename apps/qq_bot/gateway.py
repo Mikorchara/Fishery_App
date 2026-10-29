@@ -86,7 +86,14 @@ class QQGateway:
                     or connector is connect_gateway or offline_router.adapter is not adapter):
                 raise BotError('OFFLINE_GATEWAY_COMPOSITION_REQUIRED')
         if trial_router is not None:
-            raise BotError('M2_QQ_NETWORK_DISABLED')
+            from .ai_routing import OfflineQQAIRouter
+            from .live_transport import LiveQQAPI, check_live_gateway
+            if (type(trial_router) is not OfflineQQAIRouter or type(api) is not LiveQQAPI
+                    or offline_router is not None or trial_router.adapter is not adapter
+                    or not check_live_gateway(trial_router.scheduler.gateway, trial_router.coordinator)
+                    or trial_router.scheduler.gateway.api is not api or connector is connect_gateway):
+                raise BotError('M2_QQ_NETWORK_DISABLED')
+            trial_router.check_liveness()
         self.offline_router=offline_router
         self.trial_router=trial_router
         self.router=offline_router if offline_router is not None else trial_router

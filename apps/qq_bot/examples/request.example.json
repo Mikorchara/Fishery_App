@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "enabled": false,
+  "inputs": {
+    "access_file": "D:/CodexProject/Fishery_Management/outputs/qq-m3-config/access.json",
+    "monitoring_config": "D:/CodexProject/Fishery_Management/outputs/qq-m3-config/monitoring.json",
+    "ai_config": "D:/CodexProject/Fishery_Management/outputs/qq-m3-config/ai.json",
+    "policy_directory": "D:/CodexProject/Fishery_Management/outputs/qq-m3-config/policy",
+    "group_id": "REPLACE_GROUP_OPENID",
+    "member_id": "REPLACE_MEMBER_OPENID"
+  },
+  "limits": {"max_turns": 5, "seconds": 1800, "total_budget_cny": "8.02"},
+  "members": ["REPLACE_MEMBER_OPENID"],
+  "scope_sha256": "GENERATED_BY_PREPARE_DEMO_AFTER_CODE_REVIEW"
+}

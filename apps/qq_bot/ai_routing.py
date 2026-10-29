@@ -6,6 +6,7 @@ from .ai_coordinator import QQAIMessageContext
 from .ai_scheduler import QQAIJobScheduler
 from .adapter import QQAdapter
 from .configuration import app_identifier
+from .live_transport import check_live_gateway
 from .contracts import BotError,decode
 from .intent import classify,GatewayMention
 from .ai_delivery import OfflineQQGateway
@@ -31,7 +32,7 @@ class OfflineQQAIRouter:
         self._closed=threading.Event()
         self._revoked=set()
         self._ingress=QQAdapter(adapter.config,None,clock=self.owner.clock)
-        if type(scheduler.gateway) is not OfflineQQGateway:raise BotError('M2_OFFLINE_ONLY')
+        if type(scheduler.gateway) is not OfflineQQGateway and not check_live_gateway(scheduler.gateway, scheduler.coordinator):raise BotError('M2_OFFLINE_ONLY')
 
     def bind_gateway(self,owner):
         if self.coordinator._mention_owner not in (None,owner):raise BotError('QQ_GATEWAY_ALREADY_BOUND')
@@ -103,6 +104,9 @@ class OfflineQQAIRouter:
             message.timestamp,0,'')  # Fixed commands never acquire an AI execution plan.
         receipt=self.owner.send(context,text,self._closed,validate)
         return receipt.code,receipt
+
+    def check_liveness(self):
+        if self.coordinator.session_run is not None:self.coordinator.session_run.check()
 
     def connected(self):self.scheduler.gateway.reconnect()
     def disconnected(self):

@@ -1,5 +1,7 @@
 # 独立管理项目路线
 
+2026-10-29 M3：独立 Bot 配置/进程许可、真实类型化 Gateway/SDK 装配及三终端薄编排完成；仅 Mock/新建隔离实例验收，QQ/Qwen 真实联网仍待用户。原启动器保留，Bot 故障不停止 Web/Simulator。[操作与验收](deep-dive/M3_MANAGEMENT_STACK.md)。
+
 2026-10-29 M2：独立 QQ Hybrid 的 Fake-only 装配、Monitoring-only 工厂、额度/历史/交付与跨进程隔离验证完成；默认禁网，不启动后台 Bot。真实配置/资格/启动留待 M3。[验收与边界](deep-dive/M2_QQ_HYBRID_OFFLINE_ACCEPTANCE.md)。
 
 2026-10-29 M1：Repository 只读、SDK 资源门禁和默认不启用的内部装配扩展完成，609 Python / 116 Node 通过；Web 仍要求 Knowledge，无 QQ/Hybrid 入口。[验收与回滚](deep-dive/M1_SHARED_SAFETY_ACCEPTANCE.md)，M2 待人工审批。

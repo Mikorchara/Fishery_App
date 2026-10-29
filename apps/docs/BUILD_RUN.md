@@ -4,6 +4,17 @@
 
 日常操作、页面用法与学习记录见 [USER_GUIDE](USER_GUIDE.md)。MIG-1～MIG-5 主要迁移与人工验收已完成；本页区分正式用户实例与隔离开发实例，历史迁移命令不属于日常启动。
 
+## M3 三终端与独立 QQ Bot（可选）
+
+原双终端入口不变；QQ 默认不启动。新三终端只使用明确新建的 M3 SIMULATOR 隔离实例，不自动绑定正式/现有演示库。首次配置、离线验收、真实本机审批及停止方式见 [M3 操作说明](deep-dive/M3_MANAGEMENT_STACK.md)。以下 request 须先按该文档生成：
+
+```powershell
+.\scripts\dev\Start-ManagementStack.ps1 -Request .\outputs\qq-m3-config\request.json -WithBot -OfflineDemo -Check
+.\scripts\dev\Start-ManagementStack.ps1 -Request .\outputs\qq-m3-config\request.json -WithBot -OfflineDemo -NoAssistant
+```
+
+真实模式去掉 `-OfflineDemo`，Bot 专用终端仍须人工审批；不要直接将虚构 AppID/群/成员用于联网。独立 Bot 用 `Start-QQBot.ps1`，仅停 Bot 用 `Stop-QQBot.ps1 -RunDirectory <启动输出目录>`。
+
 ## 数据库兼容与人工结束
 
 维护记录显示正式及演示Monitoring已于2026-10-23按用户批准升级v2。本次人工结束功能继续使用v2，不需要再次升级或初始化；其他尚为v1的旧实例仍须单独批准维护，不会自动升级。

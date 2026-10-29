@@ -5,6 +5,9 @@ import shutil
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGES = ('ai_backend', 'ai_service', 'knowledge', 'monitoring', 'simulator', 'management_web', 'qq_bot')
+LAUNCHERS = ('local_session.py', 'windows_job.py', 'demo_instance.py', 'run_local.ps1', '启动演示系统.cmd',
+    'management_stack.py', 'stack_console.py', 'console_job.py', 'management_stack_common.ps1',
+    'Start-ManagementStack.ps1', 'Start-QQBot.ps1', 'Stop-ManagementStack.ps1', 'Stop-QQBot.ps1')
 
 
 def prepare(destination, *, root=ROOT):
@@ -19,6 +22,7 @@ def prepare(destination, *, root=ROOT):
     (destination/'apps').mkdir()
     shutil.copyfile(root/'apps/__init__.py', destination/'apps/__init__.py')
     shutil.copyfile(root/'apps/management_paths.py', destination/'apps/management_paths.py')
+    shutil.copyfile(root/'apps/management_process.py', destination/'apps/management_process.py')
     for package in PACKAGES:
         source = root/'apps'/package
         for path in sorted(source.rglob('*')):
@@ -27,6 +31,7 @@ def prepare(destination, *, root=ROOT):
                 continue
             allowed = path.suffix == '.py' or (
                 'resources' in relative.parts and path.suffix == '.json') or (
+                package == 'qq_bot' and 'examples' in relative.parts and path.suffix == '.json') or (
                 package == 'management_web' and 'static' in relative.parts and path.suffix in ('.html','.css','.js'))
             if allowed:
                 if path.is_symlink():
@@ -34,6 +39,12 @@ def prepare(destination, *, root=ROOT):
                 target = destination/'apps'/package/relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(path, target)
+    launcher_root = destination/'scripts/dev'
+    launcher_root.mkdir(parents=True)
+    for name in LAUNCHERS:
+        source = root/'scripts/dev'/name
+        if source.is_symlink():raise ValueError('BUILD_SOURCE_LINK_REFUSED')
+        shutil.copyfile(source,launcher_root/name)
     shutil.copyfile(root/'scripts/packaging/management.pyproject.toml', destination/'pyproject.toml')
     return destination
 

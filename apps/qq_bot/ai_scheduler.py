@@ -6,6 +6,7 @@ import threading
 import time
 
 from .ai_delivery import DeliveryOwner, OfflineQQGateway
+from .live_transport import check_live_gateway
 from .contracts import BotError
 
 
@@ -38,7 +39,7 @@ class QQAIJobScheduler:
     Exact Fake or independently approved Trial transport only. Ordinary CLI stays disabled.
     """
     def __init__(self, coordinator, gateway, *, clock=None, monotonic=time.monotonic,receipt_sink=None):
-        if type(gateway) is not OfflineQQGateway:raise BotError('M2_OFFLINE_DELIVERY_REQUIRED')
+        if type(gateway) is not OfflineQQGateway and not check_live_gateway(gateway, coordinator):raise BotError('M2_OFFLINE_DELIVERY_REQUIRED')
         self.coordinator,self.gateway=coordinator,gateway
         self.now=monotonic
         self.delivery=DeliveryOwner(coordinator,gateway,clock=clock,monotonic=monotonic,receipt_sink=receipt_sink)
