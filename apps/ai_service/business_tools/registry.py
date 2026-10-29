@@ -14,8 +14,11 @@ FORMAL_TOOL_NAMES = (current_water_quality.CURRENT_WATER_QUALITY, fishery_knowle
 HISTORY_CANDIDATE_TOOL_NAMES = (*FORMAL_TOOL_NAMES, water_quality_history.WATER_QUALITY_HISTORY)
 
 
-def bind_tools(monitoring, device_id, knowledge, *, formal=None, include_history=False):
-    if type(include_history) is not bool:
+def bind_tools(monitoring, device_id, knowledge, *, formal=None, include_history=False,
+               include_knowledge=True):
+    # Internal composition only. Existing Web callers retain their two/three
+    # tools and Knowledge requirement; no channel/authorization entry is added.
+    if type(include_history) is not bool or type(include_knowledge) is not bool:
         raise ValueError("INVALID_BUSINESS_TOOL_ASSEMBLY")
     if formal is not None and (water_quality_history.WATER_QUALITY_HISTORY in
             tuple(d.name for d in formal.model_definitions())) != include_history:
@@ -23,12 +26,13 @@ def bind_tools(monitoring, device_id, knowledge, *, formal=None, include_history
     # One formal definition owner; only the frozen device's water Handler changes.
     water_definition = (formal.lookup(current_water_quality.WATER_DEFINITION.name).model_definition
         if formal else current_water_quality.WATER_DEFINITION)
-    knowledge_entry = (formal.lookup(fishery_knowledge.KNOWLEDGE_DEFINITION.name) if formal else ToolDefinition(
-        fishery_knowledge.KNOWLEDGE_DEFINITION,
-        partial(fishery_knowledge.search_fishery_knowledge, service=knowledge),
-        validate_arguments=fishery_knowledge.validate_arguments))
     entries = [ToolDefinition(water_definition,
-        partial(current_water_quality.water_payload, monitoring, device_id)), knowledge_entry]
+        partial(current_water_quality.water_payload, monitoring, device_id))]
+    if include_knowledge:
+        entries.append(formal.lookup(fishery_knowledge.KNOWLEDGE_DEFINITION.name) if formal else ToolDefinition(
+            fishery_knowledge.KNOWLEDGE_DEFINITION,
+            partial(fishery_knowledge.search_fishery_knowledge, service=knowledge),
+            validate_arguments=fishery_knowledge.validate_arguments))
     if include_history:
         definition = (formal.lookup(water_quality_history.WATER_QUALITY_HISTORY).model_definition
                       if formal else water_quality_history.HISTORY_DEFINITION)

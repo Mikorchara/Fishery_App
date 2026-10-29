@@ -11,6 +11,7 @@
 - [事件生命周期与首页异常概况](deep-dive/EVENT_LIFECYCLE.md)
 - [事件族、状态文案、筛选与历史清理](deep-dive/EVENT_MANAGEMENT.md)
 - [AI Backend 与 Assistant 开发指南](deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)
+- [M1 共享安全基础、兼容性与回滚](deep-dive/M1_SHARED_SAFETY_ACCEPTANCE.md)
 - [后续路线](ROADMAP.md)
 - [MIG-3 迁移记录与边界](deep-dive/MIG3_STANDALONE.md)
 - [MIG-4 数据迁移记录与备份边界](deep-dive/MIG4_DATA_MIGRATION.md)

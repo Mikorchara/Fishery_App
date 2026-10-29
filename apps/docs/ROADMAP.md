@@ -1,5 +1,7 @@
 # 独立管理项目路线
 
+2026-10-29 M1：Repository 只读、SDK 资源门禁和默认不启用的内部装配扩展完成，609 Python / 116 Node 通过；Web 仍要求 Knowledge，无 QQ/Hybrid 入口。[验收与回滚](deep-dive/M1_SHARED_SAFETY_ACCEPTANCE.md)，M2 待人工审批。
+
 2026-10-24：复核并选择性同步失联提醒人工结束，保留监测状态/证据，重启持久、新可靠HIT重新提醒；补修校时回退的操作排序。继续使用Schema v2，不触碰真实数据库。[边界与预览](deep-dive/EVENT_MANUAL_END.md) · [验收](deep-dive/MANUAL_END_SYNC.md)。
 
 2026-10-23 EVT 收尾：选择性同步 ACK v2、风险周期列表、二态确认、可靠结束周期及 ACK 显式永久删除、恢复蓝色标签与快降慢升场景。正式/演示库仍为 v1，禁止自动升级；须人工批准维护后启动。[核查、兼容及验收](deep-dive/EVT_SYNC_ACCEPTANCE.md)。

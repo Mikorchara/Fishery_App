@@ -41,6 +41,10 @@ class ManagementStreamingTests(unittest.TestCase):
     def setUp(self):
         fixture.ManagementAssistantTests.setUp(self)
         execution_fixture.ExecutionTests.setUp(self)  # Only Windows asyncio wake-up socket is allowed.
+        from apps.ai_backend.sdk_resources import SDKResourceBudget
+        # Each case models an independent server process; never reset a budget
+        # within that process after a cleanup failure.
+        self.sdk_budget=SDKResourceBudget()
         self.clients,self.bodies,self.runtimes,self.controls,self.responses=[],[],[],[],[]
         self.service_handles=[];self.blocked=threading.Event();self.frames=[final_chunks()]
         self.addCleanup(self.finish_workers)
@@ -76,7 +80,7 @@ class ManagementStreamingTests(unittest.TestCase):
             client=Client(len(self.clients)+1);self.clients.append(client);return client
         def gateway():
             self.service_handles.append(current_handle())
-            return OpenAICompatibleAdapter(async_client_factory=factory)
+            return OpenAICompatibleAdapter(async_client_factory=factory,resource_budget=self.sdk_budget)
         old=self.backend
         self.backend=ManagementAssistantService(self.monitoring,knowledge=old.knowledge,credentials=old.credentials,traces=old.traces,
             policy_directory=self.root/'policies',gateway_factory=gateway,
@@ -320,13 +324,22 @@ class ManagementStreamingTests(unittest.TestCase):
     def test_truncation_broken_stream_and_cleanup_failure_never_execute_or_commit(self):
         for frames,code,cleanup in (([chunk(content='provisional',finish='length')],'STREAM_TRUNCATED',False),
             ([chunk(content='provisional')],'STREAM_INTERRUPTED',False),
-            (tool_chunks(),'SDK_ERROR',True)):
+            (tool_chunks(),'SDK_CLEANUP_FAILED',True)):
             self.clients.clear();self.bodies.clear()
             self.setup_stream([frames],close_error=cleanup)
             with patch.object(self.monitoring,'capture_water') as capture:
                 rows=self.rows(self.send_stream())
             self.assert_error(rows,code);capture.assert_not_called();self.assertEqual(len(self.bodies),1)
             self.assertTrue(all(c.closed and c.stream.closed for c in self.clients))
+
+    def test_cleanup_failure_quarantines_following_web_request_without_new_io(self):
+        self.setup_stream([tool_chunks()],close_error=True)
+        with patch.object(self.monitoring,'capture_water') as capture:
+            self.assert_error(self.rows(self.send_stream()),'SDK_CLEANUP_FAILED')
+            self.assert_error(self.rows(self.send_stream()),'SDK_RESOURCE_QUARANTINED')
+        capture.assert_not_called()
+        self.assertEqual(len(self.bodies),1)
+        self.assertEqual(self.sdk_budget.snapshot()['quarantined'],1)
 
     def test_timeout_and_trace_failure_never_final(self):
         self.setup_stream([[chunk(content='pending'),BLOCK]])

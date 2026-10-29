@@ -232,6 +232,7 @@ Fishery_Management/
 | `test_management_policy.py` | 管理 Policy 继承、并发锁、generation/revision、CAS 和权限失败回归。 |
 | `test_normal_selection.py` | 三工具候选选择、定义指纹、精确 Scope 及授权撤销回归。 |
 | `test_service.py` | 无 Flask 的 AI 应用服务边界、准备/执行、上下文冻结和 epoch 回归。 |
+| `test_m1_composition.py` | M1：内部 Prompt/工具装配显式选择，默认 Web Knowledge 和输入拒绝合同保持。 |
 | `test_streaming_config.py` | Streaming 本地试用配置的默认开关、精确范围及非法预算拒绝。 |
 | `test_unified_tools.py` | 三工具 Normal/Streaming、授权子集、来源、预算和显式确认的 HTTP/Fake SDK 集成。 |
 | `test_water_history_tool.py` | 历史工具 Schema、参数归一化、Monitoring 委托、有限结果及 Runtime/Fake SDK 回归。 |
@@ -252,6 +253,7 @@ Fishery_Management/
 | `protocol_specs.py` | 版本化请求参数编码，选择具体 Provider 协议字段，不授予资格。 |
 | `model_gateway.py` | 模型 Profile、冻结 RuntimeSnapshot、消息/请求/响应/工具定义和离线 Gateway 合同。 |
 | `openai_compatible_adapter.py` | 唯一 OpenAI-compatible Chat Completions SDK 传输边界，支持 Normal/Streaming 和分片组装。 |
+| `sdk_resources.py` | M1：SDK 资源租约、关闭确认、并发上限及进程内清理失败隔离；不创建 QQ 入口。 |
 | `execution.py` | 请求句柄、注册、ContextVar、Stop 与整轮 Deadline 生命周期。 |
 | `tool_conversation.py` | 共用有界工具调用协调循环、步骤、预算及 Normal/Streaming 执行结果。 |
 | `tool_argument_diagnostics.py` | 参数拒绝的有限诊断元数据，不输出原始参数、字段名或异常文本。 |
@@ -282,6 +284,7 @@ Fishery_Management/
 | `__init__.py` | Backend 测试包标识。 |
 | `support.py` | 自包含 Fake SDK、脚本 Gateway、Normal/Streaming 响应与工具分片夹具。 |
 | `test_assembler.py` | Streaming 工具名/参数分片组装、Unicode、终态及非法协议拒绝回归。 |
+| `test_sdk_resources.py` | M1：SDK 取消/超时/清理、线程回收、资源失败禁止 Commit 与后续请求隔离。 |
 | `test_boundary.py` | 无反向业务依赖、无旧包导入、独立类型和安装边界回归。 |
 | `test_credentials.py` | 虚构凭据、环境优先级、私有路径/权限、原子写入和密钥脱敏回归。 |
 | `test_execution.py` | 阻塞 SDK 的取消/Deadline、跨请求时间预算、资源关闭及禁止重试回归。 |
@@ -318,6 +321,7 @@ Fishery_Management/
 | `test_pipeline.py` | 上报校验、窗口统计、视觉有效帧、生命周期和无数据不回退 Demo 的统一链路回归。 |
 | `test_rule_governance.py` | 规则身份、单指标质量、部分覆盖、异常持续、证据缺失及可靠恢复回归。 |
 | `test_water_capture.py` | 单次 capture 读取/分析一次、Web/Tool 一致、批次不可混用和结果隔离回归。 |
+| `test_read_only.py` | M1：合成库只读禁止写入/迁移、并发、快照及长度/时间/工作量预算。 |
 | `test_water_history.py` | 历史范围、设备隔离、时区/亚秒边界、覆盖统计和查询上限回归。 |
 
 ### 2.18 知识业务 — `apps/knowledge/`

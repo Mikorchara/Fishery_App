@@ -137,7 +137,8 @@ class AIServiceTests(unittest.TestCase):
         self.assertEqual(self.gateway.requests,[])
 
     def test_preflight_rejects_web_control_fields_and_non_business_overrides(self):
-        for field in ('request_id','control_token','tools','mode','deadline','source_requirement','browser_token'):
+        for field in ('request_id','control_token','tools','mode','deadline','source_requirement','browser_token',
+                      'single_round_prompt','include_knowledge','channel_authorization'):
             with self.subTest(field=field),self.assertRaises(GatewayError) as error:
                 self.backend.prepare_turn(self.envelope(**{field:'fictional'}))
             self.assertEqual(error.exception.code,'INVALID_ASSISTANT_REQUEST')
