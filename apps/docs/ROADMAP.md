@@ -1,5 +1,7 @@
 # 独立管理项目路线
 
+2026-10-30：选择性加入 Prototype 深蓝主题、浏览器本地切换偏好与必要静态测试；保留浅色默认及原启动/业务/数据路径。前端121项与Web HTTP11项通过，本轮不含本地视频功能。
+
 2026-10-29 M3：独立 Bot 配置/进程许可、真实类型化 Gateway/SDK 装配及三终端薄编排完成；仅 Mock/新建隔离实例验收，QQ/Qwen 真实联网仍待用户。原启动器保留，Bot 故障不停止 Web/Simulator。[操作与验收](deep-dive/M3_MANAGEMENT_STACK.md)。
 
 2026-10-29 M2：独立 QQ Hybrid 的 Fake-only 装配、Monitoring-only 工厂、额度/历史/交付与跨进程隔离验证完成；默认禁网，不启动后台 Bot。真实配置/资格/启动留待 M3。[验收与边界](deep-dive/M2_QQ_HYBRID_OFFLINE_ACCEPTANCE.md)。
