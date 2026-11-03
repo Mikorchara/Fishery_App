@@ -156,7 +156,8 @@ class QQAICoordinator:
         if self._conversation_state is not None and self._conversation_state != state:
             self.conversations.invalidate()
         self._conversation_state = state
-        if 'get_current_water_quality' not in policy.selected_tools or self.config.budget.max_output_tokens > 512:
+        allowed_output=self.session_run.channel_budget.max_output_tokens if self.session_run is not None else 512
+        if 'get_current_water_quality' not in policy.selected_tools or self.config.budget.max_output_tokens > allowed_output:
             raise BotError('AI_NOT_AUTHORIZED')
         return state
 
@@ -287,6 +288,7 @@ class QQAICoordinator:
         except Exception as error:
             with self._lock:
                 task['state'] = 'FAILED'
+                task['error_code'] = getattr(error,'code','AI_SERVICE_UNAVAILABLE')
             plan.handle.finish(getattr(error, 'code', 'AI_SERVICE_UNAVAILABLE'))
             raise BotError(getattr(error, 'code', 'AI_SERVICE_UNAVAILABLE')) from None
 
@@ -295,6 +297,21 @@ class QQAICoordinator:
         self.validate_delivery_candidate(plan, result)
         trial = (plan.service or self.service)._channel_trial
         return bool(trial is not None and trial.approval.phase == 'qq' and (not trial.offline_test))
+
+    @_validation_only
+    def validate_failure_notice(self,plan,code):
+        """An error is not an AI success or a substitute Source/Commit result."""
+        if code not in ('INVALID_TOOL_ARGUMENTS','ASSISTANT_RESPONSE_TRUNCATED'):
+            raise BotError('AI_FAILURE_NOTICE_NOT_ALLOWED')
+        with self._lock:
+            task=self._tasks.get(plan.id)
+            if task is None or task['plan'] is not plan:raise BotError('INVALID_AI_PLAN')
+            result=task.get('result')
+            valid=(task['state']=='FAILED' and task.get('error_code')==code or
+                   task['state']=='COMPLETED' and result is not None and not result.completed and result.error_code==code)
+            if not valid:raise BotError('AI_FAILURE_NOTICE_NOT_ALLOWED')
+        plan.handle.assert_resources_closed()
+        (plan.service or self.service).validate_channel_turn(plan.prepared)
 
     @_validation_only
     def validate_plan(self, plan):

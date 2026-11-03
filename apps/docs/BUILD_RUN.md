@@ -48,7 +48,7 @@
 
 **事件私聊提醒：**本机专用配置已绑定主动测试成功的好友。审批会单独说明披露范围；新异常、升级及可靠消退各提醒一次，不调用模型，失败或未知送达不重发。原配置无接收人字段时不启用。详见[私聊提醒与验收](deep-dive/QQ_PRIVATE_EVENT_DELIVERY.md)。新 Scope 需要本次新审批，旧批准不复用。
 
-本机三终端入口使用 `outputs/qq-m3-real-config/request.json`，三个服务共用 `outputs/qq-m3-real-test` 隔离 SIMULATOR 实例；两终端原入口使用另一份 `outputs/demo-instance`，数据不会自动同步。QQ 初始额度为30分钟、5个付费 AI Turn，总保守预留8.02元；并非实际费用预测或云账单硬上限。普通自然语言可能收费，数据及必要上下文会发给 Qwen/QQ。
+本机三终端入口使用 `outputs/qq-m3-real-config/request.json`，三个服务共用 `outputs/qq-m3-real-test` 隔离 SIMULATOR 实例；两终端原入口使用另一份 `outputs/demo-instance`，数据不会自动同步。QQ 初始额度为30分钟、5个付费 AI Turn，每次模型请求最多2048输出Token，每轮最多2请求，总批准预算8.06元（最低保守预留8.055300元）；并非实际费用预测或云账单硬上限。普通自然语言可能收费，数据及必要上下文会发给 Qwen/QQ。
 
 新视频入口使用相应的同一份数据，不另建视频实例。原无视频入口默认行为不变；原三终端仍关闭 Web AI，新三终端视频入口开启 Web AI 以支持评分。`sample.mp4` 已放入本机 Management 根目录，Git 和发行包均不包含它，交接时需另行提供获准使用的素材。
 
@@ -96,3 +96,5 @@
 | 网页操作 | [使用指南](USER_GUIDE.md) |
 
 端口占用先正常停止旧演示，不结束未知 Python 进程。配置缺失、Scope 不匹配或凭据错误时停下核对，不重新初始化已有数据库。
+
+QQ 收到问题后若只有 `AI_ADMITTED`，不代表回答成功。新版本随后输出 `AI_TASK_FINISHED` 和明确原因；工具参数错误或回答截断时，条件允许会在群中发送一次固定失败提示，不自动重试，不写入成功记忆。详见[回复失败排查与2048预算](deep-dive/QQ_REPLY_FAILURE_FIX.md)。升级后正常结束旧Bot、重新启动并审批，不沿用旧Scope或已消费许可。

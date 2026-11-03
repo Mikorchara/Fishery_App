@@ -15,6 +15,11 @@ from .adapter import GroupReply
 from .service import plain
 from .transport import QQAPI
 
+FAILURE_MESSAGES={
+    'INVALID_TOOL_ARGUMENTS':'本次查询未完成：AI生成的工具参数不符合要求，未取得有效结果。没有自动重试。',
+    'ASSISTANT_RESPONSE_TRUNCATED':'本次查询未完成：AI回答达到输出上限而被截断，未发送不完整的水质结论。没有自动重试。',
+}
+
 @dataclass(frozen=True)
 class DeliveryReceipt:
     status: str
@@ -144,6 +149,23 @@ class DeliveryOwner:
             raise BotError('INVALID_DELIVERY_RECEIPT_SINK')
         self.receipt_sink = receipt_sink
         self.passive = PassiveReplyOwner(gateway, clock=self.clock)
+
+    def deliver_failure(self,plan,code,cancelled):
+        """One fixed error notice, no model text, facts, history or retry."""
+        if code not in FAILURE_MESSAGES:raise BotError('AI_FAILURE_NOTICE_NOT_ALLOWED')
+        def validate():
+            if cancelled.is_set():raise BotError('AI_CANCELLED')
+            if self.now()>=plan.context.deadline:raise BotError('AI_TOTAL_TIMEOUT')
+            if not 0<=(self.clock()-plan.context.timestamp).total_seconds()<285:
+                raise BotError('AI_REPLY_EXPIRED')
+            if not self.gateway.connected:raise BotError('AI_GATEWAY_DISCONNECTED')
+            self.coordinator.validate_failure_notice(plan,code)
+        validate()
+        receipt=self.passive.send(plan.context,FAILURE_MESSAGES[code],cancelled,validate)
+        if self.coordinator.session_run is not None:
+            try:self.coordinator.session_run.checkpoint_failure_notice_for(plan,code,receipt)
+            except Exception:receipt=replace(receipt,report_error='RUN_CHECKPOINT_FAILED')
+        return receipt
 
     def deliver(self, plan, result, cancelled):
 

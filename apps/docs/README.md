@@ -11,6 +11,7 @@
 - [本地视频、首页与评分同步验收](deep-dive/VIDEO_SCORE_SYNC_ACCEPTANCE.md)
 - [当前水质实验评分规则与开启方式](deep-dive/EXPERIMENTAL_WATER_SCORE.md)
 - [事件私聊提醒与交付验收](deep-dive/QQ_PRIVATE_EVENT_DELIVERY.md)
+- [QQ回复失败排查、错误提示与2048 Token预算](deep-dive/QQ_REPLY_FAILURE_FIX.md)
 - [组员首次配置与交接](deep-dive/MANAGEMENT_HANDOFF.md)
 - [运行维护、正式实例与开发测试](deep-dive/BUILD_RUN_REFERENCE.md)
 - [两项目启动方式比较与统一边界](deep-dive/LAUNCHER_COMPARISON.md)

@@ -107,8 +107,13 @@ class RunLedger:
     ownership checks outside that lock, with one bounded admission wait. Any uncertain write
     permanently poisons this Run; reserved capacity is never refunded.
     """
+    output_token_limit=512
+
     def __init__(self,directory,*,scope_sha256,bindings_sha256,limits=RunLimits(),clock=None,monotonic=time.monotonic):
         if type(limits) is not RunLimits:raise BotError('INVALID_RUN_LIMITS')
+        self.reservation_per_turn=cost_reservation(output_tokens=self.output_token_limit)
+        if money(limits.total_budget_cny)<self.reservation_per_turn*limits.max_turns:
+            raise BotError('RUN_BUDGET_INSUFFICIENT')
         self.directory=local_path(directory)
         if not self.directory.is_dir():raise BotError('RUN_STATE_DIRECTORY_REQUIRED')
         self.scope_sha256,self.bindings_sha256,self.limits=scope_sha256,bindings_sha256,limits
@@ -121,8 +126,8 @@ class RunLedger:
         self.authority=LeaseAuthority(self.check_lease)
         self._plan=dict(contract=CONTRACT,status='pending_operator_approval',consent_id=self._id,
             scope_sha256=scope_sha256,bindings_sha256=bindings_sha256,limits=asdict(limits),
-            requests_per_turn=2,output_tokens_per_request=512,seconds_per_turn=90,retries=0,
-            reservation_per_turn_cny=str(cost_reservation()),resume=False,environment='OFFLINE_FAKE_ONLY',
+            requests_per_turn=2,output_tokens_per_request=self.output_token_limit,seconds_per_turn=90,retries=0,
+            reservation_per_turn_cny=str(self.reservation_per_turn),resume=False,environment='OFFLINE_FAKE_ONLY',
             process_nonce_sha256=_hash([self._id,uuid.uuid4().hex,self._pid]))
 
     def plan(self):
@@ -188,7 +193,7 @@ class RunLedger:
         self.check()
         with self._lock:
             if self._turns>=self.limits.max_turns:raise BotError('RUN_TURN_LIMIT')
-            if self._reserved+cost_reservation()>money(self.limits.total_budget_cny):raise BotError('RUN_BUDGET_EXHAUSTED')
+            if self._reserved+self.reservation_per_turn>money(self.limits.total_budget_cny):raise BotError('RUN_BUDGET_EXHAUSTED')
 
     def remaining(self):
         self.check();return max(0,min(self._deadline-self.now(),(self._consent.expires_at-self.clock()).total_seconds()))
@@ -205,8 +210,8 @@ class RunLedger:
                 if message_key in self._messages:
                     raise BotError('RUN_MESSAGE_ALREADY_USED' if self._messages[message_key]==fingerprint else 'RUN_MESSAGE_CONFLICT')
                 if self._turns>=self.limits.max_turns:raise BotError('RUN_TURN_LIMIT')
-                if self._reserved+cost_reservation()>money(self.limits.total_budget_cny):raise BotError('RUN_BUDGET_EXHAUSTED')
-                self._turns+=1;self._reserved+=cost_reservation();self._messages[message_key]=fingerprint
+                if self._reserved+self.reservation_per_turn>money(self.limits.total_budget_cny):raise BotError('RUN_BUDGET_EXHAUSTED')
+                self._turns+=1;self._reserved+=self.reservation_per_turn;self._messages[message_key]=fingerprint
                 sequence=self._turns
                 record=dict(type='reserved',sequence=sequence,message_key_sha256=_hash(message_key),
                     fingerprint_sha256=_hash(fingerprint),reserved_cost_cny=str(self._reserved),reserved_requests=sequence*2)

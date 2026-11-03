@@ -126,7 +126,7 @@ class SessionQwenTurn(QwenTrialSession):
         snapshot.authority.validate(snapshot,digest)
         expected=(authorization.instance_id,authorization.device_id,authorization.permission_revision,
             authorization.binding_revision,policy_revision)
-        if (profile!=assistant_profile(PRESET) or authorization.budget!=ChannelBudget()
+        if (profile!=assistant_profile(PRESET) or authorization.budget!=self.channel_budget
                 or registry.registered_names()!=('get_current_water_quality',)
                 or policy.exposed_tools!=('get_current_water_quality',)
                 or snapshot is not self.snapshot or snapshot.authority is not self.authority
@@ -136,5 +136,5 @@ class SessionQwenTurn(QwenTrialSession):
         revision=_hash([self.approval.approval_id,digest,self.approval.bindings_sha256,epoch,
             snapshot.identity,snapshot.revision,snapshot.focus,[asdict(t) for t in snapshot.history]])
         return ExecutionDecision(AssistantExecutionProfile(ToolExecutionMode.SINGLE_ROUND,revision,
-            self.release_status,reason),True,max_output_tokens=512)
+            self.release_status,reason),True,max_output_tokens=self.output_token_limit)
 

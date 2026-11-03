@@ -47,8 +47,10 @@ def money(value):
     except (InvalidOperation,ValueError):raise GatewayError('TRIAL_COST_INVALID') from None
 
 
-def cost_reservation():
-    return ((CONTEXT_RESERVATION*PRICE_INPUT+512*PRICE_OUTPUT)*2/Decimal(1_000_000)).quantize(
+def cost_reservation(*,output_tokens=512):
+    if type(output_tokens) is not int or not 1<=output_tokens<=2048:
+        raise GatewayError('TRIAL_OUTPUT_BUDGET_INVALID')
+    return ((CONTEXT_RESERVATION*PRICE_INPUT+output_tokens*PRICE_OUTPUT)*2/Decimal(1_000_000)).quantize(
         Decimal('.000001'),rounding=ROUND_CEILING)
 
 
@@ -114,7 +116,7 @@ class TrialQwenAdapter(OpenAICompatibleAdapter):
         if stream or _assemble_tools or runtime.max_retries!=0 or current_handle() is not self.trial.handle:
             raise GatewayError('TRIAL_NORMAL_HANDLE_REQUIRED')
         kwargs=super()._kwargs(request,runtime,stream=False)
-        if (kwargs.get('max_tokens')!=512 or kwargs.get('extra_body',{}).get('enable_thinking') is not False
+        if (kwargs.get('max_tokens')!=self.trial.output_token_limit or kwargs.get('extra_body',{}).get('enable_thinking') is not False
                 or kwargs.get('model')!=assistant_profile(PRESET).model):
             raise GatewayError('TRIAL_TRANSPORT_BUDGET_MISMATCH')
         if len(json.dumps(kwargs,ensure_ascii=False,allow_nan=False).encode('utf-8'))>MAX_REQUEST_BYTES:
@@ -130,7 +132,7 @@ class TrialQwenAdapter(OpenAICompatibleAdapter):
         usage=result.usage
         if (usage.source!=UsageSource.PROVIDER or type(usage.input_tokens) is not int
                 or type(usage.output_tokens) is not int or not 0<=usage.input_tokens<=CONTEXT_RESERVATION
-                or not 0<=usage.output_tokens<=512):
+                or not 0<=usage.output_tokens<=self.trial.output_token_limit):
             raise GatewayError('TRIAL_USAGE_UNCONFIRMED')
         with self.trial._lock:
             self.trial.input_tokens+=usage.input_tokens;self.trial.output_tokens+=usage.output_tokens
@@ -141,6 +143,8 @@ class TrialQwenAdapter(OpenAICompatibleAdapter):
 class QwenTrialSession:
     """Server-owned approval/one-turn lease. JSON booleans cannot instantiate execution."""
     release_status='candidate'
+    output_token_limit=512
+    channel_budget=ChannelBudget()
 
     def __init__(self,approval,*,validate,claim,async_client_factory=None,clock=None,monotonic=time.monotonic):
         if type(approval) is not QwenTrialApproval or not callable(validate) or not callable(claim):
@@ -225,7 +229,7 @@ class QwenTrialSession:
         with self._lock:
             actual=(self.input_tokens*PRICE_INPUT+self.output_tokens*PRICE_OUTPUT)/Decimal(1_000_000)
             return dict(model_requests=self.requests,usage={'input_tokens':self.input_tokens,
-                'output_tokens':self.output_tokens},reserved_cost_cny=str(cost_reservation()),
+                'output_tokens':self.output_tokens},reserved_cost_cny=str(cost_reservation(output_tokens=self.output_token_limit)),
                 observed_usage_cost_cny=str(actual),billing_confirmed=False,
                 usage_complete=self.requests>0 and self.responses_with_usage==self.requests,
                 sdk_resources=self.handle.resource_info() if self.handle else None,

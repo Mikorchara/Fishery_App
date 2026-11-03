@@ -339,6 +339,12 @@ class ManagementAssistantService:
                     runtime = replace(runtime, transport_output_token_limit=decision.max_output_tokens, transport_output_token_ceiling=MAX_TOKENS)
                 elif decision.max_output_tokens is not None:
                     runtime = replace(runtime, transport_output_token_limit=decision.max_output_tokens)
+                    from .channel_management_live import ManagementLiveTurn
+                    if authorization is not None and type(self._channel_trial) is ManagementLiveTurn:
+                        self._channel_trial.check()
+                        if decision.max_output_tokens!=self._channel_trial.output_token_limit:
+                            raise GatewayError('TRIAL_TRANSPORT_BUDGET_MISMATCH')
+                        runtime=replace(runtime,transport_output_token_ceiling=self._channel_trial.output_token_limit)
                 mode = decision.profile.mode
                 trial = self._channel_trial if authorization is not None else None
                 gateway = (trial.adapter if trial else self._offline_channel_provider) if authorization is not None else self.gateway_factory()
@@ -348,6 +354,8 @@ class ManagementAssistantService:
                 if self._hybrid_channel():
                     from .channel_hybrid import PROMPT_ID, INSTRUCTION
                     prompt = (PROMPT_ID, INSTRUCTION)
+                    from .channel_management_live import ManagementLiveTurn, PROMPT_ID as LIVE_PROMPT, INSTRUCTION as LIVE_INSTRUCTION
+                    if type(trial) is ManagementLiveTurn:prompt=(LIVE_PROMPT,LIVE_INSTRUCTION)
                 result = AssistantService(coordinator, execution_mode=mode, history_projection=DEFAULT_HISTORY_PROJECTION, single_round_prompt=prompt).send(turn, runtime)
                 if authorization is not None:
                     self._check_channel(authorization, prepared.policy_revision)

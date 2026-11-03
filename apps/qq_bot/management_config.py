@@ -1,17 +1,19 @@
 """Explicit Management config; Check never opens SQLite, credentials or network."""
 from dataclasses import dataclass, asdict
+from decimal import Decimal
 from importlib.metadata import version, PackageNotFoundError
 from pathlib import Path
 import json
 
 from apps.ai_service.channel_management_live import prepared_scope, preparation_record, CONTRACT
-from apps.ai_service.channel_trial import PRESET, cost_reservation
+from apps.ai_service.channel_trial import PRESET
+from apps.ai_service.management_channel_budget import CHANNEL_BUDGET, OUTPUT_TOKENS, reservation_per_turn
 from apps.ai_service.runtime.assistant import assistant_profile
 from apps.ai_service.runtime.release_contracts import _hash
 from .conversations import ConversationOptions
 from .contracts import BotError
 from .run_consent import RunLimits
-from .trial_configuration import TrialInputs, inputs_snapshot, local_path, read_json
+from .trial_configuration import TrialInputs, inputs_snapshot as trial_inputs_snapshot, local_path, read_json
 from contextlib import contextmanager
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,6 +21,10 @@ PREPARATION = ROOT/'apps/ai_service/resources/management_qq_hybrid_live_preparat
 from apps.management_process import ISOLATED_MARKER_CONTRACT as MARKER
 RISK = ('普通自然语言可能收费；General 不是现场核验或专业保证。SIMULATOR 及必要历史将披露给 Qwen 和 QQ。'
         '失败/超时/未知送达不退款、不重试。本地预算不是云账单硬上限；不合作 SDK 线程可能无法强制退出，远端计费未知。')
+
+
+def inputs_snapshot(inputs,monitoring=None):
+    return trial_inputs_snapshot(inputs,monitoring,expected_budget=CHANNEL_BUDGET)
 
 
 def ensure_private_directory(path):
@@ -65,6 +71,8 @@ def load_request(path):
         raise BotError('INVALID_MANAGEMENT_REQUEST')
     inputs = TrialInputs.parse(value['inputs'])
     limits = RunLimits(**value['limits'])
+    if Decimal(limits.total_budget_cny)<reservation_per_turn()*limits.max_turns:
+        raise BotError('RUN_BUDGET_INSUFFICIENT')
     access, ai, source, grant, _ = inputs_snapshot(inputs)
     selected = tuple(value['members'])
     group = next(g for g in access.groups if g.group_id == inputs.group_id)
@@ -108,8 +116,8 @@ def check_request(path, *, offline=False):
         scope_sha256=request.scope_sha256, data_root=source['data_root'], instance_id=source['instance_id'],
         device_id=next(g.device_id for g in inputs_snapshot(request.inputs)[0].groups if g.group_id == request.inputs.group_id),
         group_ref=_hash(request.inputs.group_id)[:12], member_refs=[_hash(m)[:12] for m in request.members],
-        limits=asdict(request.limits), reservation_per_turn_cny=str(cost_reservation()),
-        max_model_requests=request.limits.max_turns*2, output_tokens_per_request=512,
+        limits=asdict(request.limits), reservation_per_turn_cny=str(reservation_per_turn()),
+        max_model_requests=request.limits.max_turns*2, output_tokens_per_request=OUTPUT_TOKENS,
         seconds_per_turn=90, retries=0, offline=offline, credential_checked=False,
         database_opened=False, network_requests=0, risk=RISK,
         event_notifications=check_event_recipient(request))

@@ -2,6 +2,6 @@
   "schema_version": 1,
   "enabled": true,
   "preset_id": "dashscope-qwen38-flash-r1",
-  "budget": {"max_output_tokens": 512, "turn_timeout_s": 90},
+  "budget": {"max_output_tokens": 2048, "turn_timeout_s": 90},
   "grants": [{"group_id": "REPLACE_GROUP_OPENID", "members": ["REPLACE_MEMBER_OPENID"], "device_id": "sim-pond-1", "tools": ["get_current_water_quality"]}]
 }

@@ -83,11 +83,11 @@ class TrialInputs:
             identifier(value['group_id']),identifier(value['member_id']))
 
 
-def inputs_snapshot(inputs,monitoring=None):
+def inputs_snapshot(inputs,monitoring=None,*,expected_budget=ChannelBudget()):
     access=load_access(inputs.access_file);ai=load_ai_config(inputs.ai_config)
     source_config=load_monitoring_config(inputs.monitoring_config);source_config.check_bindings(access)
     if not ai.enabled:raise BotError('AI_DISABLED')
-    if ai.budget!=ChannelBudget():raise BotError('TRIAL_FIXED_BUDGET_REQUIRED')
+    if ai.budget!=expected_budget:raise BotError('TRIAL_FIXED_BUDGET_REQUIRED')
     group=next((g for g in access.groups if g.group_id==inputs.group_id),None)
     grant=next((g for g in ai.grants if g.group_id==inputs.group_id),None)
     if (group is None or grant is None or inputs.member_id not in group.members

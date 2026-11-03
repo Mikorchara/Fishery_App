@@ -23,7 +23,7 @@ class ChannelBudget:
     turn_timeout_s: int = 90
 
     def __post_init__(self):
-        if (type(self.max_output_tokens) is not int or not 1<=self.max_output_tokens<=1024
+        if (type(self.max_output_tokens) is not int or not 1<=self.max_output_tokens<=2048
                 or type(self.turn_timeout_s) is not int or not 1<=self.turn_timeout_s<=90):
             raise GatewayError('INVALID_CHANNEL_BUDGET')
 

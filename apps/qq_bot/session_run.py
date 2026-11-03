@@ -31,12 +31,17 @@ class SessionRun:
         self._initialize(inputs,directory,async_client_factory=async_client_factory,limits=limits,
             members=members,clock=clock,monotonic=monotonic)
 
+    channel_budget=ChannelBudget()
+
+    def _inputs_snapshot(self,inputs,monitoring=None):
+        return inputs_snapshot(inputs,monitoring,expected_budget=self.channel_budget)
+
     def _initialize(self,inputs,directory,*,async_client_factory,limits,members,clock,monotonic):
         """Shared run mechanics; public constructors own their distinct authorization gates."""
         self.clock=clock or (lambda:datetime.now(timezone.utc));self.now=monotonic
         self.inputs,self.directory=inputs,local_path(directory)
         if not self.directory.is_dir() or any(self.directory.iterdir()):raise BotError('RUN_DIRECTORY_NOT_EMPTY')
-        access,ai,source,grant,_=inputs_snapshot(inputs)
+        access,ai,source,grant,_=self._inputs_snapshot(inputs)
         selected=(inputs.member_id,) if members is None else members
         group=next(g for g in access.groups if g.group_id==inputs.group_id)
         if (type(selected) is not tuple or not 1<=len(selected)<=4 or len(set(selected))!=len(selected)
@@ -44,9 +49,9 @@ class SessionRun:
             raise BotError('RUN_MEMBERS_NOT_APPROVED')
         self.members=selected;self.device_id=grant.device_id
         self.monitoring=InstanceMonitoring(source,clock=self.clock)
-        self.bindings=inputs_snapshot(inputs,self.monitoring)[-1]
+        self.bindings=self._inputs_snapshot(inputs,self.monitoring)[-1]
         self.access=replace(access,groups=(replace(group,members=selected),))
-        self.config=QQAIConfig(True,PRESET,ChannelBudget(),(QQAIGrant(inputs.group_id,selected,grant.device_id),))
+        self.config=QQAIConfig(True,PRESET,self.channel_budget,(QQAIGrant(inputs.group_id,selected,grant.device_id),))
         self.options=ConversationOptions(trigger_mode='mention_ai',memory_enabled=True)
         self.store=self._new_store(monotonic)
         self.scope=self.scope_for_options();self.scope_sha256=_hash(self.scope)
@@ -107,7 +112,7 @@ class SessionRun:
     def _check_configuration(self):
         # Fake-only Run keeps its original checks. The typed Session trial may
         # deduplicate this immutable evidence within one synchronous validation.
-        if inputs_snapshot(self.inputs,self.monitoring)[-1]!=self.bindings:raise BotError('RUN_BINDINGS_CHANGED')
+        if self._inputs_snapshot(self.inputs,self.monitoring)[-1]!=self.bindings:raise BotError('RUN_BINDINGS_CHANGED')
         if _hash(self.scope_for_options())!=self.scope_sha256:raise BotError('RUN_SCOPE_CHANGED')
 
     def check_message(self,message):
@@ -137,7 +142,7 @@ class SessionRun:
             with self._lock:
                 self._active[lease.sequence]['session']=session;self.sessions.append(session)
             return ManagementAssistantService.monitoring_only(self.monitoring,credentials=self._turn_credentials(),
-                traces=JsonlTraceSink(self.directory/f'turn-{lease.sequence}.trace.jsonl'),
+                traces=JsonlTraceSink(self.directory/f'turn-{lease.sequence}.trace.jsonl',tool_names=('get_current_water_quality',)),
                 policy_directory=self.inputs.policy_directory,channel_trial=session)
         except Exception as error:
             self.admission_failed(None,getattr(error,'code','RUN_ADMISSION_FAILED'),sequence=lease.sequence);raise
@@ -181,6 +186,15 @@ class SessionRun:
             sequence=plan.service._channel_trial.approval.sequence
             write_new(self.directory/f'turn-{sequence}.delivery.json',dict(contract=self.scope['contract'],
                 turn=sequence,receipt=asdict(receipt),client_display_confirmed=False,automatic_retry=False))
+        except Exception:
+            self.ledger.halt('RUN_CHECKPOINT_FAILED');raise BotError('RUN_CHECKPOINT_FAILED') from None
+
+    def checkpoint_failure_notice_for(self,plan,code,receipt):
+        try:
+            sequence=plan.service._channel_trial.approval.sequence
+            write_new(self.directory/f'turn-{sequence}.failure-notice.json',dict(contract=self.scope['contract'],
+                payload_kind='FIXED_FAILURE_NOTICE',turn=sequence,backend_error=code,receipt=asdict(receipt),
+                successful_ai_reply=False,history_committed=False,automatic_retry=False))
         except Exception:
             self.ledger.halt('RUN_CHECKPOINT_FAILED');raise BotError('RUN_CHECKPOINT_FAILED') from None
 

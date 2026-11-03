@@ -9,7 +9,7 @@
     "group_id": "REPLACE_GROUP_OPENID",
     "member_id": "REPLACE_MEMBER_OPENID"
   },
-  "limits": {"max_turns": 5, "seconds": 1800, "total_budget_cny": "8.02"},
+  "limits": {"max_turns": 5, "seconds": 1800, "total_budget_cny": "8.06"},
   "members": ["REPLACE_MEMBER_OPENID"],
   "scope_sha256": "GENERATED_BY_PREPARE_DEMO_AFTER_CODE_REVIEW"
 }

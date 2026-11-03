@@ -12,6 +12,8 @@
 
 下文保留初始化、离线验收、授权、故障和实现细节；不是每次启动需要逐条执行的清单。
 
+2026-11-03 更新：当前 Management QQ 使用独立2048输出Token／请求、每Turn最多2请求、90秒、零重试；五轮最低保守预留8.055300元，默认批准预算8.06元。下文历史阶段的512／8.02数字不再代表当前Management Run，旧Scope／批准不能复用。Web与旧Fake合同预算保持原值。[失败提示与新合同](QQ_REPLY_FAILURE_FIX.md)。
+
 ## 1. 快速使用：先验收纯离线三终端
 
 在 **Management 根目录**的普通 PowerShell 执行。Python 使用本项目 `.venv`；脚本兼容 Windows PowerShell 5.1，保留 UTF-8 BOM。

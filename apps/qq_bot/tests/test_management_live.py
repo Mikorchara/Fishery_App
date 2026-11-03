@@ -51,7 +51,7 @@ class ManagementLiveTests(unittest.TestCase):
             return original(store,*args,**kwargs)
         patch.object(CredentialStore,'resolve',memory_only).start()
 
-    def compose(self,approve=True):
+    def compose(self,approve=True,*,failure_feedback=False):
         directory=self.root/'run';directory.mkdir()
         self.host=ManagementRun(self.request,directory,async_client_factory=self.factory)
         self.addCleanup(self.host.close)
@@ -69,7 +69,7 @@ class ManagementLiveTests(unittest.TestCase):
         self.transport=LiveQQTransport(self.api,self.host);self.addCleanup(self.transport.close)
         self.coordinator=QQAICoordinator(self.host.access,self.host.monitoring,self.host.base_service,
             config=self.host.config,conversations=self.host.store,session_run=self.host)
-        self.scheduler=QQAIJobScheduler(self.coordinator,self.transport);self.addCleanup(self.scheduler.close)
+        self.scheduler=QQAIJobScheduler(self.coordinator,self.transport,failure_feedback=failure_feedback);self.addCleanup(self.scheduler.close)
         adapter=QQAdapter(self.host.access,ReadOnlyQueries(self.host.monitoring),mode='QQ_PASSIVE_READY')
         self.router=OfflineQQAIRouter(adapter,self.scheduler);self.addCleanup(self.router.close)
         self.gateway=QQGateway('123456789',self.api,adapter,trial_router=self.router,

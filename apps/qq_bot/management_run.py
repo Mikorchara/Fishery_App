@@ -10,15 +10,20 @@ from .session_run import SessionRun
 from .management_config import ROOT, PREPARATION, RISK, load_request
 from .trial_configuration import read_json
 from .contracts import BotError
+from apps.ai_service.management_channel_budget import CHANNEL_BUDGET, OUTPUT_TOKENS
 
 
 class ManagementLedger(HybridLedger):
+    output_token_limit=OUTPUT_TOKENS
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._plan.update(contract=CONTRACT, environment='MANAGEMENT_PROCESS_RUNCONSENT')
 
 
 class ManagementRun(HybridRun):
+    channel_budget=CHANNEL_BUDGET
+
     def __init__(self, request, directory, *, async_client_factory=None, clock=None, monotonic=None):
         import time
         self.request, self.permit = request, None

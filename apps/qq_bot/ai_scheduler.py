@@ -5,7 +5,7 @@ import re
 import threading
 import time
 
-from .ai_delivery import DeliveryOwner, OfflineQQGateway
+from .ai_delivery import DeliveryOwner, OfflineQQGateway, FAILURE_MESSAGES
 from .live_transport import check_live_gateway
 from .contracts import BotError
 
@@ -24,6 +24,8 @@ class _Job:
     result: object = None
     cancelled: threading.Event = field(default_factory=threading.Event)
     receipt: object = None
+    failure_code: str | None = None
+    failure_notice: object = None
 
 
 def _code(error):
@@ -38,7 +40,8 @@ class QQAIJobScheduler:
     AI jobs, one unfinished job per frozen authorized session. No per-job threads.
     Exact Fake or independently approved Trial transport only. Ordinary CLI stays disabled.
     """
-    def __init__(self, coordinator, gateway, *, clock=None, monotonic=time.monotonic,receipt_sink=None):
+    def __init__(self, coordinator, gateway, *, clock=None, monotonic=time.monotonic,receipt_sink=None,failure_feedback=False):
+        if type(failure_feedback) is not bool:raise BotError('INVALID_AI_FAILURE_FEEDBACK')
         if type(gateway) is not OfflineQQGateway and not check_live_gateway(gateway, coordinator):raise BotError('M2_OFFLINE_DELIVERY_REQUIRED')
         self.coordinator,self.gateway=coordinator,gateway
         self.now=monotonic
@@ -47,6 +50,7 @@ class QQAIJobScheduler:
         self._jobs={};self._finished=OrderedDict();self._finished_resources={};self._acceptances=deque(maxlen=32)
         self._stopping=False
         self._resource_fault=None
+        self.failure_feedback=failure_feedback;self._statuses=deque(maxlen=32)
         self._threads=tuple(threading.Thread(target=fn,name='qq-ai-'+name,daemon=False)
             for name,fn in (('worker',self._ai_loop),('delivery',self._delivery_loop),('watchdog',self._watch)))
         coordinator.claim_scheduler(self)
@@ -115,6 +119,10 @@ class QQAIJobScheduler:
         with self._cv:
             values=tuple(self._acceptances);self._acceptances.clear();return values
 
+    def take_statuses(self):
+        with self._cv:
+            values=tuple(self._statuses);self._statuses.clear();return values
+
     def cancel_conversation(self,key):
         with self._cv:
             ids=tuple(j.plan.id for j in self._jobs.values() if j.plan.prepared.channel_history is not None
@@ -127,6 +135,11 @@ class QQAIJobScheduler:
         receipt=job.receipt
         info=dict(task_id=task_id,state=state,code=code,
             api_accepted=bool(receipt and receipt.api_accepted),client_display_confirmed=False)
+        notice=job.failure_notice
+        if notice is not None:
+            info['failure_notice']=dict(status=notice.status,code=notice.code,api_accepted=notice.api_accepted,
+                client_display_confirmed=False,report_error=notice.report_error)
+            if notice.report_error:info['report_error']=notice.report_error
         if receipt and receipt.explanation_code is not None:
             info.update(explanation_code=receipt.explanation_code,
                         explanation_in_payload=receipt.explanation_in_payload)
@@ -136,6 +149,8 @@ class QQAIJobScheduler:
             info['sdk_resources']=job.plan.handle.resource_info()
             self._finished_resources[task_id]=job.plan.handle._sdk_resource
         self._finished[task_id]=info
+        self._statuses.append(dict(task_ref=task_id[:12],state=state,reason=code,
+            api_accepted=info['api_accepted'],failure_notice_api_accepted=bool(notice and notice.api_accepted)))
         while len(self._finished)>32:
             expired,_=self._finished.popitem(last=False)
             self._finished_resources.pop(expired,None)
@@ -207,19 +222,33 @@ class QQAIJobScheduler:
                                'AI_DEVICE_NOT_AUTHORIZED'):
                     self._finish(job,'CANCELLED','AI_AUTH_CHANGED')
                 elif error:
-                    self._finish(job,'EXPIRED' if error in ('AI_QUEUE_TIMEOUT','TOTAL_TIMEOUT') else 'FAILED',error)
+                    self._fail_or_notice(job,error)
                 elif not result.completed:
-                    self._finish(job,'EXPIRED' if result.error_code=='TOTAL_TIMEOUT' else 'FAILED',
-                                 result.error_code or 'AI_BACKEND_FAILED')
+                    self._fail_or_notice(job,result.error_code or 'AI_BACKEND_FAILED')
                 elif self.now()>=job.plan.context.deadline:self._finish(job,'EXPIRED','AI_TOTAL_TIMEOUT')
                 else:
                     job.state='COMPLETED';job.result=result
                     job.state='DELIVERY_PENDING';self._cv.notify_all()
             if self._resource_fault:self.cancel_all(reason='AI_RESOURCE_UNSAFE')
 
+    def _fail_or_notice(self,job,code):
+        if self.failure_feedback and code in FAILURE_MESSAGES:
+            job.failure_code=code;job.state='DELIVERY_PENDING';self._cv.notify_all()
+        else:self._finish(job,'EXPIRED' if code in ('AI_QUEUE_TIMEOUT','TOTAL_TIMEOUT') else 'FAILED',code)
+
     def _delivery_loop(self):
         while (job:=self._pick('DELIVERY_PENDING','delivery')) is not None:
             receipt=None;error=None
+            if job.failure_code is not None:
+                try:receipt=self.delivery.deliver_failure(job.plan,job.failure_code,job.cancelled)
+                except Exception as failure:
+                    from .ai_delivery import DeliveryReceipt
+                    receipt=DeliveryReceipt('FAILED',_code(failure))
+                with self._cv:
+                    job.owner=None;job.failure_notice=receipt
+                    if job.cancelled.is_set():self._settle_cancel(job)
+                    else:self._finish(job,'FAILED',job.failure_code)
+                continue
             try:receipt=self.delivery.deliver(job.plan,job.result,job.cancelled)
             except Exception as failure:error=_code(failure)
             with self._cv:

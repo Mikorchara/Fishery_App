@@ -14,10 +14,11 @@ from apps.ai_backend.project_env import ProjectEnvWriter
 from apps.ai_backend.secure_files import exclusive_lock, private_directory
 from apps.ai_service.runtime.locations import private_project_location
 from apps.ai_service.runtime.release_contracts import _hash
-from .management_config import ROOT, MARKER, RISK, check_request, prepared_scope, ensure_private_directory, process_lock
+from .management_config import ROOT, MARKER, RISK, check_request, prepared_scope, ensure_private_directory, process_lock, inputs_snapshot
+from apps.ai_service.management_channel_budget import CHANNEL_BUDGET, DEFAULT_RUN_BUDGET_CNY
 from .management_run import ManagementRun
 from .run_consent import RunLimits
-from .trial_configuration import write_new, local_path, inputs_snapshot
+from .trial_configuration import write_new, local_path
 from .contracts import BotError
 
 SECRET_REF = 'FISHERY_QQ_APP_SECRET'
@@ -51,7 +52,7 @@ def initialize_demo(data_root, config_dir, *, app_id, group_id, members, enable=
     if root.exists() or cfg.exists(): raise BotError('INITIALIZATION_TARGET_EXISTS')
     if not root.parent.is_dir() or not cfg.parent.is_dir(): raise BotError('INITIALIZATION_PARENT_MISSING')
     access = BotConfig(app_id,(GroupAccess(group_id,'sim-pond-1',tuple(members),('current',)),))
-    ai = QQAIConfig(True,grants=(QQAIGrant(group_id,tuple(members),'sim-pond-1'),))
+    ai = QQAIConfig(True,budget=CHANNEL_BUDGET,grants=(QQAIGrant(group_id,tuple(members),'sim-pond-1'),))
     paths = ManagementPaths.resolve(ROOT,data_root=root)
     initialize_instance(paths); cfg.mkdir()
     now=datetime.now(timezone.utc)
@@ -71,7 +72,7 @@ def initialize_demo(data_root, config_dir, *, app_id, group_id, members, enable=
     inputs_snapshot(inputs)  # Initializes only this new, isolated Bot policy; no global policy writes.
     scope=prepared_scope(ConversationOptions(trigger_mode='mention_ai',memory_enabled=True))
     write_new(cfg/'request.json',dict(schema_version=1,enabled=enable,inputs=inputs.dictionary(),
-        limits=asdict(RunLimits()),members=list(members),scope_sha256=_hash(scope)))
+        limits=asdict(RunLimits(total_budget_cny=DEFAULT_RUN_BUDGET_CNY)),members=list(members),scope_sha256=_hash(scope)))
     return cfg/'request.json'
 
 
@@ -139,7 +140,7 @@ def run(request_path, directory, *, offline=False, seconds=None, stop_requested=
             from .gateway import QQGateway
             coordinator=QQAICoordinator(host.access,host.monitoring,host.base_service,config=host.config,
                 conversations=host.store,session_run=host)
-            scheduler=QQAIJobScheduler(coordinator,transport)
+            scheduler=QQAIJobScheduler(coordinator,transport,failure_feedback=True)
             adapter=QQAdapter(host.access,ReadOnlyQueries(host.monitoring),mode='QQ_PASSIVE_READY')
             router=OfflineQQAIRouter(adapter,scheduler)
             connector=(lambda _:FakeSocket(host.access.app_id,request.inputs.group_id,request.members[0])) if offline else live_connector(host.permit)
@@ -166,6 +167,7 @@ def run(request_path, directory, *, offline=False, seconds=None, stop_requested=
                 while worker.is_alive():
                     if stop_requested(): code='MANAGEMENT_OPERATOR_STOP'; break
                     host.check(); worker.join(.1)
+                    for status in scheduler.take_statuses():emit_status('AI_TASK_FINISHED',**status)
                 if failures: code=failures[0]
             except KeyboardInterrupt: code='MANAGEMENT_OPERATOR_INTERRUPTED'
             except Exception as error: code=getattr(error,'code','MANAGEMENT_RUN_FAILED')
@@ -189,7 +191,9 @@ def run(request_path, directory, *, offline=False, seconds=None, stop_requested=
             if api and offline:api._client.close()  # Controller owns this injected memory client.
             if host:
                 try:
-                    if scheduler: report=host.stop(scheduler,code=code)
+                    if scheduler:
+                        report=host.stop(scheduler,code=code)
+                        for status in scheduler.take_statuses():emit_status('AI_TASK_FINISHED',**status)
                     else:
                         host.close();report=host.report(code);write_new(directory/'result.json',report)
                     emit_status('MANAGEMENT_BOT_REPORT_SAVED',stop_code=code,

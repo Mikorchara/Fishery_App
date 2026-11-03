@@ -135,7 +135,7 @@ def launch_stack(*,request=None,data_root=None,port=8766,scenario='normal',with_
             if not bot_only:guards.enter_context(process_lock(locks/('instance-'+_hash(str(root))[:24]+'.lock')))
             if with_bot:
                 from apps.qq_bot.management_config import load_request
-                from apps.qq_bot.trial_configuration import inputs_snapshot
+                from apps.qq_bot.management_config import inputs_snapshot
                 selected=load_request(request);app=inputs_snapshot(selected.inputs)[0].app_id
                 # Prelaunch ownership: prevents a duplicate approval terminal before Bot takes its run lock.
                 guards.enter_context(process_lock(locks/('bot-'+_hash([app,selected.inputs.group_id])[:24]+'.lock')))
