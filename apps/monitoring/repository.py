@@ -1,6 +1,7 @@
 """SQLite authoritative current state and bounded history. No secrets or device I/O."""
 
 from contextlib import contextmanager
+from collections import Counter
 from datetime import datetime, timedelta
 import hashlib
 import json
@@ -11,7 +12,7 @@ from time import monotonic
 
 from .contracts import IngestionError, ChannelAnalysis, strict_json
 from .events import EventService, interrupt_visual
-from .event_families import associate_water_changes
+from .event_families import associate_water_changes, family_group
 from .event_records import EventRecordError, deletable, legacy_closed_record, validate_delete
 from .rules import VISUAL_RULES
 from .schema import SCHEMA_VERSION, add_handling_tables, validate_schema
@@ -288,6 +289,49 @@ class MonitoringRepository:
                 event['deletable'] = deletable(raw, linked, event['id'] in references)
                 result.append(event)
             return project_handling(db, result)
+
+    def capture_events(self, device_id, *, max_rows=256):
+        """Bounded device snapshot for read consumers; no ACK/audit-table scan.
+
+        Never truncate a risk family: exceed the budget and fail the whole query.
+        Current evidence and all retained device events use one SQLite snapshot.
+        """
+        if type(max_rows) is not int or not 1 <= max_rows <= 256:
+            raise ValueError('INVALID_EVENT_QUERY_LIMIT')
+        with self.connection() as db:
+            db.execute('BEGIN')
+            rows = db.execute('''SELECT id,device_id,channel,code,
+                length(CAST(payload AS BLOB)) AS size,
+                CASE WHEN length(CAST(payload AS BLOB))<=65536 THEN payload END AS payload
+                FROM events WHERE device_id=? ORDER BY rowid DESC LIMIT ?''',
+                (device_id, max_rows+1)).fetchall()
+            if (len(rows)>max_rows or any(r['payload'] is None for r in rows)
+                    or sum(r['size'] for r in rows)>2*1024*1024):
+                raise ValueError('EVENT_QUERY_LIMIT')
+            events = []
+            for row in rows:
+                raw = json.loads(row['payload'])
+                if any(raw.get(k) != row[k] for k in ('id','device_id','channel','code')):
+                    raise ValueError('INVALID_EVENT_STORAGE_RECORD')
+                event = self.event_service.legacy_projection(raw)
+                event['deletable'] = False
+                events.append(event)
+            families = Counter((e.get('risk_family') or {}).get('episode_id') for e in events
+                               if (e.get('risk_family') or {}).get('episode_id'))
+            legacy_groups = Counter(family_group(e) for e in events if family_group(e)
+                and not e.get('risk_family') and e.get('status') != 'closed' and not e.get('superseded_by'))
+            if any(count>16 for count in (*families.values(), *legacy_groups.values())):
+                raise ValueError('EVENT_QUERY_LIMIT')
+            current = {}
+            for row in db.execute('''SELECT c.*,h.last_received_at AS last_reported_at
+                    FROM current c LEFT JOIN channel_contacts h
+                    ON c.device_id=h.device_id AND c.channel=h.channel
+                    WHERE c.device_id=?''', (device_id,)):
+                if row['channel'] not in ('water','visual') or len(row['payload'].encode())>65536:
+                    raise ValueError('INVALID_CURRENT_STORAGE_RECORD')
+                current[row['channel']] = self._decode(row)
+            return events, current
+
 
     def acknowledge_event(self, value, *, at):
         if not isinstance(at, datetime) or at.tzinfo is None or at.utcoffset() is None:

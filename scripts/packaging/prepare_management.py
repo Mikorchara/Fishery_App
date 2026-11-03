@@ -7,7 +7,8 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGES = ('ai_backend', 'ai_service', 'knowledge', 'monitoring', 'simulator', 'management_web', 'qq_bot')
 LAUNCHERS = ('local_session.py', 'windows_job.py', 'demo_instance.py', 'run_local.ps1', '启动演示系统.cmd',
     '启动QQ演示系统.cmd', 'management_stack.py', 'stack_console.py', 'console_job.py', 'management_stack_common.ps1',
-    'Start-ManagementStack.ps1', 'Start-QQBot.ps1', 'Stop-ManagementStack.ps1', 'Stop-QQBot.ps1')
+    'Start-ManagementStack.ps1', 'Start-QQBot.ps1', 'Stop-ManagementStack.ps1', 'Stop-QQBot.ps1',
+    '启动视频演示系统.cmd', '启动QQ视频演示系统.cmd')
 
 
 def prepare(destination, *, root=ROOT):

@@ -1,6 +1,7 @@
 """Finite intent templates; neither a model router nor a business authority."""
 from dataclasses import dataclass
 import re
+from apps.ai_service.channel_identity import GREETING
 from apps.ai_service.channel_conversation import question_for
 
 
@@ -12,7 +13,7 @@ class Intent:
     def question(self):return question_for(self.focus)
     @property
     def text(self):
-        return {'greeting':'你好，我是鱼类监测 AI 助手。可以询问当前绑定设备的水质。',
+        return {'greeting':GREETING,
             'capabilities':'可解释当前绑定设备的模拟水质。知识、历史AI分析和写操作暂未开放；固定查询请用 /帮助。',
             'clarify':'请明确你想了解水温、pH还是溶解氧；旧对话不能证明当前水质。',
             'unsupported':'当前只支持当前水质问答，不能切换设备、查询知识或执行写操作；固定命令请用 /帮助。',

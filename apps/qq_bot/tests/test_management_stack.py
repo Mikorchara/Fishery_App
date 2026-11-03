@@ -35,11 +35,14 @@ class ManagementStackTests(unittest.TestCase):
             time.sleep(.1)
         self.fail('owned stack condition timed out')
 
-    def start(self,*,bot=True,only=False,seconds=70,quarantine=False,interactive=False,menu_input=None):
+    def start(self,*,bot=True,only=False,seconds=70,quarantine=False,interactive=False,menu_input=None,demo_video=None,score_trial=False):
         log=self.root/'controller.log'
         output=log.open('wb');self.addCleanup(output.close)
         command=[sys.executable,'-X','utf8','-I','-B','-u',str(ROOT/'scripts/dev/management_stack.py'),
             '--request',str(self.request),'--port',str(self.port),'--offline-demo','--no-assistant','--seconds',str(seconds)]
+        if demo_video is not None:command+=['--demo-video',str(demo_video)]
+        if score_trial:
+            command.remove('--no-assistant');command+=['--score-trial']
         if interactive:command+=['--interactive-scenario']
         if bot:command+=['--with-bot']
         if only:command+=['--bot-only']
@@ -167,6 +170,30 @@ runpy.run_path(script,run_name='__main__')'''
         self.wait(lambda:'"role": "bot"' in (directory/'controller.log').read_text() and
             '"state": "EXITED"' in (directory/'controller.log').read_text())
         self.assertFalse(process_fixture.alive(pid))
+
+    def test_video_and_score_three_consoles_with_fake_bot_stop_independently(self):
+        import urllib.request
+        video=self.root/'sample.mp4';content=b'\x00\x00\x00\x18ftypisom'+b'fictional-video'*20
+        video.write_bytes(content)
+        child,directory=self.start(demo_video=video,score_trial=True)
+        self.wait(lambda:self.status(directory,'bot').get('state')=='READY' or child.poll() is not None)
+        self.assertIsNone(child.poll(),(directory/'controller.log').read_text())
+        records=[self.status(directory,r) for r in ('web','simulator','bot')]
+        self.assertEqual(len({r['pid'] for r in records}),3)
+        self.assertEqual(len({r['console_hwnd'] for r in records}),3)
+        base=f'http://127.0.0.1:{self.port}'
+        with urllib.request.urlopen(urllib.request.Request(base+'/media/local-demo.mp4',headers={'Range':'bytes=0-23'}),timeout=5) as response:
+            self.assertEqual(response.status,206);self.assertEqual(response.read(),content[:24])
+        with urllib.request.urlopen(base+'/api/ai/tool-policy',timeout=5) as response:
+            policy=json.load(response)
+        self.assertTrue(policy['score_trial']['enabled'])
+        self.assertIn('score_current_water_quality',[tool['name'] for tool in policy['tools']])
+        request_stop(directory,'bot')
+        self.wait(lambda:self.status(directory,'bot').get('state')=='EXITED')
+        before=self.count();self.wait(lambda:self.count()>before,timeout=15)
+        self.assertIsNone(child.poll());self.assertTrue(process_fixture.alive(records[0]['pid']))
+        request_stop(directory,'all');child.wait(timeout=30)
+        self.wait(lambda:not any(process_fixture.alive(r['pid']) for r in records))
 
     def test_no_bot_default_and_standalone_bot_exit(self):
         child,directory=self.start(bot=False)

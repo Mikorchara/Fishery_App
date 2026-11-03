@@ -20,7 +20,8 @@ CONTRACT = 'management-qq-hybrid-process-run@1'
 def prepared_scope(options):
     root = Path(__file__).resolve().parents[2]
     base = offline_scope(options)
-    paths = ('apps/ai_service/channel_management_live.py', 'apps/qq_bot/management_run.py',
+    paths = ('apps/qq_bot/event_notifications.py', 'apps/qq_bot/event_recipients.py',
+             'apps/ai_service/channel_management_live.py', 'apps/qq_bot/management_run.py',
              'apps/qq_bot/management_config.py', 'apps/qq_bot/management_cli.py',
              'apps/qq_bot/live_transport.py', 'apps/qq_bot/demo_runtime.py',
              'apps/management_process.py', 'apps/management_web/__main__.py')

@@ -61,17 +61,20 @@ def require_free_port(port):
 
 
 def commands(python, scenario, port, seed, *, assistant=True, streaming=True, multi_round=True, history=True,
-             data_root=None, user_data=False):
+             data_root=None, user_data=False, demo_video=None, score_trial=False):
+    if score_trial and not assistant:raise RuntimeError('SCORE_TRIAL_REQUIRES_ASSISTANT')
     server = [python,'-m','apps.management_web','--port',str(port),'--enable-ingestion']
     if data_root is not None:
         server += ['--data-root',str(data_root)]
     if user_data:
         server += ['--user-data']
+    if demo_video is not None:server+=['--demo-video',str(Path(demo_video).absolute())]
     if assistant:
         server += ['--enable-assistant']
         server += [flag for enabled,flag in ((multi_round,'--assistant-multi-round-trial'),
             (streaming,'--assistant-streaming-trial'),(history,'--assistant-history-trial')) if enabled]
         if history and (multi_round or streaming):server += ['--assistant-tools-trial']
+        if score_trial:server+=['--assistant-score-trial']
     return (server,[python,'-m','apps.simulator','--scenario',scenario,'--server',f'http://127.0.0.1:{port}',
                     '--seed',str(seed),'--interval','10'])
 
@@ -92,7 +95,7 @@ def run_local(scenario='normal', port=8766, seed=42, *, root=ROOT, python=None,
               assistant=True, streaming=True, multi_round=True, history=True,
               data_root=None, user_data=False, show_terminals=False, open_browser=False, interactive_scenario=False,
               launch=subprocess.Popen, is_ready=ready, sleep=time.sleep, emit=print,
-              browse=webbrowser.open):
+              browse=webbrowser.open, demo_video=None, score_trial=False):
     if interactive_scenario and not show_terminals:
         raise RuntimeError('LOCAL_SCENARIO_MENU_REQUIRES_TERMINALS')
     require_free_port(port)
@@ -105,7 +108,7 @@ def run_local(scenario='normal', port=8766, seed=42, *, root=ROOT, python=None,
     try:
         server,simulator = commands(python or sys.executable,scenario,port,seed,
             assistant=assistant,streaming=streaming,multi_round=multi_round,history=history,
-            data_root=data_root,user_data=user_data)
+            data_root=data_root,user_data=user_data,demo_video=demo_video,score_trial=score_trial)
         options = dict(cwd=root,env=child_env)
         if show_terminals:
             if os.name != 'nt':
@@ -227,6 +230,8 @@ def main(argv=None):
     parser.add_argument('--interactive-scenario',action='store_true',help='在 Simulator 终端先选择场景；仅与 --show-terminals 使用')
     for name in ('assistant','streaming','multi-round','history'):
         parser.add_argument('--no-'+name,action='store_true')
+    parser.add_argument('--demo-video',type=Path)
+    parser.add_argument('--score-trial',action='store_true')
     args=parser.parse_args(arguments)
     if not 1 <= args.port <= 65535:
         parser.error('INVALID_LOCAL_PORT')
@@ -259,7 +264,8 @@ def main(argv=None):
             return run_local(args.scenario,args.port,args.seed,assistant=not args.no_assistant,
                 streaming=not args.no_streaming,multi_round=not args.no_multi_round,history=not args.no_history,
                 data_root=args.data_root,user_data=args.user_data,show_terminals=args.show_terminals,
-                open_browser=args.open_browser,interactive_scenario=args.interactive_scenario)
+                open_browser=args.open_browser,interactive_scenario=args.interactive_scenario,
+                demo_video=args.demo_video,score_trial=args.score_trial)
     except (RuntimeError, OSError, ValueError, SecureFileError, KnowledgeError, ToolPolicyError) as error:
         code = str(error) if isinstance(error, (RuntimeError, ValueError)) else getattr(error, 'code', 'LOCAL_STORAGE_OR_PERMISSION_ERROR')
         print(code+' · '+ERROR_HELP.get(code, '启动已停止。请保留现有数据，核对演示实例或手动运行以查看错误。'),file=sys.stderr)

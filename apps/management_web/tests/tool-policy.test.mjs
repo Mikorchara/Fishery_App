@@ -7,10 +7,11 @@ import {fixture,tick} from './assistant-fixture.mjs';
 
 const WATER='get_current_water_quality',KNOWLEDGE='search_fishery_knowledge',HISTORY='get_water_quality_history';
 const walk=node=>[node,...node.children.flatMap(walk)];
-function settingsFixture(){
+function settingsFixture(scoreTrial=false){
   let config={epoch:'epoch',browser_token:'fictional',revision:'r1',source:'INHERITED_SHARED_POLICY',
     selected_tools:[WATER,KNOWLEDGE],tools:[{name:WATER},{name:KNOWLEDGE},{name:HISTORY,candidate_only:true},
       {name:'score_current_water_quality',compatibility_only:true}]};
+  if(scoreTrial){config.score_trial={enabled:true};config.tools[3]={name:'score_current_water_quality',assembled:true,trial_required:true,trial_enabled:true};}
   const writes=[];let saved=0;
   const api={toolPolicy:async()=>structuredClone(config),saveToolPolicy:async value=>{
     writes.push(structuredClone(value));config={...config,selected_tools:value.selected_tools,revision:'r2',source:'MANAGEMENT_OVERRIDE'};return config;}};
@@ -29,6 +30,9 @@ test('settings load never saves; history opt-in preserves choices and publicatio
   const p=settingsFixture();await tick();
   assert.equal(p.writes.length,0);assert.match(p.root.textContent,/Normal：未启用 · Streaming：未启用/);
   let inputs=walk(p.root).filter(n=>n.tagName==='input');
+  assert.equal(p.root.className,'tool-policy-panel');
+  assert.equal(walk(p.root).filter(n=>n.className==='tool-policy-option').length,4);
+  assert.equal(walk(p.root).find(n=>n.getAttribute('role')==='group').getAttribute('aria-label'),'允许 Assistant 使用的工具');
   assert.equal(inputs[2].getAttribute('checked'),null);
   assert.equal(inputs[3].getAttribute('disabled'),'disabled');
   inputs[2].events.change({target:{checked:true}});
@@ -47,6 +51,17 @@ test('stale concurrent settings require reload; safe errors never render private
   p.api.toolPolicy=async()=>{throw new Error('private payload');};
   await p.panel.load();assert.doesNotMatch(p.root.textContent,/private payload/);
   assert.equal(walk(p.root).find(n=>n.textContent==='保存 Tool 授权').getAttribute('disabled'),'disabled');
+});
+
+test('score opt-in is selectable with an explicit trial, explains evidence limits, and saves only authorization',async()=>{
+  const p=settingsFixture(true);await tick();
+  const input=walk(p.root).filter(n=>n.tagName==='input')[3];
+  assert.equal(input.getAttribute('disabled'),null);assert.match(p.root.textContent,/评分独立试用/);
+  assert.match(p.root.textContent,/溶解氧50%/);assert.match(p.root.textContent,/不给总分/);
+  input.events.change({target:{checked:true}});
+  walk(p.root).find(n=>n.textContent==='保存 Tool 授权').events.click();await tick();
+  assert.deepEqual(p.writes[0].selected_tools,[WATER,KNOWLEDGE,'score_current_water_quality']);
+  assert.equal(p.writes.length,1);assert.equal(p.saved,1);
 });
 
 test('policy save refreshes the send configuration, preserves history and draft, defers refresh in flight',async()=>{

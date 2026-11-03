@@ -167,6 +167,9 @@ def _observation(payload):
 
 
 def _score_available(payload, observation):
+    if 'scoring_version' in payload:
+        from ..business_tools.water_quality_score import valid_evaluation
+        if not valid_evaluation(payload):return False
     if observation is None or observation["quality"] == Quality.INVALID:
         return False
     status = payload.get("status")
@@ -251,6 +254,9 @@ def _receipt_from_step(run: ToolConversationResult, step: ToolExecutionStep) -> 
         else:
             valid = _empty_score(payload) and all(
                 key in payload and payload[key] is None for key in ("quality", "freshness", "evaluated_at"))
+            if 'scoring_version' in payload:
+                from ..business_tools.water_quality_score import valid_evaluation
+                valid=valid and valid_evaluation(payload)
         if not valid:
             return empty
         return TurnSourceReceipt(tool_name=step.tool_name, tool_status=tool.status,
@@ -273,6 +279,11 @@ def _receipt_from_step(run: ToolConversationResult, step: ToolExecutionStep) -> 
             evaluation_completed = (_empty_score(payload) and observation["quality"] == Quality.INVALID
                 and payload.get("quality") == observation["quality"].value
                 and payload.get("freshness") == observation["freshness"].value)
+            if 'scoring_version' in payload:
+                from ..business_tools.water_quality_score import valid_evaluation
+                evaluation_completed=(_empty_score(payload) and valid_evaluation(payload)
+                    and payload.get('quality')==observation['quality'].value
+                    and payload.get('freshness')==observation['freshness'].value)
     return TurnSourceReceipt(frozenset(sources), step.tool_name, tool.status, **observation,
         observation_query_completed=True, score_evaluation_completed=evaluation_completed)
 

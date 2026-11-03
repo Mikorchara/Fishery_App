@@ -165,6 +165,23 @@ class QQAPI:
         if self._owned:
             self._client.close()
 
+    def _error_code(self, response, started):
+        """Extract only a bounded numeric platform code; never publish response text."""
+        try:
+            content = bytearray()
+            for chunk in response.iter_bytes():
+                if self._now()-started > 10 or len(content)+len(chunk) > 65536:
+                    return None
+                content.extend(chunk)
+            value = json_object(bytes(content))
+            code = value.get('err_code', value.get('code'))
+            if type(code) is int and 1 <= code <= 999999999:
+                return code
+        except Exception:
+            pass  # A bad/unfinished error body cannot hide the known HTTP failure.
+        return None
+
+
     def _request(self, method, path, *, authenticated=True, body=None,before_post=None):
         headers = {'Authorization': 'QQBot '+self.token()} if authenticated else {}
         started = self._now()
@@ -174,6 +191,8 @@ class QQAPI:
                 if not 200 <= response.status_code < 300:
                     if response.status_code == 401:
                         self._token, self._expires = None, 0
+                    code = self._error_code(response, started) if 400 <= response.status_code < 600 else None
+                    if code is not None:raise BotError('QQ_API_'+str(code))
                     raise BotError('QQ_HTTP_'+str(response.status_code))
                 content = bytearray()
                 for chunk in response.iter_bytes():
@@ -242,6 +261,24 @@ class QQAPI:
         if not isinstance(value.get('id'), str) or not value['id']:
             raise BotError('QQ_SEND_NOT_CONFIRMED')
         return True
+
+
+    def send_event_notice(self,permit,text,*,before_post):
+        from .event_notifications import NotificationPermit
+        if type(permit) is not NotificationPermit:raise BotError('EVENT_NOTIFICATION_APPROVAL_REQUIRED')
+        if (permit.host.access.app_id!=self.app_id or type(text) is not str or not 1<=len(text)<=1600
+                or any(c in text for c in ('@','<','>')) or not callable(before_post)):
+            raise BotError('INVALID_EVENT_NOTIFICATION')
+        def validate():permit.check();before_post()
+        validate()
+        target=identifier(permit.recipient['user_openid'] if permit.recipient else permit.group_id)
+        channel='users' if permit.recipient else 'groups'
+        # Genuine proactive message: never borrow a user msg_id/event_id or its reply owner.
+        value=self._request('POST','/v2/'+channel+'/'+target+'/messages',
+            body={'msg_type':0,'content':text},before_post=validate)
+        if not isinstance(value.get('id'),str) or not value['id']:raise BotError('QQ_SEND_NOT_CONFIRMED')
+        return True
+
 
 
 def connect_gateway(url):

@@ -27,9 +27,13 @@ def request_stop(directory,role):
     else:write_new(path,value)
     return {'code':'STACK_STOP_REQUESTED','role':role,'run_directory':str(directory)}
 
-def preflight(*,request=None,data_root=None,port=8766,with_bot=False,offline=False,bot_only=False):
+def preflight(*,request=None,data_root=None,port=8766,with_bot=False,offline=False,bot_only=False,demo_video=None,score_trial=False,no_assistant=False):
     from scripts.dev.local_session import require_free_port
     if os.name!='nt':raise RuntimeError('STACK_WINDOWS_REQUIRED')
+    if score_trial and no_assistant:raise RuntimeError('SCORE_TRIAL_REQUIRES_ASSISTANT')
+    if demo_video is not None:
+        from apps.management_web.demo_video import LocalDemoVideo
+        LocalDemoVideo.open(demo_video)
     if not bot_only:require_free_port(port)
     if with_bot:
         from apps.qq_bot.management_config import check_request
@@ -57,7 +61,7 @@ def preflight(*,request=None,data_root=None,port=8766,with_bot=False,offline=Fal
 
 def launch_stack(*,request=None,data_root=None,port=8766,scenario='normal',with_bot=False,
                  offline=False,bot_only=False,seconds=None,no_assistant=False,
-                 interactive_scenario=False,open_browser=False,emit=print):
+                 interactive_scenario=False,open_browser=False,emit=print,demo_video=None,score_trial=False):
     from scripts.dev import local_session
     from scripts.dev.windows_job import own_process_tree
     from scripts.dev.console_job import ConsoleJob
@@ -65,7 +69,8 @@ def launch_stack(*,request=None,data_root=None,port=8766,scenario='normal',with_
     from apps.qq_bot.management_config import ensure_private_directory,process_lock
     from apps.ai_service.runtime.release_contracts import _hash
     from apps.qq_bot.trial_configuration import write_new
-    root,summary=preflight(request=request,data_root=data_root,port=port,with_bot=with_bot,offline=offline,bot_only=bot_only)
+    root,summary=preflight(request=request,data_root=data_root,port=port,with_bot=with_bot,offline=offline,bot_only=bot_only,
+        demo_video=demo_video,score_trial=score_trial,no_assistant=no_assistant)
     own_process_tree()
     parent=ROOT/'outputs/management-stack';parent.mkdir(parents=True,exist_ok=True)
     directory=parent/('stack-'+uuid.uuid4().hex);directory.mkdir()
@@ -155,6 +160,7 @@ def launch_stack(*,request=None,data_root=None,port=8766,scenario='normal',with_
                     time.sleep(seconds_to_sleep)
                 result=local_session.run_local(scenario,port,assistant=not no_assistant,
                     data_root=root,show_terminals=True,interactive_scenario=interactive_scenario,
+                    demo_video=demo_video,score_trial=score_trial,
                     open_browser=open_browser,launch=launch,sleep=sleep,emit=lambda text:report(dict(code='STACK_WEB_SIMULATOR',message=text)))
     except KeyboardInterrupt:result=0
     except Exception as error:
@@ -198,6 +204,7 @@ def main(argv=None):
     p.add_argument('--seconds',type=int);p.add_argument('--no-assistant',action='store_true')
     p.add_argument('--interactive-scenario',action='store_true')
     p.add_argument('--open-browser',action='store_true')
+    p.add_argument('--demo-video',type=Path);p.add_argument('--score-trial',action='store_true')
     p.add_argument('--stop-directory',type=Path);p.add_argument('--stop-role',choices=('bot','all'),default='all')
     args=p.parse_args(argv)
     try:
@@ -206,11 +213,14 @@ def main(argv=None):
         if args.seconds is not None and not 1<=args.seconds<=1800:raise RuntimeError('INVALID_RUN_DURATION')
         if args.bot_only:args.with_bot=True
         if args.check:
-            root,summary=preflight(request=args.request,data_root=args.data_root,port=args.port,with_bot=args.with_bot,offline=args.offline_demo,bot_only=args.bot_only)
-            print(json.dumps(dict(code='STACK_PREFLIGHT_OK',data_root=str(root),bot=args.with_bot,summary=summary),ensure_ascii=False));return 0
+            root,summary=preflight(request=args.request,data_root=args.data_root,port=args.port,with_bot=args.with_bot,offline=args.offline_demo,bot_only=args.bot_only,
+                demo_video=args.demo_video,score_trial=args.score_trial,no_assistant=args.no_assistant)
+            print(json.dumps(dict(code='STACK_PREFLIGHT_OK',data_root=str(root),bot=args.with_bot,summary=summary,video_enabled=args.demo_video is not None,
+                score_trial_enabled=args.score_trial),ensure_ascii=False));return 0
         return launch_stack(request=args.request,data_root=args.data_root,port=args.port,scenario=args.scenario,
             with_bot=args.with_bot,offline=args.offline_demo,bot_only=args.bot_only,seconds=args.seconds,no_assistant=args.no_assistant,
-            interactive_scenario=args.interactive_scenario,open_browser=args.open_browser)
+            interactive_scenario=args.interactive_scenario,open_browser=args.open_browser,
+            demo_video=args.demo_video,score_trial=args.score_trial)
     except Exception as error:
         from apps.qq_bot.management_cli import emit
         emit(getattr(error,'code',str(error) if isinstance(error,RuntimeError) else 'STACK_PREFLIGHT_FAILED'));return 1

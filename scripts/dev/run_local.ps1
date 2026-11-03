@@ -14,7 +14,9 @@
     [switch]$InteractiveScenario,
     [switch]$OpenBrowser,
     [switch]$Detach,
-    [switch]$DialogErrors
+    [switch]$DialogErrors,
+    [string]$DemoVideo,
+    [switch]$ScoreTrial
 )
 $ErrorActionPreference = 'Stop'
 try {
@@ -23,17 +25,18 @@ if ($Detach) {
     # Keep only the two service consoles visible. No elevated execution/policy bypass.
     $detachedArgs = @('-NoLogo','-NoProfile','-File',('"{0}"' -f $PSCommandPath),
         '-DialogErrors','-Scenario',$Scenario,'-Port',"$Port",'-Seed',"$Seed")
-    foreach ($name in @('Demo','ShowTerminals','InteractiveScenario','OpenBrowser','NoAssistant','NoStreaming','NoMultiRound','NoHistory','UserData')) {
+    foreach ($name in @('Demo','ShowTerminals','InteractiveScenario','OpenBrowser','NoAssistant','NoStreaming','NoMultiRound','NoHistory','UserData','ScoreTrial')) {
         if (Get-Variable -Name $name -ValueOnly) { $detachedArgs += ('-' + $name) }
     }
     if ($DataRoot) { $detachedArgs += @('-DataRoot',('"{0}"' -f $DataRoot)) }
+    if ($DemoVideo) { $detachedArgs += @('-DemoVideo',('"{0}"' -f $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DemoVideo))) }
     Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $detachedArgs -WindowStyle Hidden -ErrorAction Stop | Out-Null
     exit 0
 }
 $workspaceRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $pythonPath = Join-Path $workspaceRoot '.venv/Scripts/python.exe'
 if (-not (Test-Path -LiteralPath $pythonPath -PathType Leaf)) { throw 'LOCAL_VENV_REQUIRED' }
-$launchArgs = @('-I','-B','-u',(Join-Path $PSScriptRoot 'local_session.py'),'--scenario',$Scenario,'--port',"$Port",'--seed',"$Seed")
+$launchArgs = @('-X','utf8','-I','-B','-u',(Join-Path $PSScriptRoot 'local_session.py'),'--scenario',$Scenario,'--port',"$Port",'--seed',"$Seed")
 if (($DataRoot -and $UserData) -or ($Demo -and ($DataRoot -or $UserData))) { throw 'DATA_ROOT_OPTIONS_CONFLICT' }
 if ($DataRoot) { $launchArgs += @('--data-root',$DataRoot) }
 if ($UserData) { $launchArgs += '--user-data' }
@@ -45,6 +48,8 @@ if ($Demo) { $launchArgs += '--demo' }
 if ($ShowTerminals) { $launchArgs += '--show-terminals' }
 if ($InteractiveScenario) { $launchArgs += '--interactive-scenario' }
 if ($OpenBrowser) { $launchArgs += '--open-browser' }
+if ($DemoVideo) { $launchArgs += @('--demo-video',$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DemoVideo)) }
+if ($ScoreTrial) { $launchArgs += '--score-trial' }
 # Approved Qwen unified trial follows History/transport switches in the supervisor.
 # Foreground supervisor owns only its two children; no Provider call on startup.
 & $pythonPath @launchArgs

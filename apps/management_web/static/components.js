@@ -1,5 +1,77 @@
 import {metricText,chartGeometry,normalizedChartGeometry,trendMetrics,timeText,qualityNames,freshnessNames,sourceName,connectionName} from './view-model.js';
 
+// Keep the media region mounted while only the two data panels refresh.
+export function createVideoWorkspace(mediaHost){
+  const collapsed={left:false,right:false};
+  const panels={};
+  const focus=button('专注视频',()=>{
+    const close=!collapsed.left||!collapsed.right;
+    collapsed.left=close;collapsed.right=close;layout();
+  });
+  function panel(side,title){
+    const body=el('div',{class:'video-panel-body',id:`video-${side}-data`});
+    const toggle=button('收起',()=>{collapsed[side]=!collapsed[side];layout();});
+    toggle.setAttribute('aria-controls',body.getAttribute('id'));
+    const node=el('aside',{class:`video-data-panel video-panel-${side}`,'aria-label':title},[
+      el('div',{class:'video-panel-heading'},[el('h2',{text:title}),toggle]),body]);
+    panels[side]={body,toggle};return node;
+  }
+  const placeholder=el('div',{class:'video-stage-empty'});
+  const stage=el('section',{class:'video-stage','aria-label':'监控画面'},[
+    el('div',{class:'video-stage-heading'},[el('div',{},[el('span',{class:'eyebrow',text:'MONITOR VIEW'}),
+      el('h2',{text:'监控画面'})]),el('span',{class:'video-stage-hint',text:'画面与观测数据独立'})]),mediaHost,placeholder]);
+  const node=el('section',{class:'video-workspace','aria-label':'视频与监测数据'},[
+    el('div',{class:'video-workspace-toolbar'},[
+      el('p',{text:'中间看画面，两侧看数据。可分别收起，也可专注视频。'}),focus]),
+    el('div',{class:'video-console'},[panel('left','水质与观测'),stage,panel('right','检测与风险')])]);
+  function layout(){
+    for(const side of ['left','right']){
+      node.setAttribute(`data-${side}-collapsed`,String(collapsed[side]));
+      panels[side].body.hidden=collapsed[side];
+      panels[side].toggle.textContent=collapsed[side]?'展开':'收起';
+      panels[side].toggle.setAttribute('aria-label',`${collapsed[side]?'展开':'收起'}${side==='left'?'左':'右'}侧数据`);
+      panels[side].toggle.setAttribute('aria-expanded',String(!collapsed[side]));
+    }
+    focus.textContent=collapsed.left&&collapsed.right?'展开两侧数据':'专注视频';
+    focus.setAttribute('aria-pressed',String(collapsed.left&&collapsed.right));
+  }
+  layout();
+  return {node,update({left,right,empty}){
+    panels.left.body.replaceChildren(...left);panels.right.body.replaceChildren(...right);
+    placeholder.hidden=!empty;
+    if(empty)placeholder.replaceChildren(empty);
+    else placeholder.replaceChildren();
+    return node;
+  }};
+}
+
+// A separate, stable media region. Polling statistics never recreates the player.
+export function createLocalVideoPreview(host){
+  let player=null,shown=false,key=null;
+  function update(metadata,visible=false){
+    const valid=metadata?.kind==='local_file'&&metadata.url==='/media/local-demo.mp4';
+    if(!valid){
+      if(player){player.pause?.();player.removeAttribute('src');player.load?.();}
+      player=null;key=null;shown=false;host.hidden=true;host.replaceChildren();return;
+    }
+    host.hidden=!visible;
+    if(!visible){player?.pause?.();shown=false;return;}
+    if(key!==metadata.url||!player){
+      const notice=el('p',{class:'muted',role:'status',text:'本地录制素材，支持暂停、拖动和循环播放。'});
+      player=el('video',{class:'demo-video-player',src:metadata.url,controls:'',autoplay:'',muted:'',loop:'',playsinline:'',preload:'metadata','aria-label':'本地演示视频（非实时设备）'});
+      player.muted=true;
+      player.addEventListener('error',()=>{notice.textContent='视频无法读取或解码，请检查文件或转为 H.264/AAC MP4；未回退为其他视频。';});
+      host.replaceChildren(card('本地演示视频（非实时设备）','仅用于展示播放效果，不代表当前鱼塘状态。',[
+        badge('LOCAL VIDEO · 录制素材','demo'),player,notice,
+        el('p',{class:'muted',text:'画面与观测统计、事件及时间戳独立；未执行实时视频分析，不生成观测或事件。'})]));
+      key=metadata.url;
+    }
+    if(!shown){const pending=player.play?.();pending?.catch(()=>{});}
+    shown=true;
+  }
+  return {update,suspend(){player?.pause?.();shown=false;}};
+}
+
 export function el(tag,attrs={},children=[]) {
   const node=document.createElement(tag);
   for (const [key,value] of Object.entries(attrs)) {

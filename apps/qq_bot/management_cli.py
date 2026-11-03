@@ -100,15 +100,21 @@ def run(request_path, directory, *, offline=False, seconds=None, stop_requested=
     locks=ROOT/'outputs/qq-bot/locks'; locks.parent.mkdir(parents=True,exist_ok=True)
     ensure_private_directory(locks)
     key=_hash([inputs_snapshot(request.inputs)[0].app_id, request.inputs.group_id])[:24]
-    host=scheduler=gateway=transport=api=None
+    host=scheduler=gateway=transport=api=notifier=None
     code='MANAGEMENT_BOT_STOPPED'; failures=[]
     with process_lock(locks/('bot-'+key+'.lock')):
         try:
             from .demo_runtime import provider_factory
             host=ManagementRun(request,directory,async_client_factory=provider_factory if offline else None)
+            if summary.get('event_notifications'):
+                host.enable_event_notifications(request.event_recipient_file)
             plan=host.plan(); digest=_hash(plan)[:12]
             emit_status('MANAGEMENT_BOT_APPROVAL_REQUIRED',summary=summary,plan_sha256=_hash(plan))
             if not offline:
+                if plan.get('event_notifications'):
+                    print('另行批准：向已验证好友（摘要 '+plan['event_notifications']['recipient_ref']+
+                        '）主动发送本次指定设备的 SIMULATOR 事件、观测时间。新异常、升级、可靠消退各一次；'
+                        '不调用模型，未知送达不重发，每10秒最多1次、每日最多100次。仅本进程有效。',flush=True)
                 answer=read('如同意本进程模型、披露、General 风险及费用，请输入 APPROVE MANAGEMENT '+digest+'：')
                 if answer.strip()!='APPROVE MANAGEMENT '+digest: raise BotError('MANAGEMENT_APPROVAL_DECLINED')
             host.approve(plan,confirmed=True)  # Offline consent cannot construct real I/O.
@@ -139,6 +145,18 @@ def run(request_path, directory, *, offline=False, seconds=None, stop_requested=
             connector=(lambda _:FakeSocket(host.access.app_id,request.inputs.group_id,request.members[0])) if offline else live_connector(host.permit)
             gateway=QQGateway(host.access.app_id,api,adapter,trial_router=router,connector=connector,
                 emit=lambda c,**fields:emit_status(c,**fields))
+            if summary.get('event_notifications'):
+                from .event_notifications import NotificationPermit,NoticeJournal,EventNotifier
+                permit=NotificationPermit(host)
+                journal_dir=ROOT/'outputs/qq-bot/event-notices'
+                journal_dir.parent.mkdir(parents=True,exist_ok=True);ensure_private_directory(journal_dir)
+                journal=NoticeJournal(journal_dir,permit.audience,clock=host.clock)
+                try:
+                    notifier=EventNotifier(permit,api,journal,
+                        connected=lambda:gateway.ready.is_set() and transport.connected,
+                        clock=host.clock,emit=emit_status)
+                except Exception:journal.close();raise
+                notifier.start()
             def drive():
                 try: gateway.run(min(request.limits.seconds,seconds or request.limits.seconds))
                 except Exception as error: failures.append(getattr(error,'code','MANAGEMENT_GATEWAY_FAILED'))
@@ -162,6 +180,10 @@ def run(request_path, directory, *, offline=False, seconds=None, stop_requested=
         except (KeyboardInterrupt,EOFError): code='MANAGEMENT_OPERATOR_INTERRUPTED'
         except Exception as error: code=getattr(error,'code','MANAGEMENT_BOT_FAILED')
         finally:
+            if notifier:
+                try:notifier.close()
+                except Exception:code='EVENT_NOTIFICATION_STOP_FAILED'
+                host._notice_report=notifier.report()
             if transport:transport.close()
             if api:api.close()
             if api and offline:api._client.close()  # Controller owns this injected memory client.

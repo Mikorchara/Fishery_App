@@ -27,6 +27,7 @@ def project_root(*, module_file=None, working_directory=None):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Fishery management Web (local monitoring, optional Assistant)")
     parser.add_argument("--port", type=int, default=8766)
+    parser.add_argument('--demo-video',type=Path,help='Explicit local MP4; never observation evidence')
     locations = parser.add_mutually_exclusive_group()
     locations.add_argument('--data-root', type=Path, help='Explicit existing management instance; no workspace fallback')
     locations.add_argument('--user-data', action='store_true', help='Use LOCALAPPDATA/FisheryManagement; explicit opt-in')
@@ -39,6 +40,7 @@ def main(argv=None):
     parser.add_argument("--assistant-streaming-trial", action="store_true", help="Qwen two-tool Streaming local trial; exact Scope/Policy required")
     parser.add_argument("--assistant-history-trial", action="store_true", help="Qwen Normal history-only local trial; exact Scope/Policy required")
     parser.add_argument('--assistant-tools-trial',action='store_true',help='Qwen three-Tool local trial; also enable desired Normal/Streaming trial')
+    parser.add_argument('--assistant-score-trial',action='store_true',help='Independent experimental score Scope; Policy and Send approval required')
     args = parser.parse_args(argv)
     try:
         root = args.project_root.resolve() if args.project_root is not None else project_root()
@@ -49,6 +51,12 @@ def main(argv=None):
         parser.error(str(error))
     if not 1 <= args.port <= 65535:
         parser.error("port must be between 1 and 65535")
+    demo_video=None
+    if args.demo_video is not None:
+        from .demo_video import LocalDemoVideo
+        try:demo_video=LocalDemoVideo.open(args.demo_video)
+        except ValueError as error:parser.error(str(error))
+    if args.assistant_score_trial and not args.enable_assistant:parser.error('SCORE_TRIAL_REQUIRES_ASSISTANT')
     if args.legacy_demo and args.enable_ingestion:
         parser.error("LEGACY_DEMO_CANNOT_INGEST")
     if args.legacy_demo and args.enable_assistant:
@@ -114,6 +122,7 @@ def main(argv=None):
                 multi_round_trial=args.assistant_multi_round_trial,
                 streaming_trial=args.assistant_streaming_trial,
                 history_trial=args.assistant_history_trial,unified_tools_trial=args.assistant_tools_trial,knowledge=knowledge,
+                **({'score_trial':True} if args.assistant_score_trial else {}),
                 **({'data_paths':paths} if paths.data_root is not None else {}))
         except (CredentialLocationError, CredentialFileError, ToolPolicyError, GatewayError):
             parser.error("AI_CONFIGURATION_UNAVAILABLE")
@@ -121,6 +130,7 @@ def main(argv=None):
     if args.enable_assistant:
         from apps.ai_service.settings import ManagementSettingsService
         settings = ManagementSettingsService(ai_options['ai'].backend, paths.settings)
+    if demo_video is not None:ai_options['demo_video']=demo_video
     app = create_app(allowed_hosts=(f"127.0.0.1:{args.port}", f"localhost:{args.port}"),
                      data_service=data_service, ingestion_token=token, knowledge_service=knowledge,
                      settings_service=settings, **ai_options)

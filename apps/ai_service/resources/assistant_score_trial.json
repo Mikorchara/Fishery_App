@@ -1,0 +1,389 @@
+{
+  "contract": "management-score-tool-trial@1",
+  "status": "local_experimental",
+  "enabled": false,
+  "qualification_id": null,
+  "validated_at": null,
+  "scopes": [
+    {
+      "runtime": {
+        "preset_id": "dashscope-qwen38-flash-r1",
+        "preset_variant": "off",
+        "contract_version": "1.0.2",
+        "identity": [
+          "dashscope",
+          "openai_chat",
+          "https://dashscope.aliyuncs.com/compatible-mode/v1",
+          "qwen3.8-flash"
+        ],
+        "protocol_spec": {
+          "spec_id": "dashscope_chat",
+          "version": "1",
+          "max_output_tokens_field": "max_tokens",
+          "thinking_encoding": "enable_thinking",
+          "effort_field": "reasoning_effort",
+          "stream_field": "stream",
+          "usage_options_field": "stream_options"
+        },
+        "thinking": "off",
+        "response_mode": "normal",
+        "prompt_id": "ASSISTANT_BOUNDED_MULTI_ROUND@1",
+        "prompt_sha256": "51906f193e00749e4a6cf6c1f067e65798252b49c9a352ddf1b44139cd54b066",
+        "history_projection": "UNTRUSTED_TRANSCRIPT_V1",
+        "history_version": "1",
+        "tools": [
+          "get_current_water_quality",
+          "search_fishery_knowledge",
+          "get_water_quality_history",
+          "score_current_water_quality"
+        ],
+        "tool_definitions_sha256": "46873f9d0cf189feb312615bf5cb132c1bf1a41292ea6fc4fef2bda3ee8a1075"
+      },
+      "data_bindings": {
+        "water": "management-current-water@1",
+        "knowledge": "management-project-knowledge@1",
+        "knowledge_source": "legacy:eel_knowledge.json",
+        "knowledge_version": "1.0",
+        "retrieval_backend": "portable"
+      },
+      "transport": "NORMAL",
+      "history_framing_sha256": "4f81ca3cb5d86125435bb263fbd182b97ed4f7307855ba48687532281964259b",
+      "generation": {
+        "max_output_tokens": null,
+        "temperature": null,
+        "top_p": null
+      },
+      "history_binding": {
+        "version": "management-water-history@1",
+        "device": "FROZEN_PER_TURN",
+        "max_rows": 720,
+        "max_items": 12,
+        "max_result_bytes": 24576,
+        "source_version": "historical-water-receipt@1"
+      },
+      "budget": {
+        "calls": 2,
+        "rounds": 2,
+        "requests": 3,
+        "retry": 0,
+        "deadline_s": 120,
+        "max_output_tokens": 1024
+      },
+      "score_contract": {
+        "version": "management-water-score@1",
+        "source": "management-water-score-source@1",
+        "weights": {
+          "temperature": 25,
+          "ph": 25,
+          "dissolved_oxygen": 50
+        },
+        "points": {
+          "clear": 100,
+          "warning": 60,
+          "critical": 20,
+          "extreme": 0
+        },
+        "caps": {
+          "clear": 100,
+          "warning": 79,
+          "critical": 39,
+          "extreme": 19
+        },
+        "eligibility": "COMPLETE_VALID_FRESH_ONLINE_RULE_EVIDENCE",
+        "implementation": {
+          "scoring": "bd3d866514ef2dda01b62103d04c6bb69874b044eeca496e22cf6496848c56fc",
+          "admission": "9e52d891276b06ff2ab401079408cacdf555f552c0a7a364bb3dc8984ea96a32",
+          "monitoring_rules": "1c427eda6c3efb39863af3761fe2b218eab7d9eb28b6d6e6e64b3113e023ae82",
+          "diagnosis": "a8e0af78a6c566f741c92bf44b1fe55e1864f9711d780df0f66a76355a0f580d",
+          "source_gate": "7ed602fce24849aaf642ece6359f4d5001f7053bcd5bd1fb3ae7a1359935b692"
+        }
+      }
+    },
+    {
+      "runtime": {
+        "preset_id": "dashscope-qwen38-flash-r1",
+        "preset_variant": "off",
+        "contract_version": "1.0.2",
+        "identity": [
+          "dashscope",
+          "openai_chat",
+          "https://dashscope.aliyuncs.com/compatible-mode/v1",
+          "qwen3.8-flash"
+        ],
+        "protocol_spec": {
+          "spec_id": "dashscope_chat",
+          "version": "1",
+          "max_output_tokens_field": "max_tokens",
+          "thinking_encoding": "enable_thinking",
+          "effort_field": "reasoning_effort",
+          "stream_field": "stream",
+          "usage_options_field": "stream_options"
+        },
+        "thinking": "off",
+        "response_mode": "streaming",
+        "prompt_id": "ASSISTANT_BOUNDED_MULTI_ROUND@1",
+        "prompt_sha256": "51906f193e00749e4a6cf6c1f067e65798252b49c9a352ddf1b44139cd54b066",
+        "history_projection": "UNTRUSTED_TRANSCRIPT_V1",
+        "history_version": "1",
+        "tools": [
+          "get_current_water_quality",
+          "search_fishery_knowledge",
+          "get_water_quality_history",
+          "score_current_water_quality"
+        ],
+        "tool_definitions_sha256": "46873f9d0cf189feb312615bf5cb132c1bf1a41292ea6fc4fef2bda3ee8a1075",
+        "model_transport": "STREAMING",
+        "assembler_version": "openai-tool-stream-assembler@1"
+      },
+      "data_bindings": {
+        "water": "management-current-water@1",
+        "knowledge": "management-project-knowledge@1",
+        "knowledge_source": "legacy:eel_knowledge.json",
+        "knowledge_version": "1.0",
+        "retrieval_backend": "portable"
+      },
+      "transport": "STREAMING",
+      "history_framing_sha256": "4f81ca3cb5d86125435bb263fbd182b97ed4f7307855ba48687532281964259b",
+      "generation": {
+        "max_output_tokens": null,
+        "temperature": null,
+        "top_p": null
+      },
+      "history_binding": {
+        "version": "management-water-history@1",
+        "device": "FROZEN_PER_TURN",
+        "max_rows": 720,
+        "max_items": 12,
+        "max_result_bytes": 24576,
+        "source_version": "historical-water-receipt@1"
+      },
+      "budget": {
+        "calls": 2,
+        "rounds": 2,
+        "requests": 3,
+        "retry": 0,
+        "deadline_s": 120,
+        "max_output_tokens": 512
+      },
+      "score_contract": {
+        "version": "management-water-score@1",
+        "source": "management-water-score-source@1",
+        "weights": {
+          "temperature": 25,
+          "ph": 25,
+          "dissolved_oxygen": 50
+        },
+        "points": {
+          "clear": 100,
+          "warning": 60,
+          "critical": 20,
+          "extreme": 0
+        },
+        "caps": {
+          "clear": 100,
+          "warning": 79,
+          "critical": 39,
+          "extreme": 19
+        },
+        "eligibility": "COMPLETE_VALID_FRESH_ONLINE_RULE_EVIDENCE",
+        "implementation": {
+          "scoring": "bd3d866514ef2dda01b62103d04c6bb69874b044eeca496e22cf6496848c56fc",
+          "admission": "9e52d891276b06ff2ab401079408cacdf555f552c0a7a364bb3dc8984ea96a32",
+          "monitoring_rules": "1c427eda6c3efb39863af3761fe2b218eab7d9eb28b6d6e6e64b3113e023ae82",
+          "diagnosis": "a8e0af78a6c566f741c92bf44b1fe55e1864f9711d780df0f66a76355a0f580d",
+          "source_gate": "7ed602fce24849aaf642ece6359f4d5001f7053bcd5bd1fb3ae7a1359935b692"
+        }
+      }
+    },
+    {
+      "runtime": {
+        "preset_id": "dashscope-qwen38-flash-r1",
+        "preset_variant": "off",
+        "contract_version": "1.0.2",
+        "identity": [
+          "dashscope",
+          "openai_chat",
+          "https://dashscope.aliyuncs.com/compatible-mode/v1",
+          "qwen3.8-flash"
+        ],
+        "protocol_spec": {
+          "spec_id": "dashscope_chat",
+          "version": "1",
+          "max_output_tokens_field": "max_tokens",
+          "thinking_encoding": "enable_thinking",
+          "effort_field": "reasoning_effort",
+          "stream_field": "stream",
+          "usage_options_field": "stream_options"
+        },
+        "thinking": "off",
+        "response_mode": "normal",
+        "prompt_id": "ASSISTANT_BOUNDED_MULTI_ROUND@1",
+        "prompt_sha256": "51906f193e00749e4a6cf6c1f067e65798252b49c9a352ddf1b44139cd54b066",
+        "history_projection": "UNTRUSTED_TRANSCRIPT_V1",
+        "history_version": "1",
+        "tools": [
+          "get_current_water_quality",
+          "search_fishery_knowledge",
+          "get_water_quality_history",
+          "score_current_water_quality"
+        ],
+        "tool_definitions_sha256": "46873f9d0cf189feb312615bf5cb132c1bf1a41292ea6fc4fef2bda3ee8a1075"
+      },
+      "data_bindings": {
+        "water": "management-current-water@1",
+        "knowledge": "management-project-knowledge@1",
+        "knowledge_source": "management:knowledge-content",
+        "knowledge_version": "managed-content@1",
+        "retrieval_backend": "portable"
+      },
+      "transport": "NORMAL",
+      "history_framing_sha256": "4f81ca3cb5d86125435bb263fbd182b97ed4f7307855ba48687532281964259b",
+      "generation": {
+        "max_output_tokens": null,
+        "temperature": null,
+        "top_p": null
+      },
+      "history_binding": {
+        "version": "management-water-history@1",
+        "device": "FROZEN_PER_TURN",
+        "max_rows": 720,
+        "max_items": 12,
+        "max_result_bytes": 24576,
+        "source_version": "historical-water-receipt@1"
+      },
+      "budget": {
+        "calls": 2,
+        "rounds": 2,
+        "requests": 3,
+        "retry": 0,
+        "deadline_s": 120,
+        "max_output_tokens": 1024
+      },
+      "score_contract": {
+        "version": "management-water-score@1",
+        "source": "management-water-score-source@1",
+        "weights": {
+          "temperature": 25,
+          "ph": 25,
+          "dissolved_oxygen": 50
+        },
+        "points": {
+          "clear": 100,
+          "warning": 60,
+          "critical": 20,
+          "extreme": 0
+        },
+        "caps": {
+          "clear": 100,
+          "warning": 79,
+          "critical": 39,
+          "extreme": 19
+        },
+        "eligibility": "COMPLETE_VALID_FRESH_ONLINE_RULE_EVIDENCE",
+        "implementation": {
+          "scoring": "bd3d866514ef2dda01b62103d04c6bb69874b044eeca496e22cf6496848c56fc",
+          "admission": "9e52d891276b06ff2ab401079408cacdf555f552c0a7a364bb3dc8984ea96a32",
+          "monitoring_rules": "1c427eda6c3efb39863af3761fe2b218eab7d9eb28b6d6e6e64b3113e023ae82",
+          "diagnosis": "a8e0af78a6c566f741c92bf44b1fe55e1864f9711d780df0f66a76355a0f580d",
+          "source_gate": "7ed602fce24849aaf642ece6359f4d5001f7053bcd5bd1fb3ae7a1359935b692"
+        }
+      }
+    },
+    {
+      "runtime": {
+        "preset_id": "dashscope-qwen38-flash-r1",
+        "preset_variant": "off",
+        "contract_version": "1.0.2",
+        "identity": [
+          "dashscope",
+          "openai_chat",
+          "https://dashscope.aliyuncs.com/compatible-mode/v1",
+          "qwen3.8-flash"
+        ],
+        "protocol_spec": {
+          "spec_id": "dashscope_chat",
+          "version": "1",
+          "max_output_tokens_field": "max_tokens",
+          "thinking_encoding": "enable_thinking",
+          "effort_field": "reasoning_effort",
+          "stream_field": "stream",
+          "usage_options_field": "stream_options"
+        },
+        "thinking": "off",
+        "response_mode": "streaming",
+        "prompt_id": "ASSISTANT_BOUNDED_MULTI_ROUND@1",
+        "prompt_sha256": "51906f193e00749e4a6cf6c1f067e65798252b49c9a352ddf1b44139cd54b066",
+        "history_projection": "UNTRUSTED_TRANSCRIPT_V1",
+        "history_version": "1",
+        "tools": [
+          "get_current_water_quality",
+          "search_fishery_knowledge",
+          "get_water_quality_history",
+          "score_current_water_quality"
+        ],
+        "tool_definitions_sha256": "46873f9d0cf189feb312615bf5cb132c1bf1a41292ea6fc4fef2bda3ee8a1075",
+        "model_transport": "STREAMING",
+        "assembler_version": "openai-tool-stream-assembler@1"
+      },
+      "data_bindings": {
+        "water": "management-current-water@1",
+        "knowledge": "management-project-knowledge@1",
+        "knowledge_source": "management:knowledge-content",
+        "knowledge_version": "managed-content@1",
+        "retrieval_backend": "portable"
+      },
+      "transport": "STREAMING",
+      "history_framing_sha256": "4f81ca3cb5d86125435bb263fbd182b97ed4f7307855ba48687532281964259b",
+      "generation": {
+        "max_output_tokens": null,
+        "temperature": null,
+        "top_p": null
+      },
+      "history_binding": {
+        "version": "management-water-history@1",
+        "device": "FROZEN_PER_TURN",
+        "max_rows": 720,
+        "max_items": 12,
+        "max_result_bytes": 24576,
+        "source_version": "historical-water-receipt@1"
+      },
+      "budget": {
+        "calls": 2,
+        "rounds": 2,
+        "requests": 3,
+        "retry": 0,
+        "deadline_s": 120,
+        "max_output_tokens": 512
+      },
+      "score_contract": {
+        "version": "management-water-score@1",
+        "source": "management-water-score-source@1",
+        "weights": {
+          "temperature": 25,
+          "ph": 25,
+          "dissolved_oxygen": 50
+        },
+        "points": {
+          "clear": 100,
+          "warning": 60,
+          "critical": 20,
+          "extreme": 0
+        },
+        "caps": {
+          "clear": 100,
+          "warning": 79,
+          "critical": 39,
+          "extreme": 19
+        },
+        "eligibility": "COMPLETE_VALID_FRESH_ONLINE_RULE_EVIDENCE",
+        "implementation": {
+          "scoring": "bd3d866514ef2dda01b62103d04c6bb69874b044eeca496e22cf6496848c56fc",
+          "admission": "9e52d891276b06ff2ab401079408cacdf555f552c0a7a364bb3dc8984ea96a32",
+          "monitoring_rules": "1c427eda6c3efb39863af3761fe2b218eab7d9eb28b6d6e6e64b3113e023ae82",
+          "diagnosis": "a8e0af78a6c566f741c92bf44b1fe55e1864f9711d780df0f66a76355a0f580d",
+          "source_gate": "7ed602fce24849aaf642ece6359f4d5001f7053bcd5bd1fb3ae7a1359935b692"
+        }
+      }
+    }
+  ]
+}

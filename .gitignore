@@ -29,3 +29,6 @@ htmlcov/
 *.pt
 *.pth
 *.onnx
+
+# Local video demonstration asset, never a source artifact
+/sample.mp4

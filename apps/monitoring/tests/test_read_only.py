@@ -151,4 +151,31 @@ class ReadOnlyRepositoryTests(unittest.TestCase):
 
 
 
+    def test_device_event_budget_cannot_silently_truncate(self):
+        reader = MonitoringRepository(self.path,read_only=True)
+        with reader.connection() as db:
+            before=db.execute('SELECT count(*) FROM events').fetchone()[0]
+        events,current=reader.capture_events('sim-pond-1')
+        self.assertEqual(len(events),before)
+        self.assertEqual(set(current),{'water','visual'})
+        if before > 1:
+            with self.assertRaisesRegex(ValueError,'EVENT_QUERY_LIMIT'):
+                reader.capture_events('sim-pond-1',max_rows=1)
+        with self.assertRaisesRegex(ValueError,'INVALID_EVENT_QUERY_LIMIT'):
+            reader.capture_events('sim-pond-1',max_rows=257)
+        self.assertEqual(reader.capture_events('other-device'),([],{}))
+
+
+    def test_scoped_service_reuses_projection_and_does_not_read_ack_history(self):
+        reader=MonitoringRepository(self.path,read_only=True)
+        service=MonitoringService(reader,clock=lambda:self.now)
+        from unittest.mock import patch
+        with patch('apps.monitoring.repository.project_handling',side_effect=AssertionError('no global audit scan')):
+            cycles=service.event_cycles(device_id='sim-pond-1')
+        self.assertTrue(cycles)
+        self.assertEqual({e['device_id'] for e in cycles},{'sim-pond-1'})
+        self.assertEqual({(e['id'],e['lifecycle_state']) for e in cycles},
+                         {(e['id'],e['lifecycle_state']) for e in self.service.event_cycles()})
+
+
 if __name__ == "__main__":unittest.main()

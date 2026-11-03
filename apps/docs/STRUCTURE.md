@@ -49,7 +49,7 @@ Fishery_Management/
 
 当前双击入口是 `scripts/dev/启动演示系统.cmd`，演示实例位于 `outputs/demo-instance`。首次只读复制正式知识，后续保留演示编辑。演示业务数据隔离不等于项目凭据隔离。
 
-当前视频页展示模拟视觉统计，没有真实视频流、摄像头或 NPU 接入。各层 `streaming.py` 处理 LLM Streaming，不是视频推流。
+当前视频页支持显式 `--demo-video` 播放本地 MP4，左右监测面板可收起；录像与模拟视觉统计独立，没有真实视频流、摄像头或 NPU 接入。各层 `streaming.py` 处理 LLM Streaming，不是视频推流。`management_web/demo_video.py` 提供固定的本机媒体路由；`ai_service/business_tools/water_quality_score.py` 和 `score_execution.py` 提供独立开关的只读实验评分。两个新增视频 CMD 与原入口并存，见 [启动指南](BUILD_RUN.md)。
 
 ## 二、详细版：逐文件职责
 

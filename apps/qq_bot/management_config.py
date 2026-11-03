@@ -47,6 +47,7 @@ class ManagementRequest:
     scope_sha256: str
     enabled: bool
     digest: str
+    event_recipient_file: Path | None = None
 
     def check(self):
         if _hash(read_json(self.path)) != self.digest:
@@ -56,7 +57,8 @@ class ManagementRequest:
 def load_request(path):
     path = local_path(path)
     value = read_json(path)
-    if (set(value) != {'schema_version', 'enabled', 'inputs', 'limits', 'members', 'scope_sha256'}
+    required = {'schema_version', 'enabled', 'inputs', 'limits', 'members', 'scope_sha256'}
+    if (set(value) not in (required, required | {'event_recipient_file'})
             or type(value['schema_version']) is not int or value['schema_version'] != 1
             or type(value['enabled']) is not bool or type(value['members']) is not list
             or not 1 <= len(value['members']) <= 4):
@@ -85,7 +87,11 @@ def load_request(path):
     scope = prepared_scope(ConversationOptions(trigger_mode='mention_ai', memory_enabled=True))
     if read_json(PREPARATION) != preparation_record(scope) or value['scope_sha256'] != _hash(scope):
         raise BotError('MANAGEMENT_SCOPE_REVIEW_REQUIRED')
-    return ManagementRequest(path, inputs, limits, selected, _hash(scope), value['enabled'], _hash(value))
+    recipient_path = local_path(value['event_recipient_file']) if 'event_recipient_file' in value else None
+    if recipient_path:
+        from .event_recipients import load_recipient
+        load_recipient(recipient_path,access.app_id)
+    return ManagementRequest(path, inputs, limits, selected, _hash(scope), value['enabled'], _hash(value),recipient_path)
 
 
 def check_request(path, *, offline=False):
@@ -105,4 +111,14 @@ def check_request(path, *, offline=False):
         limits=asdict(request.limits), reservation_per_turn_cny=str(cost_reservation()),
         max_model_requests=request.limits.max_turns*2, output_tokens_per_request=512,
         seconds_per_turn=90, retries=0, offline=offline, credential_checked=False,
-        database_opened=False, network_requests=0, risk=RISK)
+        database_opened=False, network_requests=0, risk=RISK,
+        event_notifications=check_event_recipient(request))
+
+
+def check_event_recipient(request):
+    # Explicit request binding; other instances never inherit a global destination.
+    path=request.event_recipient_file
+    if path is None:return None
+    from .event_recipients import load_recipient
+    from .event_notifications import approval_summary
+    return approval_summary(load_recipient(path,inputs_snapshot(request.inputs)[0].app_id))

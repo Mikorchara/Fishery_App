@@ -530,7 +530,7 @@ test('5/10 minute selectors drive both charts, keep default 30 minutes and survi
   assert.ok(p.requests.every(url=>url.startsWith('/api/bootstrap')));
 });
 
-test('dashboard moves existing side cards beside trends and keeps one full-row event table with working details',async()=>{
+test('dashboard keeps AI and connection cards beside trends and one full-row event table with working details',async()=>{
   const d=fixture();d.monitoring.trend=restartHistory();
   const p=page(d);await p.ready();
   const walk=node=>[node,...node.children.flatMap(walk)];
@@ -541,10 +541,97 @@ test('dashboard moves existing side cards beside trends and keeps one full-row e
     assert.ok(grid);assert.equal(grid.children.length,3);
     assert.deepEqual(titles(grid.children[0]),['历史趋势','三指标综合趋势（归一化）']);
     assert.ok(hasClass(grid.children[1],'dashboard-sidebar'));
-    assert.deepEqual(titles(grid.children[1]),['视觉监测概况','AI 智能助手','连接状态']);
+    assert.deepEqual(titles(grid.children[1]),['AI 智能助手','连接状态']);
+    assert.ok(!nodes.some(n=>hasClass(n,'video-placeholder')));
     assert.ok(hasClass(grid.children[2],'dashboard-events'));
     assert.deepEqual(titles(grid.children[2]),['最近事件']);
-    for(const title of ['视觉监测概况','AI 智能助手','连接状态','最近事件']){
+    for(const title of ['AI 智能助手','连接状态','最近事件']){
+      assert.equal(nodes.filter(n=>n.tagName==='h2'&&n.textContent===title).length,1);
+    }
+    const eventCard=grid.children[2];
+    assert.ok(walk(eventCard).some(n=>n.attributes.href==='#events'&&n.textContent==='全部记录'));
+    assert.ok(walk(grid.children[1]).some(n=>n.attributes.href==='#assistant'&&n.textContent.includes('打开助手工作区')));
+    walk(eventCard).find(n=>n.tagName==='button'&&n.textContent==='查看详情').events.click();
+    assert.equal(p.node('dialog-title').textContent,d.events[0].title);
+    assert.ok(p.node('dialog-body').textContent.includes(d.events[0].batch_id));
+  };
+  check();await p.run('refresh()');check();
+  assert.ok(p.requests.every(url=>url.startsWith('/api/bootstrap')));
+});
+
+test('actual polling page retains local video node and playback position independently of statistics',async()=>{
+  const data=fixture();data.video_preview={kind:'local_file',url:'/media/local-demo.mp4'};
+  const p=page(data);await p.ready();
+  p.run("location.hash='#video';render()");
+  const walk=n=>[n,...n.children.flatMap(walk)],host=p.node('local-video-preview');
+  const player=walk(host).find(n=>n.tagName==='video');assert.ok(player);player.currentTime=12;
+  data.cameras[0].summary.anomaly_counts.suspected_lesion=7;
+  await p.run('refresh()');
+  assert.equal(walk(host).find(n=>n.tagName==='video'),player);assert.equal(player.currentTime,12);
+  assert.match(p.node('content').textContent,/画面与观测数据独立/);
+  p.run("location.hash='#monitoring';render()");assert.equal(host.hidden,true);
+  p.run("location.hash='#video';render()");assert.equal(walk(host).find(n=>n.tagName==='video'),player);
+  delete data.video_preview;await p.run('refresh()');assert.equal(host.hidden,true);
+  assert.match(p.node('content').textContent,/无视频流/);
+});
+
+
+test('video panels collapse independently, persist across polling and never remount playing media',async()=>{
+  const data=fixture();data.video_preview={kind:'local_file',url:'/media/local-demo.mp4'};
+  const p=page(data);await p.ready();p.run("location.hash='#video';render()");
+  const walk=n=>[n,...n.children.flatMap(walk)],find=(label)=>walk(p.node('content')).find(n=>n.getAttribute('aria-label')===label);
+  const root=p.node('content').children[0],player=walk(root).find(n=>n.tagName==='video');
+  let pauses=0;player.pause=()=>pauses++;player.currentTime=22;
+  const left=find('收起左侧数据'),right=find('收起右侧数据');
+  left.events.click();assert.equal(left.getAttribute('aria-expanded'),'false');
+  assert.equal(root.getAttribute('data-left-collapsed'),'true');assert.equal(root.getAttribute('data-right-collapsed'),'false');
+  const body=walk(root).find(n=>n.getAttribute('id')==='video-left-data');assert.equal(body.hidden,true);
+  data.monitoring.metrics[2].value=2.2;await p.run('refresh()');
+  assert.equal(p.node('content').children[0],root);assert.equal(find('展开左侧数据'),left);
+  assert.equal(walk(root).find(n=>n.tagName==='video'),player);assert.equal(player.currentTime,22);assert.equal(pauses,0);
+  assert.match(body.textContent,/2.2/);
+  const focus=walk(root).find(n=>n.tagName==='button'&&n.textContent==='专注视频');focus.events.click();
+  assert.equal(right.getAttribute('aria-expanded'),'false');assert.equal(focus.textContent,'展开两侧数据');
+  focus.events.click();assert.equal(left.getAttribute('aria-expanded'),'true');assert.equal(right.getAttribute('aria-expanded'),'true');
+  p.run("location.hash='#dashboard';render()");assert.equal(pauses,1);
+  p.run("location.hash='#video';render()");assert.equal(p.node('content').children[0],root);
+  assert.equal(walk(root).find(n=>n.tagName==='video'),player);
+  assert.ok(p.requests.every(url=>url.startsWith('/api/bootstrap')));
+});
+
+
+test('video water panel preserves stale, missing and rule evidence without interpreting the recording as observation',async()=>{
+  const data=fixture(2.2);data.monitoring.freshness='stale';data.monitoring.connectivity='offline';data.monitoring.quality='partial';
+  data.monitoring.metrics[1].value=null;data.monitoring.metrics[1].quality='missing';
+  data.video_preview={kind:'local_file',url:'/media/local-demo.mp4'};
+  const p=page(data);await p.ready();p.run("location.hash='#video';render()");
+  const text=p.node('content').textContent;
+  assert.match(text,/留存读数/);assert.match(text,/已过期/);assert.match(text,/上报中断/);assert.match(text,/不可用/);
+  assert.match(text,/不能据此排除风险/);assert.match(text,/LOCAL VIDEO/);assert.doesNotMatch(text,/本窗口未命中已评估规则/);
+  data.monitoring.freshness='fresh';data.monitoring.connectivity='online';data.monitoring.findings=[{code:'OXYGEN_CRITICAL_LOW',message:'合成低氧规则信号'}];
+  await p.run('refresh()');assert.match(p.node('content').textContent,/合成低氧规则信号/);
+  p.setData(new Error('synthetic failure'));await p.run('refresh()');
+  assert.equal(p.node('local-video-preview').hidden,true);assert.match(p.node('content').textContent,/上次显示已失效/);
+});
+
+
+test('dashboard prioritizes AI beside trends without a video placeholder and preserves event details',async()=>{
+  const d=fixture();d.monitoring.trend=restartHistory();
+  const p=page(d);await p.ready();
+  const walk=node=>[node,...node.children.flatMap(walk)];
+  const hasClass=(node,name)=>(node.className||'').split(/\s+/).includes(name);
+  const titles=node=>walk(node).filter(n=>n.tagName==='h2').map(n=>n.textContent);
+  const check=()=>{
+    const nodes=walk(p.node('content')),grid=nodes.find(n=>hasClass(n,'dashboard-overview'));
+    assert.ok(grid);assert.equal(grid.children.length,3);
+    assert.deepEqual(titles(grid.children[0]),['历史趋势','三指标综合趋势（归一化）']);
+    assert.ok(hasClass(grid.children[1],'dashboard-sidebar'));
+    assert.deepEqual(titles(grid.children[1]),['AI 智能助手','连接状态']);
+    assert.ok(hasClass(grid.children[1].children[0],'dashboard-assistant'));
+    assert.ok(!nodes.some(n=>hasClass(n,'video-placeholder')));
+    assert.ok(hasClass(grid.children[2],'dashboard-events'));
+    assert.deepEqual(titles(grid.children[2]),['最近事件']);
+    for(const title of ['AI 智能助手','连接状态','最近事件']){
       assert.equal(nodes.filter(n=>n.tagName==='h2'&&n.textContent===title).length,1);
     }
     const eventCard=grid.children[2];

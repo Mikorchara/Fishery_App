@@ -1,5 +1,7 @@
 # 独立管理项目路线
 
+2026-11-03：选择性同步本地 MP4、可收缩视频双侧面板、首页 AI 优先、紧凑 Tool 授权及 Web 实验评分；原入口与数据路径保留，无数据库迁移。Python 774／774、Node 128／128 通过；真实 Management 联网验收待人工执行。[同步验收](deep-dive/VIDEO_SCORE_SYNC_ACCEPTANCE.md)。
+
 2026-10-30：选择性加入 Prototype 深蓝主题、浏览器本地切换偏好与必要静态测试；保留浅色默认及原启动/业务/数据路径。前端121项与Web HTTP11项通过，本轮不含本地视频功能。
 
 2026-10-29 M3：独立 Bot 配置/进程许可、真实类型化 Gateway/SDK 装配及三终端薄编排完成；仅 Mock/新建隔离实例验收，QQ/Qwen 真实联网仍待用户。原启动器保留，Bot 故障不停止 Web/Simulator。[操作与验收](deep-dive/M3_MANAGEMENT_STACK.md)。

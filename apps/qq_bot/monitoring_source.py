@@ -132,3 +132,7 @@ class InstanceMonitoring:
             lambda channel='water': source._read(source._service.analysis,device_id,channel=channel),
             partial(source.capture_water,device_id))
 
+
+    def event_cycles(self, *, device_id):
+        return self._read(lambda device: self._service.event_cycles(device_id=device), device_id)
+

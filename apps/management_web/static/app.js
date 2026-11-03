@@ -1,4 +1,4 @@
-import {el,icon,card,badge,empty,button,link,rows,metricCards,metadata,table,trendChart,normalizedTrendChart} from './components.js';
+import {el,icon,card,badge,empty,button,link,rows,metricCards,metadata,table,trendChart,normalizedTrendChart,createLocalVideoPreview,createVideoWorkspace} from './components.js';
 import {routes,routeFor,timeText,filterItems,validateBootstrap,qualityNames,freshnessNames,sourceName,connectionName,eventState,eventStateName,eventStateReasonName,eventHandlingName,cycleConfirmationName,eventSeverityName,trendRanges,activeEventOverview} from './view-model.js';
 import {services} from './services.js';
 import {createAssistantWorkspace} from './assistant.js';
@@ -14,6 +14,8 @@ const assistantWorkspace=createAssistantWorkspace(services.ai,{onDevice:id=>{sta
 const toolPolicySettings=createToolPolicySettings(services.ai,{onSaved:()=>assistantWorkspace.policyChanged()});
 const knowledgeWorkspace=createKnowledgeWorkspace(services.knowledge);
 const settingsWorkspace=createSettingsWorkspace(services.settings,toolPolicySettings,{onBudgetSaved:()=>assistantWorkspace.policyChanged()});
+const localVideoPreview=createLocalVideoPreview($('local-video-preview'));
+const videoWorkspace=createVideoWorkspace($('local-video-preview'));
 const severity=item=>badge(eventSeverityName(item),item.severity==='critical'?'critical':item.severity==='warning'?'warning':'neutral');
 const status=item=>el('div',{class:'event-status'},[
   badge(item.source_kind==='simulator'?eventStateName(item):(item.status==='pending'?'待处理（演示）':'已处理（演示）'),eventState(item)==='RESOLVED'?'resolved':item.status==='closed'?'neutral':'warning'),
@@ -172,12 +174,28 @@ function trend(){const options={rangeSeconds:state.trendRange==='all'?null:Numbe
       normalizedTrendChart(state.data.monitoring,options)])]);}
 function videoPlaceholder(compact=false){return el('div',{class:`video-placeholder ${compact?'compact':''}`},[
   el('div',{class:'video-corner',text:'演示预览区域 / 无视频流'}),el('span',{class:'video-symbol'},[icon('camera')]),el('h3',{text:'等待接入监控设备'}),
-  el('p',{text:'未接入真实视频；模拟视觉统计展示在下方。'}),badge('NOT CONNECTED','neutral')]);}
+  el('p',{text:'未接入真实视频；检测统计与画面接入独立。'}),badge('NOT CONNECTED','neutral')]);}
 
 function dashboard(){
   const d=state.data, snapshot=d.monitoring;
   const recentEvents=card('最近事件','按风险周期展示；等级变化与原始证据见详情。',[eventsTable((d.event_cycles||d.events).slice(0,5))],link('全部记录','events'));
   recentEvents.className+=' dashboard-events';
+  const assistantCard=card('AI 智能助手','围绕监测事实，获得有依据的辅助解读。',[
+    el('div',{class:'assistant-entry'},[
+      el('div',{class:'assistant-entry-intro'},[el('span',{class:'assistant-emblem'},[icon('spark')]),
+        badge(d.ai?.connected?'助手已启用':'助手未启用',d.ai?.connected?'success':'neutral')]),
+      el('h3',{text:'让数据更容易理解'}),
+      el('p',{text:d.ai?.connected?'从水质问题到资料解读，在助手工作区继续对话。':'启用 Assistant 后，可在助手工作区选择模型并开始对话。'}),
+      el('div',{class:'assistant-entry-features'},[
+        ['drop','理解水质','了解指标、观测质量与时效限制。'],
+        ['book','查找资料','在已授权的知识范围内寻找依据。'],
+        ['file','核对来源','区分监测事实与 AI 辅助建议。']
+      ].map(([symbol,title,description])=>el('div',{class:'assistant-entry-feature'},[icon(symbol),el('div',{},[
+        el('strong',{text:title}),el('small',{text:description})])]))),
+      el('div',{class:'assistant-entry-action'},[
+        el('a',{href:'#assistant',class:'button primary'},['打开助手工作区',icon('arrow')]),
+        el('p',{text:'工具按已有授权使用；发送前确认，不会自动调用模型。'})])])]);
+  assistantCard.className+=' dashboard-assistant';
   return [el('div',{class:'overview-strip'},[
     el('div',{},[el('span',{class:'strip-icon'},[icon('link')]),el('div',{},[el('strong',{text:'数据连接概况'}),el('small',{text:d.data_mode==='simulator'?'统一监测存储 · 模拟器来源':'独立 Demo adapter 已就绪'})])]),
     el('div',{class:'strip-number'},[el('strong',{text:String(d.devices.length)}),el('span',{text:'监测区域'})]),
@@ -186,8 +204,7 @@ function dashboard(){
     el('div',{class:'section-caption'},[el('h2',{text:'水质指标概览'}),link('查看水质监测','monitoring')]),metadata(snapshot),metricCards(snapshot),currentAnomalies(d),
     el('div',{class:'dashboard-grid dashboard-overview'},[trend(),
       el('div',{class:'side-stack dashboard-sidebar'},[
-        card('视觉监测概况','只有模拟窗口统计，真实视频 / NPU 未接入。',[rows([['设备',d.cameras[0]?.name||'无设备'],['上报状态',connectionName(d.cameras[0]?.status)],['视觉新鲜度',freshnessNames[d.cameras[0]?.freshness]||'未知'],['窗口帧数',d.cameras[0]?.summary?.frames_processed??'暂无上报']]),videoPlaceholder(true),el('div',{class:'card-foot'},[el('span',{text:'无实际视频流'}),link('视觉窗口详情','video')])]),
-        card('AI 智能助手','从环境事实到可解释的辅助建议。',[el('div',{class:'assistant-entry'},[el('span',{class:'assistant-emblem'},[icon('spark')]),el('p',{text:d.ai?.connected?'Normal 助手已启用；当前水质查询与网页共用监测存储。':'启用 Assistant 后，复用现有模型与只读 Tool Runtime。'}),el('a',{href:'#assistant',class:'button primary'},['打开助手工作区',icon('arrow')])])]),
+        assistantCard,
         card('连接状态','未连接不代表设备离线。',[el('div',{class:'connection-list'},d.connections.map(c=>el('div',{class:'connection-row'},[
           el('span',{text:c.name}),badge(connectionName(c.status),c.status==='online'?'success':c.status==='offline'?'warning':'neutral')])))] )]),recentEvents])];
 }
@@ -216,14 +233,31 @@ function assistant(){if(state.data.ai?.connected)return [assistantWorkspace.moun
     card('工具执行','未来仅展示安全 Activity。',[empty('暂无执行记录','Tool 调用、步骤和来源证明将在服务接入后展示。','settings')]),
     card('开发验证','与管理平台的正式工作区分开。',[el('p',{class:'muted',text:'现有 AI Prototype Web 保留在独立端口，模型和凭据由原 Runtime 管理。'}),el('a',{class:'text-link',href:'http://127.0.0.1:8765',target:'_blank',rel:'noopener noreferrer',text:'打开现有 AI 原型 ↗'})])])])];}
 
-function video(){const cameras=state.data.cameras;const camera=cameras.find(c=>c.id===state.camera)||cameras[0];const summary=camera?.summary;
+function video(){
+  const snapshot=state.data.monitoring;
+  const cameras=state.data.cameras;const camera=cameras.find(c=>c.id===state.camera)||cameras[0];const summary=camera?.summary;
   const behaviors={normal_activity:'正常活动',reduced_activity:'活动减少',feeding:'摄食',feeding_anomaly:'摄食异常',unknown:'未知'};
   const anomalies={suspected_lesion:'疑似病灶',surface_anomaly:'体表异常',suspected_dead:'疑似死亡个体'};
-  return [el('div',{class:'video-layout'},[
-    card('监控预览','未播放任何视频流。',[videoPlaceholder(),el('div',{class:'card-foot'},[el('span',{text:camera?.name||'无设备'}),badge('视频未接入','neutral')])]),
-    el('div',{class:'side-stack'},[card('监测设备','视觉与水质共享设备和时间窗。',[el('div',{class:'camera-list'},cameras.map(c=>button(c.name,()=>{state.camera=c.id;render();},state.camera===c.id?'selected':'secondary')))]),
-      card('视觉数据状态','PROTOTYPE · 统计来自模拟器，不是真实 NPU 推理。',[rows([['来源',sourceName(camera?.source_kind)],['上报状态',connectionName(camera?.status)],['新鲜度',freshnessNames[camera?.freshness]||'未知'],['检测信号',camera?.signal_status==='no_obvious_anomaly'?'未出现所列异常信号（模拟）':camera?.signal_status==='suspected_anomaly'?'疑似异常（模拟，非确诊）':camera?.signal_status==='no_valid_frames'?'无有效帧，信号未知':camera?.signal_status==='indeterminate'?'当前状态待确认':'暂无信号'],['观测时间',timeText(camera?.observed_at)],['接收时间',timeText(camera?.received_at)]])])])]),
-    ...(summary?[card('疾病与异常检测信号','窗口内出现该信号的帧数；类别可重叠，不能作为最终疾病诊断。',[
+  const left=[card('水质读数','窗口观测，与视频画面独立。',[
+    badge(sourceName(snapshot?.source_kind),'demo'),
+    el('p',{class:'video-device-name',text:state.data.devices.find(d=>d.id===state.device)?.name||state.device}),
+    ...(!snapshot?.observed_at?[el('p',{class:'video-data-caution',text:'NO_DATA · 尚无水质观测，状态未知。'})]:
+      snapshot.freshness!=='fresh'||snapshot.connectivity!=='online'?[el('p',{class:'video-data-caution',text:'观测过期或上报状态不足；以下为留存读数，不能确认当前水质。'})]:[]),
+    metricCards(snapshot),
+    el('div',{class:'video-quality'},[badge(qualityNames[snapshot?.quality]||'未知',snapshot?.quality==='valid'?'success':'warning'),
+      badge(freshnessNames[snapshot?.freshness]||'未知',snapshot?.freshness==='fresh'?'success':'warning'),badge(connectionName(snapshot?.connectivity),'neutral')]),
+    el('p',{class:'video-observed-at',text:`观测 ${timeText(snapshot?.observed_at)}`}),link('查看水质详情','monitoring')]),
+    card('水质规则信号','服务器实验规则，非专业健康或养殖保证。',snapshot?.findings?.length?
+      snapshot.findings.map(f=>el('p',{class:'video-data-caution',text:`${f.code} · ${f.message}`})):
+      [el('p',{class:'muted',text:snapshot?.observed_at&&snapshot.freshness==='fresh'&&snapshot.connectivity==='online'&&snapshot.quality==='valid'?
+        '本窗口未命中已评估规则，不等于全部正常。':'当前证据不足，不能据此排除风险。'})]),
+    card('观测信息','时间均为北京时间。',[rows([['设备',state.device],['接收时间',timeText(snapshot?.received_at)],['评估时间',timeText(snapshot?.evaluated_at)]]),
+      el('details',{class:'data-details'},[el('summary',{text:'窗口与批次'}),rows([['窗口开始',timeText(snapshot?.window?.start)],['窗口结束',timeText(snapshot?.window?.end)],['批次',snapshot?.batch_id]])])])];
+  const right=[
+    card('视觉数据状态',`${sourceName(camera?.source_kind)} · 与播放画面独立。`,[
+      ...(cameras.length>1?[el('div',{class:'camera-list'},cameras.map(c=>button(c.name,()=>{state.camera=c.id;render();},state.camera===c.id?'selected':'secondary')))]:[]),
+      rows([['设备',camera?.name||'无设备'],['来源',sourceName(camera?.source_kind)],['上报状态',connectionName(camera?.status)],['新鲜度',freshnessNames[camera?.freshness]||'未知'],['检测信号',camera?.signal_status==='no_obvious_anomaly'?'未出现所列异常信号（模拟）':camera?.signal_status==='suspected_anomaly'?'疑似异常（模拟，非确诊）':camera?.signal_status==='no_valid_frames'?'无有效帧，信号未知':camera?.signal_status==='indeterminate'?'当前状态待确认':'暂无信号'],['观测时间',timeText(camera?.observed_at)],['接收时间',timeText(camera?.received_at)]])]),
+    ...(summary?[card('疾病与异常检测信号','帧数可重叠；检测信号不作为疾病确诊。',[
       badge('SIMULATOR · 非诊断','demo'),rows(Object.entries(anomalies).map(([key,label])=>[label,`${summary.anomaly_counts[key]} / ${summary.valid_frames??summary.frames_processed} 有效帧`]))]),
       card('行为识别','窗口内有效帧比例，不是绝对行为结论。',[rows(Object.entries(behaviors).map(([key,label])=>[label,summary.valid_frames===0?'无有效帧':`${(summary.behavior_ratios[key]*100).toFixed(1)}%`]))]),
       card('体长与可见数量','体长按有效检测记录加权；无标定时不显示厘米值；可见鱼数不代表鱼池存量。',[rows([
@@ -232,7 +266,8 @@ function video(){const cameras=state.data.cameras;const camera=cameras.find(c=>c
         ['有效画面 / 总帧',`${summary.valid_frames??summary.frames_processed} / ${summary.frames_processed}`],['标定',summary.length.calibration==='uncalibrated'?'未标定':'纯模拟标定'],
         ['画面平均可见数',summary.visible_fish_count??'缺失'],['模型版本',summary.model_version],['窗口开始',timeText(camera.window?.start)],
         ['窗口结束',timeText(camera.window?.end)],['关联批次',camera.batch_id]])])]
-      :[card('视觉窗口汇总','没有补造另一通道数据。',[empty('NO_DATA · 暂无视觉上报','启动模拟器后显示窗口统计；不会生成假录像。','camera')])])];}
+      :[card('视觉窗口汇总','没有补造另一通道数据。',[empty('NO_DATA · 暂无视觉上报','启动模拟器后显示窗口统计；不会生成假录像。','camera')])])];
+  return [videoWorkspace.update({left,right,empty:state.data.video_preview?null:videoPlaceholder()})];}
 
 async function requestEventDeletion(scope,item=null){
   if(eventDeletionBusy)return;
@@ -296,8 +331,10 @@ function knowledge(){return [knowledgeWorkspace.mount()];}
 function settings(){return [settingsWorkspace.mount()];}
 
 const pages={dashboard,monitoring,assistant,video,events,knowledge,settings};
-function render(passive=false){if(!state.data)return;if(state.readFailed){$('content').replaceChildren(empty('读取失败 · 上次显示已失效','请恢复服务器连接，不将缓存当作当前数据。'));return;}const route=routeFor(location.hash);$('page-title').textContent=route.title;$('page-eyebrow').textContent=route.eyebrow;$('page-description').textContent=route.description;$('breadcrumb').textContent=route.title;
-  document.title=`${route.title} · AI 监测系统`;$('content').replaceChildren(...pages[route.id]());
+function render(passive=false){if(!state.data)return;if(state.readFailed){localVideoPreview.update(null);$('content').replaceChildren(empty('读取失败 · 上次显示已失效','请恢复服务器连接，不将缓存当作当前数据。'));return;}const route=routeFor(location.hash);$('page-title').textContent=route.title;$('page-eyebrow').textContent=route.eyebrow;$('page-description').textContent=route.description;$('breadcrumb').textContent=route.title;
+  document.title=`${route.title} · AI 监测系统`;const content=pages[route.id]();
+  if(route.id!=='video'||!$('content').contains(videoWorkspace.node))$('content').replaceChildren(...content);
+  localVideoPreview.update(state.data.video_preview,route.id==='video');
   document.querySelectorAll('#navigation a').forEach(a=>{const active=a.hash===`#${route.id}`;a.classList.toggle('active',active);if(active)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
   if(!passive){$('sidebar').classList.remove('open');$('menu-toggle').setAttribute('aria-expanded','false');}}
 let refreshing=false;
@@ -329,6 +366,7 @@ async function refresh(force=false){
     }
   }catch(_){
     if(revision!==state.revision)return;
+    localVideoPreview.update(null);
     state.readFailed=true;$('refresh-status').textContent='读取失败 · 上次显示已失效';
     if(force||!state.data)$('content').replaceChildren(card('工作区暂不可用','不使用假数据掩盖服务错误。',[empty('服务加载失败','请检查管理服务。'),button('重新加载',bootstrap)]));
     else $('content').replaceChildren(empty('读取失败 · 上次显示已失效','请恢复服务器连接，不将缓存当作当前数据。'));
@@ -348,5 +386,5 @@ bootstrap();
 let poll;
 function startPolling(){if(!poll)poll=setInterval(()=>{if(!document.hidden)refresh();},5000);}
 startPolling();
-window.addEventListener('pagehide',()=>{clearInterval(poll);poll=null;assistantWorkspace.suspend();});
+window.addEventListener('pagehide',()=>{clearInterval(poll);poll=null;assistantWorkspace.suspend();localVideoPreview.suspend();});
 window.addEventListener('pageshow',()=>{startPolling();});

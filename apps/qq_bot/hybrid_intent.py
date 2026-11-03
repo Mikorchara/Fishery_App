@@ -1,5 +1,7 @@
 """Finite free commands; all other natural language goes to the same Agent."""
 from dataclasses import dataclass, field
+import unicodedata
+from apps.ai_service.channel_identity import INTRODUCTION
 
 from apps.ai_backend.model_gateway import GatewayError
 from .hybrid_conversations import valid_question
@@ -28,6 +30,12 @@ def classify(text, *, topic=None, command_priority=True):
     if text.startswith('/'):return Intent('unsupported')
     plain = text.lower().strip('！!。，.?？ ')
     if plain in ('你好', '您好', 'hello', 'hi', '谢谢', '感谢'):return Intent('greeting')
+    identity=unicodedata.normalize('NFKC',plain)
+    identity=''.join(identity.split())
+    if identity in ('你是谁','你是什么','介绍一下你自己','自我介绍','你叫什么','你的名字是什么',
+            '你是水质监测助手吗','你是鳗鲡养殖智能体吗','你不是水质监测助手，你是鳗鲡养殖智能体',
+            '你不是水质监测助手,你是鳗鲡养殖智能体'):
+        return HybridIdentity()
     if plain in ('帮助', 'help', '你能做什么', '有什么功能', '怎么用'):
         return HybridHelp()
     return HybridIntent(text)
@@ -36,6 +44,12 @@ def classify(text, *, topic=None, command_priority=True):
 @dataclass(frozen=True)
 class HybridHelp:
     kind: str = 'capabilities'
-    text: str = ('可简短聊天、解释一般概念，并查询当前绑定设备的模拟水质。'
+    text: str = ('我是鳗鲡养殖智能体。可简短聊天、解释一般养殖概念，并查询当前绑定设备的模拟水质。'
                  '其余普通自然语言可能调用模型并消费共享额度。'
                  '未开放项目知识库/历史AI分析、ACK、删除或设备控制；固定查询请用 /帮助。')
+
+
+@dataclass(frozen=True)
+class HybridIdentity:
+    kind: str = 'identity'
+    text: str = INTRODUCTION

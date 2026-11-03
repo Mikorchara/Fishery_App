@@ -38,18 +38,23 @@ from .business_tools.current_water_quality import CURRENT_WATER_QUALITY
 from apps.ai_backend.tools import ToolDefinition
 from apps.ai_backend.tool_conversation import ToolExecutionMode
 
+from .score_execution import ScoreTrialConfig,load_score_config,resolve_score_trial,SCORE_TOOL_NAMES
+from .business_tools.registry import WATER_QUALITY_SCORE
+
 PRESETS = ("dashscope-qwen38-flash-r1", "ollama-qwen35-4b-r1")
 
 
 class ManagementAssistantService:
     """One epoch and frozen device/policy/mode per turn; single-round by default."""
 
-    def __init__(self, monitoring, *, credentials, traces, policy_directory, gateway_factory=OpenAICompatibleAdapter, execution_config=None, streaming_config=None, history_config=None, unified_config=None, knowledge=None, offline_channel_provider=None, channel_trial=None, _monitoring_only=False):
+    def __init__(self, monitoring, *, credentials, traces, policy_directory, gateway_factory=OpenAICompatibleAdapter, execution_config=None, streaming_config=None, history_config=None, unified_config=None, knowledge=None, offline_channel_provider=None, channel_trial=None, _monitoring_only=False, scoring_config=None):
         if knowledge is None and (not _monitoring_only):
             raise ValueError('KNOWLEDGE_SERVICE_REQUIRED')
         self.monitoring, self.credentials, self.traces = (monitoring, credentials, traces)
         self.gateway_factory = gateway_factory
         self.settings_store = None
+        self._scoring_config=load_score_config() if scoring_config is None else scoring_config
+        if not isinstance(self._scoring_config,ScoreTrialConfig):raise GatewayError('INVALID_SCORE_TRIAL_CONFIG')
         self._unified_config = load_unified_tool_trials() if unified_config is None else unified_config
         if not isinstance(self._unified_config, UnifiedToolTrials):
             raise GatewayError('INVALID_UNIFIED_TOOL_TRIAL_CONFIG')
@@ -84,6 +89,8 @@ class ManagementAssistantService:
             from .content_binding import content_scope_configs
             self._execution_config, self._streaming_config, self._unified_config = content_scope_configs(self._execution_config, self._streaming_config, self._unified_config)
         self.history_registry = bind_tools(monitoring, devices[0]['id'], self.knowledge, include_history=self.knowledge is not None, include_knowledge=self.knowledge is not None)
+        self.scoring_registry=(bind_tools(monitoring,devices[0]['id'],self.knowledge,include_history=True,include_score=True)
+            if self.knowledge is not None and self._scoring_config.enabled else None)
         self.formal_registry = ToolRegistry([self.history_registry.lookup(name) for name in FORMAL_TOOL_NAMES if name in self.history_registry.registered_names()])
         self.policy_store = UserToolPolicyStore(policy_directory, self.formal_registry)
         self.management_policy = ManagementToolPolicyStore(policy_directory, self.policy_store)
@@ -99,7 +106,7 @@ class ManagementAssistantService:
 
     @classmethod
     def local(cls, monitoring, project_root, *, multi_round_trial=False, streaming_trial=False, history_trial=False,
-              unified_tools_trial=False, knowledge=None, data_paths=None):
+              unified_tools_trial=False, knowledge=None, data_paths=None,score_trial=False):
         from .runtime.locations import private_project_location
         from apps.management_paths import ManagementPaths
         root = Path(project_root).resolve()
@@ -107,13 +114,14 @@ class ManagementAssistantService:
         location = private_project_location(root)
         return cls(monitoring, knowledge=knowledge, credentials=CredentialStore(location.env_path, private_location=location),
             traces=JsonlTraceSink(paths.traces,
-                tool_names=HISTORY_CANDIDATE_TOOL_NAMES),
+                tool_names=SCORE_TOOL_NAMES),
             policy_directory=paths.policy_directory,
             execution_config=load_execution_config(enable_trial=multi_round_trial),
             streaming_config=load_streaming_config(enable_trial=streaming_trial),
             history_config=load_history_config(enable_trial=history_trial),
             unified_config=load_unified_tool_trials(normal=unified_tools_trial and multi_round_trial,
-                                                   streaming=unified_tools_trial and streaming_trial))
+                                                   streaming=unified_tools_trial and streaming_trial),
+            scoring_config=load_score_config(enable_trial=score_trial))
 
     def availability(self):
         if self.knowledge is None:
@@ -123,14 +131,19 @@ class ManagementAssistantService:
     def tool_authorization(self):
         from .business_tools.registry import WATER_QUALITY_SCORE
         return {**self.management_policy.public(), 'epoch':self.epoch,
-            'tools':[{'name':name, 'assembled':name in self.history_registry.registered_names(),
+            'tools':[{'name':name, 'assembled':name in self.history_registry.registered_names() or
+                         (name==WATER_QUALITY_SCORE and self.scoring_registry is not None),
                       'history_query_only':name == WATER_QUALITY_HISTORY and not (
                           self._unified_config.normal_enabled or self._unified_config.streaming_enabled),
                       'candidate_only':name == WATER_QUALITY_HISTORY and self._history_config.status == 'candidate',
-                      'compatibility_only':name == WATER_QUALITY_SCORE}
+                      'compatibility_only':name==WATER_QUALITY_SCORE and not self._scoring_config.enabled,
+                      'trial_required':name==WATER_QUALITY_SCORE,
+                      'trial_enabled':self._scoring_config.enabled and self.scoring_registry is not None}
                      for name in (*FORMAL_TOOL_NAMES, WATER_QUALITY_HISTORY, WATER_QUALITY_SCORE)],
             'tool_trials':{'status':'local_experimental','normal_enabled':self._unified_config.normal_enabled,
                            'streaming_enabled':self._unified_config.streaming_enabled},
+            'score_trial':{'enabled':self._scoring_config.enabled,'status':'local_experimental',
+                           'version':'management-water-score@1'},
             'history_candidate':{'status':self._history_config.status,
                                  'enabled':self._history_config.enabled,
                                  'max_tool_calls':1,'max_tool_rounds':1,'max_model_requests':2}}
@@ -143,47 +156,68 @@ class ManagementAssistantService:
         self.management_policy.save(value['selected_tools'],expected_revision=value['revision'])
         return self.tool_authorization()
 
-    def _configuration(self, preset_id, device_id, *, transport=ToolModelTransport.NORMAL, policy_snapshot=None, execution_profile=None, budget_document=None):
+    def _configuration(self, preset_id, device_id, *, transport=ToolModelTransport.NORMAL,
+                       policy_snapshot=None, execution_profile=None, budget_document=None):
         if not isinstance(transport, ToolModelTransport):
             raise GatewayError('INVALID_ASSISTANT_REQUEST')
         if preset_id not in PRESETS:
-            raise GatewayError('ASSISTANT_PRESET_NOT_ALLOWED')
+            raise GatewayError("ASSISTANT_PRESET_NOT_ALLOWED")
         if not isinstance(device_id, str):
-            raise GatewayError('INVALID_ASSISTANT_REQUEST')
-        self.monitoring.bind(device_id)
+            raise GatewayError("INVALID_ASSISTANT_REQUEST")
+        self.monitoring.bind(device_id)  # Validate registered device, never page-global state.
         if execution_profile not in (None, HISTORY_PROFILE, NORMAL_SELECTION_CANDIDATE):
             raise GatewayError('INVALID_ASSISTANT_REQUEST')
         historical = execution_profile == HISTORY_PROFILE
         candidate = execution_profile == NORMAL_SELECTION_CANDIDATE
         snapshot = policy_snapshot or self.management_policy.snapshot()
         if self.knowledge is None:
-            registry = bind_tools(self.monitoring, device_id, None, include_knowledge=False)
-            policy = ToolPolicy('assistant', True, tuple((name for name in snapshot.selected_tools if name == CURRENT_WATER_QUALITY and name in registry.registered_names())))
-            profile = assistant_profile(preset_id)
-            return (profile, policy, candidate_decision(profile, policy, registry, device_id=device_id, epoch=self.epoch, policy_revision=snapshot.revision), registry)
-        unified = not historical and (not candidate) and (preset_id == UNIFIED_PRESET) and (set(snapshot.selected_tools).intersection(HISTORY_CANDIDATE_TOOL_NAMES) != set(FORMAL_TOOL_NAMES)) and (self._unified_config.streaming_enabled if transport == ToolModelTransport.STREAMING else self._unified_config.normal_enabled)
-        registry = bind_tools(self.monitoring, device_id, self.knowledge, formal=self.history_registry if historical or candidate or unified else self.formal_registry, include_history=historical or candidate or unified)
-        selected = ToolPolicy('assistant', True, snapshot.selected_tools)
+            registry=bind_tools(self.monitoring,device_id,None,include_knowledge=False)
+            policy=ToolPolicy('assistant',True,tuple(name for name in snapshot.selected_tools
+                if name==CURRENT_WATER_QUALITY and name in registry.registered_names()))
+            profile=assistant_profile(preset_id)
+            return profile,policy,candidate_decision(profile,policy,registry,device_id=device_id,
+                epoch=self.epoch,policy_revision=snapshot.revision),registry
+        scoring=(not historical and not candidate and self._scoring_config.enabled and
+                 WATER_QUALITY_SCORE in snapshot.selected_tools)
+        unified=(not scoring and not historical and not candidate and preset_id==UNIFIED_PRESET
+            and set(snapshot.selected_tools).intersection(HISTORY_CANDIDATE_TOOL_NAMES)!=set(FORMAL_TOOL_NAMES) and (
+                self._unified_config.streaming_enabled if transport==ToolModelTransport.STREAMING
+                else self._unified_config.normal_enabled))
+        registry = bind_tools(self.monitoring, device_id, self.knowledge,
+            formal=self.scoring_registry if scoring else self.history_registry if historical or candidate or unified else self.formal_registry,
+            include_history=historical or candidate or unified or scoring,include_score=scoring)
+        selected = ToolPolicy("assistant", True, snapshot.selected_tools)
         bound = {definition.name for definition in registry.model_definitions()}
-        names = HISTORY_CANDIDATE_TOOL_NAMES if candidate or unified else selected.exposed_tools
-        policy = ToolPolicy('assistant', selected.llm_tool_calling, tuple((name for name in names if name in bound and name in selected.exposed_tools and (not historical or name == WATER_QUALITY_HISTORY))))
+        names = SCORE_TOOL_NAMES if scoring else HISTORY_CANDIDATE_TOOL_NAMES if candidate or unified else selected.exposed_tools
+        policy = ToolPolicy("assistant", selected.llm_tool_calling,
+            tuple(name for name in names if name in bound and name in selected.exposed_tools
+                  and (not historical or name == WATER_QUALITY_HISTORY)))
         profile = assistant_profile(preset_id)
-        if candidate:
-            execution = resolve_normal_selection_candidate(profile, selected, registry, self.knowledge, device_id=device_id, epoch=self.epoch, policy_revision=snapshot.revision, transport=transport)
+        if scoring:
+            execution=resolve_score_trial(self._scoring_config,profile,policy,registry,self.knowledge,
+                device_id=device_id,epoch=self.epoch,policy_revision=snapshot.revision,transport=transport)
+        elif candidate:
+            execution = resolve_normal_selection_candidate(profile,selected,registry,self.knowledge,
+                device_id=device_id,epoch=self.epoch,policy_revision=snapshot.revision,transport=transport)
         elif historical:
-            execution = resolve_history_candidate(self._history_config, profile, selected, registry, device_id=device_id, epoch=self.epoch, policy_revision=snapshot.revision, transport=transport)
+            execution = resolve_history_candidate(self._history_config,profile,selected,registry,
+                device_id=device_id,epoch=self.epoch,policy_revision=snapshot.revision,transport=transport)
         elif unified:
-            execution = resolve_unified_tools(self._unified_config, profile, policy, registry, self.knowledge, device_id=device_id, epoch=self.epoch, policy_revision=snapshot.revision, transport=transport)
+            execution=resolve_unified_tools(self._unified_config,profile,policy,registry,self.knowledge,
+                device_id=device_id,epoch=self.epoch,policy_revision=snapshot.revision,transport=transport)
         elif transport == ToolModelTransport.STREAMING:
-            execution = resolve_streaming(self._streaming_config, profile, selected, policy, registry, self.knowledge, device_id=device_id, epoch=self.epoch)
+            execution = resolve_streaming(self._streaming_config,profile,selected,policy,registry,self.knowledge,
+                                          device_id=device_id,epoch=self.epoch)
         else:
-            execution = resolve_execution(self._execution_config, profile, selected, policy, registry, self.knowledge, device_id=device_id, epoch=self.epoch)
-        if not historical and (not candidate) and (snapshot.source == 'MANAGEMENT_OVERRIDE'):
-            execution = replace(execution, profile=replace(execution.profile, revision=_hash({'execution_revision': execution.profile.revision, 'management_policy_revision': snapshot.revision})))
-        if not historical and (not candidate):
+            execution = resolve_execution(self._execution_config,profile,selected,policy,registry,self.knowledge,
+                                          device_id=device_id,epoch=self.epoch)
+        if not historical and not candidate and snapshot.source == 'MANAGEMENT_OVERRIDE':
+            execution = replace(execution,profile=replace(execution.profile, revision=_hash({
+                'execution_revision':execution.profile.revision,'management_policy_revision':snapshot.revision})))
+        if not historical and not candidate:
             from .output_budget import apply
-            execution = apply(profile, execution, self.settings_store, document=budget_document)
-        return (profile, policy, execution, registry)
+            execution=apply(profile,execution,self.settings_store,document=budget_document)
+        return profile, policy, execution, registry
 
     def bootstrap(self, device_id: str) -> dict:
         # Read Policy and budget state once so every displayed mode describes

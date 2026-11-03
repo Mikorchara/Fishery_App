@@ -22,6 +22,9 @@ class ManagementRun(HybridRun):
     def __init__(self, request, directory, *, async_client_factory=None, clock=None, monotonic=None):
         import time
         self.request, self.permit = request, None
+        self._notice_recipient = self._notice_recipient_path = None
+        self._notice_summary = None
+        self._notice_report = {'enabled':False}
         self._issuer = LivePermitIssuer(self.check)
         kwargs = dict(async_client_factory=async_client_factory, limits=request.limits, members=request.members,
                       clock=clock, monotonic=monotonic or time.monotonic)
@@ -38,7 +41,8 @@ class ManagementRun(HybridRun):
 
     def plan(self):
         return {**SessionRun.plan(self), 'contract': CONTRACT, 'offline': self.offline_test,
-                'request_sha256': self.request.digest, 'risk': RISK}
+                'request_sha256': self.request.digest, 'risk': RISK,
+                **({'event_notifications':self._notice_summary} if self._notice_summary else {})}
 
     def approve(self, plan, *, confirmed=False):
         if not self.request.enabled: raise BotError('AI_DISABLED')
@@ -69,3 +73,16 @@ class ManagementRun(HybridRun):
             conversation_epoch=self.base_service.epoch, options=self.options, snapshot=snapshot,
             validate=validate, claim=lambda: self.ledger.check_lease(lease),
             async_client_factory=self.factory, clock=self.clock, monotonic=self.now)
+
+    def enable_event_notifications(self, recipient_path):
+        from .event_recipients import load_recipient
+        from .event_notifications import approval_summary
+        if self.permit is not None:raise BotError('INVALID_RUN_APPROVAL')
+        recipient=load_recipient(recipient_path,self.access.app_id)
+        group=next(g for g in self.access.groups if g.group_id==self.inputs.group_id)
+        if 'current' not in group.capabilities:raise BotError('EVENT_NOTIFICATION_PERMISSION_REQUIRED')
+        self._notice_recipient,self._notice_recipient_path=recipient,recipient_path
+        self._notice_summary=approval_summary(recipient)
+
+    def report(self,code='RUN_SNAPSHOT'):
+        return {**SessionRun.report(self,code),'event_notifications':self._notice_report}

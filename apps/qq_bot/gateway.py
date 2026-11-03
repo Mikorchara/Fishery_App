@@ -101,6 +101,7 @@ class QQGateway:
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.now = monotonic
         self.stop = threading.Event()
+        self.ready = threading.Event()
         self._queue = Queue(maxsize=4)
         self._worker = None
         self._session, self._seq, self._bot_id = None, None, None
@@ -175,7 +176,7 @@ class QQGateway:
 
     def request_stop(self):
         """Cancel only this owned connection; do not wait for console input or recv."""
-        self.stop.set();guard=self._active_guard
+        self.stop.set();self.ready.clear();guard=self._active_guard
         if guard is not None and guard._socket is not None:guard.arm(self.now(),'QQ_CANCELLED')
 
     def _pump(self, ws, guard=None):
@@ -255,9 +256,11 @@ class QQGateway:
                     if application and (not isinstance(application, dict) or str(application.get('id')) != self.app_id):
                         raise BotError('QQ_APP_CONTEXT_MISMATCH')
                     ready, self._seq = True, seq
+                    self.ready.set()
                     self.emit('QQ_GATEWAY_READY')
                 elif packet.get('t') == 'RESUMED' and self._session:
                     ready, self._seq = True, seq
+                    self.ready.set()
                     self.emit('QQ_GATEWAY_RESUMED')
                 # Official Resume replays missed Dispatch frames BEFORE RESUMED.
                 # Only a connection with an existing authenticated session may do this.
@@ -293,6 +296,7 @@ class QQGateway:
                             try:
                                 self._pump(ws, guard)
                             finally:
+                                self.ready.clear()
                                 if self.router is not None:self.router.disconnected()
                                 self.emit('QQ_GATEWAY_CLOSING')
                                 guard.arm(self.now()+GATEWAY_CLOSE_SECONDS, 'GATEWAY_CLOSE_TIMEOUT')
@@ -328,7 +332,7 @@ class QQGateway:
                     self.emit('QQ_GATEWAY_RETRY_WAIT', attempt=attempt+1, retry_delay_seconds=2**attempt)
                     self.stop.wait(min(2**attempt, max(0, self._deadline-self.now())))
         finally:
-            self.stop.set()
+            self.stop.set();self.ready.clear()
             try:
                 # Close owned fake I/O before joining the receive worker. It may
                 # be inside a fixed reply while connection setup itself failed.
