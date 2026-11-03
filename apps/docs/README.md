@@ -20,6 +20,7 @@
 - [历史趋势图、归一化与布局](deep-dive/HISTORY_CHART_UI.md)
 - [事件生命周期与首页异常概况](deep-dive/EVENT_LIFECYCLE.md)
 - [事件族、状态文案、筛选与历史清理](deep-dive/EVENT_MANAGEMENT.md)
+- [已结束风险周期一次删除及保护规则](deep-dive/EVENT_CYCLE_DELETE_ONCE.md)
 - [AI Backend 与 Assistant 开发指南](deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)
 - [M1 共享安全基础、兼容性与回滚](deep-dive/M1_SHARED_SAFETY_ACCEPTANCE.md)
 - [M2 独立 QQ Hybrid 离线集成与验收](deep-dive/M2_QQ_HYBRID_OFFLINE_ACCEPTANCE.md)

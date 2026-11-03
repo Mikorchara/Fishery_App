@@ -54,6 +54,8 @@
 
 **停止：**三终端在最初的启动 PowerShell 按 Ctrl+C；两终端可在 Web 或 Simulator 窗口按 Ctrl+C。单独关闭 Bot 不影响 Web/Simulator。优先正常停止以保存报告。
 
+**删除已结束事件：**列表或详情选择“删除已结束周期”，核对原始记录及确认历史数量后确认一次。升级后重启 Web 并按 `Ctrl+F5`；活动及状态待核实事件仍不可删除。[一次删除修复](deep-dive/EVENT_CYCLE_DELETE_ONCE.md)
+
 ## 2. 需要指定场景或检查配置时
 
 三终端等价的完整命令（显示场景菜单）：

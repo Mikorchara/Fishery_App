@@ -155,7 +155,7 @@
       "apps/qq_bot/conversations.py": "0706c530175e7a0e6b2e878b24ef7bb9eda9ddee2e5099c1529047780e6a9efd",
       "apps/ai_service/channel_conversation.py": "9fff8f9fc66bbe9733fe034ae15877b3ca1054318c3ec3a0da2709343a3392be",
       "apps/management_paths.py": "466e32076f93617299989c42ee5b3067d74b25ac633f77d1bdc696a9d37ac116",
-      "apps/monitoring/repository.py": "d485fd0b7eaa8a0746f440399cfbb406617dd3b40ef828dcc2c4aa07e76392d7",
+      "apps/monitoring/repository.py": "3a7e35cffa256ec24c9b646a4b6731f1fa528a2f1c602df8e5d3d54912554acd",
       "apps/monitoring/schema.py": "85d631b3186c67802a9ac892469b23f6b44be5ef0a1f82d03caf2676a29c0f18",
       "apps/monitoring/service.py": "f2286f62734069bdfa9923ad4dfab482b425ff6031dd9a3e22f353340736a3f6",
       "apps/monitoring/analysis.py": "f2f2867d73205e9676c03cc53b892eee52791dfb75d92a99aed8e276a0ac8748",
@@ -169,7 +169,7 @@
     "deployment": "fishery-management",
     "publication": "FAKE_GATEWAY_ONLY_NO_REAL_GENERAL_APPROVAL"
   },
-  "scope_sha256": "52a0c96c600926f75af0f324442684a646d118c116411a82638bb26061acda4d",
+  "scope_sha256": "f94ee14692ae65549474b53c8d2fda5e14cea78519eeeb464132aaec3fc12aaa",
   "qualification_id": null,
   "can_execute_real": false,
   "can_deliver_real": false

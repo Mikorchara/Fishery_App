@@ -6,7 +6,7 @@ import re
 import uuid
 
 from .event_families import FAMILIES, family_group
-from .event_records import EventRecordError
+from .event_records import EventRecordError,parse_time
 from .rules import VISUAL_RULES
 
 
@@ -137,6 +137,11 @@ def project_handling(db, events):
         event['can_delete_ack_cycle'] = bool(event['id'] in protected and context and
             counts.get(reference[0],0) and all(e.get('lifecycle_state') == 'RESOLVED' and
                 e.get('status') == 'closed' and e['id'] not in linked for e in context['members']))
+        # This is a preview capability, never authorization for the write. The
+        # Repository rechecks all members, references and audit rows in its transaction.
+        event['can_delete_cycle']=bool(context and all(e.get('lifecycle_state')=='RESOLVED'
+            and e.get('status')=='closed' and parse_time(e.get('resolved_at')) is not None
+            and e['id'] not in linked and not e.get('manual_ends') for e in context['members']))
     return events
 
 

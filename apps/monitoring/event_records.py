@@ -40,8 +40,8 @@ def parse_time(value):
 
 
 def validate_delete(scope, event_id):
-    if scope not in ('single', 'all_resolved', 'ack_cycle') or (scope == 'all_resolved' and event_id is not None) or (
-            scope in ('single', 'ack_cycle') and (not isinstance(event_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', event_id))):
+    if scope not in ('single', 'all_resolved', 'ack_cycle', 'cycle') or (scope == 'all_resolved' and event_id is not None) or (
+            scope in ('single', 'ack_cycle', 'cycle') and (not isinstance(event_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', event_id))):
         raise EventRecordError('INVALID_EVENT_DELETE')
 
 

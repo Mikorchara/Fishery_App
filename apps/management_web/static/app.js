@@ -79,7 +79,8 @@ function eventDetail(item){details(item.title,[badge(sourceName(item.source_kind
   ...eventHandlingPanel(item),
   ...manualEndPanel(item),
   ...(item.source_kind==='simulator'&&state.data.event_management?.enabled?[
-    ...(item.can_delete_ack_cycle?[button('删除已结束周期',()=>requestEventDeletion('ack_cycle',item),'danger')]:
+    ...(item.can_delete_cycle?[button('删除已结束周期',()=>requestEventDeletion('cycle',item),'danger')]:
+      item.can_delete_ack_cycle?[button('删除已结束周期',()=>requestEventDeletion('ack_cycle',item),'danger')]:
       item.deletable?[button('删除此原始记录',()=>requestEventDeletion('single',item),'danger')]:[
       el('p',{class:'muted',text:item.deletion_block_reason==='MANUAL_END_AUDIT_RETAINED'?'人工结束及证据留痕保留，不参与历史清理。':item.deletion_block_reason==='ACK_AUDIT_RETAINED'?'知晓审计留存，不可单条删除；整个周期可靠结束后，可连同确认历史一起明确删除。':'此原始记录当前不满足历史删除条件。'})])]:[]),
   ...(item.channel==='visual'?[el('p',{text:'视觉信号消退仅表示连续可靠观测未再检出该异常信号，不代表疾病治愈或人工处理完成。'})]:[]),el('p',{text:item.description}),
@@ -138,7 +139,8 @@ function eventsTable(items,maintenance=false){return table(['风险 / 类型','�
   el('div',{class:'cycle-level'},[...(item.cycle_summary?.ended?[el('small',{text:'历史最高等级'})]:[]),severity(item)]),
   item.cycle_summary?badge(eventStateName(item),item.manual_end?.active?'neutral':eventState(item)==='RESOLVED'?'resolved':item.status==='closed'?'neutral':'warning'):status(item),
   badge(cycleConfirmationName(item),cycleConfirmationName(item)==='已确认'?'success':'neutral'),
-  ...(maintenance?[item.can_delete_ack_cycle?button('删除已结束周期',()=>requestEventDeletion('ack_cycle',item),'text danger'):
+  ...(maintenance?[item.can_delete_cycle?button('删除已结束周期',()=>requestEventDeletion('cycle',item),'text danger'):
+    item.can_delete_ack_cycle?button('删除已结束周期',()=>requestEventDeletion('ack_cycle',item),'text danger'):
     item.deletable?button('删除记录',()=>requestEventDeletion('single',item),'text danger'):
     item.deletion_block_reason==='MANUAL_END_AUDIT_RETAINED'?'人工结束留痕，保留记录':item.deletion_block_reason==='ACK_AUDIT_RETAINED'?(item.cycle_summary?
       (item.cycle_summary.ended?'周期引用受保护，暂不可删除':'周期未结束，不可删除'):'知晓审计留存，不可删除'):
@@ -276,19 +278,21 @@ async function requestEventDeletion(scope,item=null){
   const cancel=()=>{$('details-dialog').close();};
   try{
     const plan=await services.eventDeletionPreview(value,token);
+    const wholeCycle=scope==='cycle'||scope==='ack_cycle';
     const finish=()=>{
-      const commit=button(scope==='ack_cycle'?'确认删除周期及确认历史':scope==='single'?'确认删除此条事件':`确认清理 ${plan.count} 条记录`,async()=>{
+      const commit=button(wholeCycle?(plan.ack_count?'确认删除周期及确认历史':'确认删除整个周期'):scope==='single'?'确认删除此条事件':`确认清理 ${plan.count} 条记录`,async()=>{
         if(eventDeletionBusy)return;eventDeletionBusy=true;commit.disabled=true;
         try{const result=await services.eventDelete({...value,revision:plan.revision},token);
           $('details-dialog').close();state.eventOffset=0;state.revision++;await refresh(true);
-          $('refresh-status').textContent=`已删除 ${result.deleted_count} 条已结束事件记录${scope==='ack_cycle'?`及 ${result.deleted_ack_count} 条确认历史`:''}`;
+          $('refresh-status').textContent=`已删除 ${wholeCycle?'整个已结束周期，共 ':''}${result.deleted_count} 条已结束事件记录${wholeCycle&&result.deleted_ack_count?`及 ${result.deleted_ack_count} 条确认历史`:''}`;
         }catch(_){details('删除未完成',[el('p',{text:'记录或权限可能已变化。未自动重试；请刷新后重新预览、确认。'}),button('关闭',cancel)]);}
         finally{eventDeletionBusy=false;commit.disabled=false;}
       },'danger');
-      details(scope==='ack_cycle'?'永久删除已结束周期':scope==='single'?'确认删除历史事件':'最终确认：清理全部已结束事件',[
+      details(wholeCycle?'永久删除已结束周期':scope==='single'?'确认删除历史事件':'最终确认：清理全部已结束事件',[
         el('p',{text:scope!=='all_resolved'?`${item.title} · ${item.id}`:'范围：全部设备、全部时间的可删除已结束记录，包含符合条件的旧版已结束记录；不受当前筛选或分页影响。'}),
         el('p',{text:`预计删除 ${plan.count} 条。数据库硬删除，应用内不可撤销；水质历史、批次及其他业务数据不受影响。`}),
-        ...(scope==='ack_cycle'?[el('p',{text:`同时永久删除该周期的 ${plan.ack_count} 条确认历史及等级关联。此后无法查看该周期的确认时间及当时等级；不会保留可恢复的归档。`})]:[]),
+        ...(wholeCycle?[el('p',{text:plan.ack_count?`同时永久删除该周期的 ${plan.ack_count} 条确认历史及等级关联。此后无法查看该周期的确认时间及当时等级；不会保留可恢复的归档。`:
+          '删除本周期全部等级的原始记录，避免删除后仍留下同一周期。该周期没有人工确认历史；其他风险周期不受影响。'})]:[]),
         ...(plan.legacy_count?[el('p',{text:`其中 ${plan.legacy_count} 条为旧版已结束记录，未经新版规则复核；清理不表示已验证恢复，不补造人工确认。`})]:[]),
         el('div',{class:'event-confirm-actions'},[...(plan.count?[commit]:[]),button('取消',cancel)]),
         ...(!plan.count?[el('p',{text:'没有可删除的已结束事件。'})]:[])]);

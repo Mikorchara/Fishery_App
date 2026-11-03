@@ -1,5 +1,7 @@
 # 独立管理项目路线
 
+2026-11-03：修复同一已结束周期需要删除两次：统一显式整周期删除，保留并发、引用与事务保护，不变更 Schema；Python 791/791、Node 129/129 通过。[说明](deep-dive/EVENT_CYCLE_DELETE_ONCE.md)。
+
 2026-11-03：定位真实QQ两次无回复为工具参数多余与512 Token截断；Management QQ独立预算提升至2048，强化参数Prompt、增加一次性失败提示与终态日志。五轮新审批预算8.06元，旧许可失效；不改Web预算、不自动重试。[说明](deep-dive/QQ_REPLY_FAILURE_FIX.md)。
 
 2026-11-03：选择性同步本地 MP4、可收缩视频双侧面板、首页 AI 优先、紧凑 Tool 授权及 Web 实验评分；原入口与数据路径保留，无数据库迁移。Python 774／774、Node 128／128 通过；真实 Management 联网验收待人工执行。[同步验收](deep-dive/VIDEO_SCORE_SYNC_ACCEPTANCE.md)。

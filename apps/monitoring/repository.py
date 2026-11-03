@@ -356,8 +356,8 @@ class MonitoringRepository:
     @staticmethod
     def _deletion_plan(db, scope, event_id):
         validate_delete(scope, event_id)
-        if scope == 'ack_cycle':
-            return ack_cycle_plan(db, event_id)
+        if scope in ('ack_cycle','cycle'):
+            return ack_cycle_plan(db, event_id,scope=scope)
         all_rows = db.execute("SELECT e.id,e.payload,EXISTS(SELECT 1 FROM alerts a WHERE a.event_id=e.id) AS linked FROM events e ORDER BY e.id").fetchall()
         references = {e.get('superseded_by') for e in (json.loads(r['payload']) for r in all_rows) if e.get('superseded_by')}
         audited = {r[0] for r in db.execute('SELECT event_id FROM event_handling_members')}
@@ -388,7 +388,7 @@ class MonitoringRepository:
                 candidates, plan = self._deletion_plan(db, scope, event_id)
                 if plan['revision'] != revision:
                     raise EventRecordError('EVENT_DELETE_CONFLICT', 409)
-                if scope == 'ack_cycle':
+                if scope in ('ack_cycle','cycle'):
                     ack_count = delete_handling(db, plan)
                 for row in candidates:
                     deleted = db.execute('DELETE FROM events WHERE id=? AND NOT EXISTS(SELECT 1 FROM alerts WHERE event_id=events.id)', (row['id'],)).rowcount

@@ -248,6 +248,45 @@ test('ended ACK cycle deletion previews both counts, cancellation keeps data, ex
   assert.equal(conflict.writes.length,1);assert.match(conflict.node('dialog-title').textContent,/删除未完成/);
 });
 
+test('one ended cycle row is deleted once from detail, with or without ACK and one or two originals',async()=>{
+  for(const [members,acks] of [[2,0],[1,0],[2,2]]){
+    const data=fixture();data.event_management={enabled:true,write_token:'fictional-cycle-token'};
+    const item={...data.events[0],id:'ended-cycle',device_id:'sim-pond-1',channel:'water',
+      title:'溶解氧低',lifecycle_state:'RESOLVED',status:'closed',resolved_at:data.monitoring.observed_at,
+      can_delete_cycle:true,deletable:acks===0,handling:{action_count:acks,history:[]}};
+    const cycle={...item,deletable:false,cycle_summary:{key:'stable-cycle',count:members,
+      detail_event_id:item.id,member_ids:['ended-cycle','lower-grade'].slice(0,members),ended:true,
+      reading_label:'异常时读数',reading:'低氧异常时读数'}};
+    data.events=[item];data.event_cycles=[cycle];const commits=[],previews=[];
+    const p=page(data,async(url,options)=>{
+      if(url.startsWith('/api/bootstrap'))return {ok:true,json:async()=>structuredClone(data)};
+      if(url.startsWith('/api/events?'))return {ok:true,json:async()=>({items:structuredClone(data.event_cycles),total:data.event_cycles.length,limit:50,offset:0})};
+      if(url==='/api/events/'+item.id)return {ok:true,json:async()=>structuredClone(item)};
+      if(url==='/api/events/deletion-preview'){
+        previews.push(JSON.parse(options.body));return {ok:true,json:async()=>({scope:'cycle',count:members,ack_count:acks,revision:'b'.repeat(64)})};}
+      if(url==='/api/events/delete'){
+        commits.push(JSON.parse(options.body));data.events=[];data.event_cycles=[];
+        return {ok:true,json:async()=>({deleted_count:members,deleted_ack_count:acks,scope:'cycle'})};}
+      return {ok:true,json:async()=>({items:[],total:0})};
+    });
+    const walk=n=>[n,...n.children.flatMap(walk)];
+    const find=(root,label)=>walk(root).find(n=>n.tagName==='button'&&n.textContent===label);
+    await p.ready();p.run("location.hash='#events';render()");await p.ready();
+    await p.run('showEventDetail(state.data.event_cycles[0])');
+    await find(p.node('dialog-body'),'删除已结束周期').events.click();await p.ready();
+    assert.equal(previews[0].scope,'cycle');assert.match(p.node('dialog-body').textContent,new RegExp(`预计删除 ${members} 条`));
+    find(p.node('dialog-body'),'取消').events.click();assert.equal(commits.length,0);
+    await p.run('showEventDetail(state.data.event_cycles[0])');
+    await find(p.node('dialog-body'),'删除已结束周期').events.click();await p.ready();
+    await find(p.node('dialog-body'),acks?'确认删除周期及确认历史':'确认删除整个周期').events.click();await p.ready();
+    assert.equal(commits.length,1);assert.equal(commits[0].scope,'cycle');assert.equal(commits[0].revision,'b'.repeat(64));
+    assert.match(p.node('content').textContent,/没有符合条件的记录/);
+    assert.equal(p.run('state.data.event_cycles.length'),0);
+    await p.run('refresh()');await p.ready();assert.match(p.node('content').textContent,/没有符合条件的记录/);
+    p.run("location.hash='#dashboard';render()");assert.doesNotMatch(p.node('content').textContent,/异常时读数/);
+  }
+});
+
 test('EVT wording is consistent in homepage, list, detail and family member rows',async()=>{
   const cases=[
     [{lifecycle_state:'INDETERMINATE',state_reason:'OTHER_RISK_CONDITION_ACTIVE',family_current_code:'OXYGEN_CRITICAL_LOW',family_level_change:'UPGRADED'},'已升级为严重低氧'],
