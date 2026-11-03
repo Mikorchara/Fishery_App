@@ -1,5 +1,7 @@
 # Fishery Management 技术路线说明（组员阅读版）
 
+> 交接版更新：已支持根目录sample.mp4与可收缩视频面板；录像不产生检测。QQ当前为2048输出Token/请求、默认预算8.06元，本次运行到期仍退出。日常命令和首次配置以BUILD_RUN、DEPLOYMENT为准。
+
 版本：初稿 v0.1，2026-10-29。依据 Management 源码 `87f52a7`、现有 M1～M3 文档及用户提供的真实 QQ 运行反馈整理。面向项目讲解、演示和后续 PPT 内容讨论，不是安装教程或生产发布证明。
 
 ## 先用一分钟了解项目
@@ -218,9 +220,9 @@ RunConsent 表示操作者批准本次进程的模型、数据披露、群、成
 | 约束 | 上限或行为 |
 |---|---|
 | 整次运行 | 30分钟、最多5个付费 AI Turn；批准成员共享额度 |
-| 每个 Turn | 最多2次模型请求、每请求512输出 Token、90秒、零自动重试 |
+| 每个 Turn | 最多2次模型请求、每请求2048输出 Token、90秒、零自动重试 |
 | AI 调度 | 1个 AI worker，最多2个等待位置，并限制同会话并发 |
-| 费用预留 | 每轮1.602765元，5轮至少8.013825元；默认总上限8.02元 |
+| 费用预留 | 每轮1.611060元，5轮至少8.055300元；默认总上限8.06元 |
 | 许可复用 | 仅本次进程有效；不能重启恢复旧额度 |
 
 费用数字是保守的本地准入预留，不是实际费用预测，也不是云账单绝对硬上限。失败、取消和送达未知不自动退回许可；BUSY、未授权和重复消息等不应成为新的付费执行。
@@ -250,7 +252,7 @@ SDK 清理失败时，系统保留故障隔离并停止新模型调用，不能�
 .\scripts\dev\启动QQ演示系统.cmd
 ```
 
-两种方式都在 Simulator 窗口选场景。三终端还需在 Bot 窗口人工批准；该入口关闭本次 Web AI，但保留 QQ AI。其他 Web AI 启动方式见 [启动指南](BUILD_RUN.md) 和 [运行维护参考](deep-dive/BUILD_RUN_REFERENCE.md)。
+两种方式都在 Simulator 窗口选场景。三终端还需在 Bot 窗口人工批准；该入口关闭本次 Web AI，但保留 QQ AI。其他 Web AI 启动方式见 [启动指南](BUILD_RUN.md) 和 [运行维护参考](deep-dive/OPERATIONS.md)。
 
 当前本机两终端使用 `outputs/demo-instance`，三终端使用 `outputs/qq-m3-real-test`；它们不是同一份数据库。三终端内部的 Web、Simulator 和 Bot 才绑定到同一隔离实例。
 
@@ -264,7 +266,7 @@ SDK 清理失败时，系统保留故障隔离并停止新模型调用，不能�
 
 七种场景是启动时选择，不是当前运行中的热切换。演示要预留10秒窗口形成和新鲜度变化的等待时间，不应期待选完立刻出现完整新状态。
 
-组员换电脑或移动目录后，应按 [首次配置说明](deep-dive/MANAGEMENT_HANDOFF.md) 重建环境和本机配置，亲自录入凭据。源码、配置、数据库和凭据是不同的交接对象；不要直接打包别人机器的密钥、正式数据库或旧批准账本。
+组员换电脑或移动目录后，应按 [首次配置说明](DEPLOYMENT.md) 重建环境和本机配置，亲自录入凭据。源码、配置、数据库和凭据是不同的交接对象；不要直接打包别人机器的密钥、正式数据库或旧批准账本。
 
 ## 8. 目前完成到什么程度
 
@@ -289,7 +291,7 @@ Prototype 的实验数字不能直接当作 Management 的性能或正确率。Q
 | “Qwen 自动诊断鱼病并处理” | Monitoring 按规则识别异常信号，AI 提供受控解释，不确诊、不执行控制 |
 | “两个渠道各有一套 Agent” | 两个独立进程复用同一套 AI Service 和 Agent 实现，装配权限不同 |
 | “所有模型回答都经过事实核验” | Water 的现场事实绑定本轮 Tool；General 仅有结构和有限内容防护 |
-| “预算8.02元就是实际花费，平台接收就一定送达” | 本地费用预留与最终账单分开，平台接受与客户端显示分开 |
+| “预算8.06元就是实际花费，平台接收就一定送达” | 本地费用预留与最终账单分开，平台接受与客户端显示分开 |
 
 ## 10. 想进一步了解时看哪些文件
 
@@ -297,17 +299,17 @@ Prototype 的实验数字不能直接当作 Management 的性能或正确率。Q
 
 | 想了解什么 | 入口 |
 |---|---|
-| 两个启动入口与组员交接 | [BUILD_RUN](BUILD_RUN.md)、[首次配置](deep-dive/MANAGEMENT_HANDOFF.md) |
+| 启动入口与组员交接 | [BUILD_RUN](BUILD_RUN.md)、[首次配置](DEPLOYMENT.md) |
 | 数据生成与上报 | [generator.py](../simulator/generator.py)、[transport.py](../simulator/transport.py) |
 | 监测统一事实、规则与事件 | [service.py](../monitoring/service.py)、[rules.py](../monitoring/rules.py)、[events.py](../monitoring/events.py) |
 | 数据库只读边界 | [repository.py](../monitoring/repository.py)、[Monitoring 适配](../qq_bot/monitoring_source.py) |
 | Web/QQ 共享 AI 装配 | [AI Service](../ai_service/service.py)、[工具 Registry](../ai_service/business_tools/registry.py) |
 | Hybrid Prompt 与 General/Water 判定 | [channel_hybrid.py](../ai_service/channel_hybrid.py)、[展示合同](../ai_service/channel_presentation.py) |
 | 许可、队列、交付和记忆 | [run_consent.py](../qq_bot/run_consent.py)、[ai_scheduler.py](../qq_bot/ai_scheduler.py)、[ai_delivery.py](../qq_bot/ai_delivery.py)、[conversations.py](../qq_bot/conversations.py) |
-| Management 真实运行装配 | [channel_management_live.py](../ai_service/channel_management_live.py)、[M3 文档](deep-dive/M3_MANAGEMENT_STACK.md) |
-| SDK 清理与资源门禁 | [sdk_resources.py](../ai_backend/sdk_resources.py)、[M1 验收](deep-dive/M1_SHARED_SAFETY_ACCEPTANCE.md) |
+| Management 真实运行装配 | [channel_management_live.py](../ai_service/channel_management_live.py)、[QQ运行合同](deep-dive/QQ_BOT.md) |
+| SDK 清理与资源门禁 | [sdk_resources.py](../ai_backend/sdk_resources.py)、[SDK安全边界](deep-dive/QQ_BOT.md) |
 | Web 知识检索 | [retrieval.py](../knowledge/retrieval.py)、[知识内容说明](deep-dive/KNOWLEDGE_CONTENT.md) |
-| 移植与兼容性依据 | [M2 验收](deep-dive/M2_QQ_HYBRID_OFFLINE_ACCEPTANCE.md) |
+| 移植与兼容性依据 | [QQ集成边界](deep-dive/QQ_BOT.md) |
 
 ### 讲解常用词
 

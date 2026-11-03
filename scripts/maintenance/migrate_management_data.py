@@ -1,7 +1,7 @@
 """MIG-4B: five fixed sources, dry-run by default, Windows no-replace publication.
 
 No credential access, network calls, source writes, initialization or cleanup.
-Run with this project's Python -I -B; see apps/docs/deep-dive/MIG4_DATA_MIGRATION.md.
+Run with this project's Python -I -B; see apps/docs/deep-dive/OPERATIONS.md.
 """
 from __future__ import annotations
 

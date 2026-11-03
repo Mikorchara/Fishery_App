@@ -4,7 +4,7 @@
 
 本指南用于管理平台的代码定位、扩展与验证。当前依赖为 `management_web → ai_service → ai_backend`。旧 Prototype 留在独立仓库，本项目没有 src/fishery_ai，也不依赖它。以下路径以仓库根目录为起点；示例不构成权限或真实请求授权。
 
-先读 [工程规则](../../AGENTS.md)、[结构地图](../STRUCTURE.md)；启动与数据接入见 [BUILD_RUN](../BUILD_RUN.md)，数据合同见 [INTEGRATION](../INTEGRATION.md)。迁移历史见 [R2C-1 记录](research/R2C1B_AI_BACKEND_FORK_MIGRATION_PLAN.md#15-r2c-1e-工程收尾与人工验收)。本指南不复制完整协议、Prompt 或发布 JSON。
+先读 [工程规则](../../AGENTS.md)、[结构地图](../STRUCTURE.md)；启动与数据接入见 [BUILD_RUN](../BUILD_RUN.md)，数据合同见 [INTEGRATION](../INTEGRATION.md)。运行及回滚见 [维护说明](OPERATIONS.md)。本指南不复制完整协议、Prompt 或发布 JSON。
 
 ## 1. 架构与职责
 
@@ -87,7 +87,7 @@ flowchart TD
 
 `get_water_quality_history` 已有默认关闭的独立本地试用范围。以下地图也适用于后续新Tool；不是要求每次都改全部文件。
 
-普通聊天不选择技术性执行Profile。过渡期通过「历史查询」快捷操作，在下一条消息提交 `action="history_query"`，Web薄适配映射到服务器内部历史范围；成功后恢复普通提问，History保留。页面不能提交 `execution_profile` 或预算。历史在Streaming不可用时须由用户主动切Normal。三工具统一Normal候选见 [normal_selection.py](../../ai_service/normal_selection.py) 与 [固定Scope](../../ai_service/resources/assistant_normal_candidate.json)，始终candidate且产品禁止准入，不继承已有两工具/历史单工具的真实资格。后续新工具的“授权”“装配”“精确范围发布”仍分别校验。
+当前Web统一三工具Normal/Streaming由原启动开关、Scope与Policy装配；模型从本次可用工具中选择，页面不要求历史查询快捷动作，也不能提交execution_profile或任意预算。旧单工具资格与历史candidate保留独立身份，不自动扩大其他模型权限。
 
 | 顺序 | 当前文件 / 入口 | 需要考虑的改动 |
 |---|---|---|
@@ -189,7 +189,7 @@ candidate_single_prompt_id = "ASSISTANT_V2@2"
 | ProtocolSpec、请求字段编码 | [backend/protocol_specs.py](../../ai_backend/protocol_specs.py)、[providers.py](../../ai_backend/providers.py)、[Adapter](../../ai_backend/openai_compatible_adapter.py) | `max_tokens`/Thinking/Usage 等编码不授予 capability；固定 Preset 协议须匹配 |
 | Thinking | `assistant_profile()` / Profile 的 ReasoningOptions | 管理 Assistant 固定 OFF；不能只加下拉就开放 ON + Tool |
 | Normal/Streaming | `ExecutionDecision.model_transport`、Web 路由 | 前端选择下一条消息的受控路径，不能提交任意 mode/budget/Prompt。Streaming 不是把 `profile.default_response_mode` 改成 streaming；业务 guard 仍要求正式 Normal 基础 Profile |
-| 输出 tokens | Profile `default_generation`、Backend `effective_options()`；Streaming 发布记录 `max_output_tokens` | Streaming 由 Service 设置 `RuntimeSnapshot.transport_output_token_limit`，Adapter 按 ProtocolSpec 编码；当前 Qwen 管理上限 512/请求。不要把它当成所有 Normal 请求的统一默认 |
+| 输出 tokens | Profile `default_generation`、Backend `effective_options()`；Streaming 发布记录 `max_output_tokens` | Streaming 由 Service 设置 `RuntimeSnapshot.transport_output_token_limit`，Adapter 按 ProtocolSpec 编码；Web默认Streaming 512、Normal 1024；获批可调输出以output_budget和本次revision为准。QQ独立上限2048，不能混用 |
 | Tool / round / request budget | [tool_conversation.py](../../ai_backend/tool_conversation.py) `ToolTurnBudget`、`ToolExecutionMode` | 固定 1/1/2 或 2/2/3，每轮最多一个；选择业务执行模式不等于可随意修改预算 |
 | 整 Turn Deadline / retry | Preset 超时、Service `claim_turn()` / `_execute_claimed_turn()`、[backend/execution.py](../../ai_backend/execution.py) | 覆盖所有模型/Tool与提交检查；当前 Qwen 120秒、retry=0。不是每轮重置一份120秒 |
 | Normal 多轮发布 | [service/execution.py](../../ai_service/execution.py) 与 [assistant_execution.json](../../ai_service/resources/assistant_execution.json) | 管理独立 Scope、数据绑定、flag 与 revision，不处理取消 |
@@ -293,7 +293,7 @@ node --test apps/management_web/tests/*.test.mjs
 
 ## 管理端 Tool 授权与历史候选
 
-[management_policy.py](../../ai_service/management_policy.py) 是管理 Assistant 的授权 owner；`runtime/policy.py` 保留共享旧格式与缺省选择。不存在管理覆盖文件时只读继承，不创建目录/文件；首次明确保存时才独立持有完整选择。设置入口、并发与撤销语义见 [运行说明](../BUILD_RUN.md)，合同见 [集成说明](../INTEGRATION.md#历史-tool-授权与候选边界r2d-1d)。
+[management_policy.py](../../ai_service/management_policy.py) 是管理 Assistant 的授权 owner；`runtime/policy.py` 保留共享旧格式与缺省选择。不存在管理覆盖文件时只读继承，不创建目录/文件；首次明确保存时才独立持有完整选择。设置入口、并发与撤销语义见 [运行说明](../BUILD_RUN.md)，合同见 [集成说明](../INTEGRATION.md)。
 
 新增 Tool 必须分别完成业务Definition/Handler装配、用户Policy授权及维护者精确Scope许可。当前Qwen三工具Normal/Streaming为既有local_experimental，非released；不自动授予新工具、新模型或新预算资格。历史单工具候选/试用合同独立，详见当前BUILD_RUN和发布资源。
 

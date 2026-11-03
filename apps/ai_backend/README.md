@@ -67,7 +67,7 @@ RequestHandle/RequestRegistry 可在构造时固定 `summarize_tool`，只接收
 
 pyproject 明确打包 Backend、AI Service、Monitoring、Simulator、Management Web及业务JSON/静态资源，排除所有apps测试；没有使用宽泛apps.*。新旧平台在同一个wheel分发，但管理Turn不调用旧LLM实现。领域/Knowledge依赖仍在业务侧。
 
-正式PEP517 wheel已用本机缓存的setuptools84.0.0在工作区隔离venv中构建/安装；没有联网或改现有.venv，build-system仍要求setuptools>=68。内容/CRC和隔离导入、Fake流程见 [实施记录§14](../docs/deep-dive/research/R2C1B_AI_BACKEND_FORK_MIGRATION_PLAN.md#14-r2c-1d-phase-ii-管理端整体切换)。不是build_py替代验收。
+正式PEP517 wheel已用本机缓存的setuptools84.0.0在工作区隔离venv中构建/安装；没有联网或改现有.venv，build-system仍要求setuptools>=68。内容/CRC和隔离导入、Fake流程见 [实施记录§14](../docs/deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。不是build_py替代验收。
 
 ## 当前装配与回滚
 
@@ -79,4 +79,4 @@ pyproject 明确打包 Backend、AI Service、Monitoring、Simulator、Managemen
 
 R2C-1E 已完成工程收尾：用户报告 Qwen Normal 水质 Tool / Final、Streaming 水质 + Knowledge / Final 提交，以及模拟来源 / PROTOTYPE 标签正常。它是基本人工观察，未生成新的 Provider 资格记录，回答质量专项审核仍独立进行。迁移主线结束，下一阶段可开展管理业务开发。
 
-仅关闭试用时去掉 trial 启动参数并重启，仍使用本 Backend。代码整体回滚基线为 Phase I `0cf64f6`；应完整撤销 Phase II `a256569` 的切换范围并重启新 epoch，不单独替换 Adapter/Handle，不自动重发，不修改 SQLite、Policy、凭据或报告。本轮只核对回滚方案，不执行回滚；详见 [迁移收尾记录](../docs/deep-dive/research/R2C1B_AI_BACKEND_FORK_MIGRATION_PLAN.md#15-r2c-1e-工程收尾与人工验收)。
+仅关闭试用时去掉 trial 启动参数并重启，仍使用本 Backend。代码整体回滚基线为 Phase I `0cf64f6`；应完整撤销 Phase II `a256569` 的切换范围并重启新 epoch，不单独替换 Adapter/Handle，不自动重发，不修改 SQLite、Policy、凭据或报告。本轮只核对回滚方案，不执行回滚；详见 [迁移收尾记录](../docs/deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。

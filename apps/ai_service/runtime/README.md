@@ -27,4 +27,4 @@ R2D-1G 的 [历史 Tool](../business_tools/water_quality_history.py) 由 bind_to
 
 R2C-1E：用户已报告新 Backend 的 Qwen Normal 水质查询、Streaming 水质 + Knowledge 与最终提交基本网页验收通过。迁移主线已结束；这不替代回答质量专项审核，不增加 Provider 资格或发布范围。Monitoring 领域独立化已由 MIG-1 完成；Knowledge 在 R2D-3B 脱离旧实现，旧 JSON 仅作显式迁移/历史资格夹具。
 
-验证：`python scripts/dev/run_tests.py backend`。当前执行路径、指纹与回滚见 [实施记录](../../docs/deep-dive/research/R2C1B_AI_BACKEND_FORK_MIGRATION_PLAN.md#14-r2c-1d-phase-ii-管理端整体切换)。
+验证：`python scripts/dev/run_tests.py backend`。当前执行路径、指纹与回滚见 [实施记录](../../docs/deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。

@@ -1,56 +1,72 @@
-# 事件族、状态文案、时间筛选与历史清理
+# 事件周期、确认、人工结束与清理
 
-本项目选择性同步 Prototype 的 EVT-1/EVT-2 和文案收尾，保留独立启动器、品牌、业务数据路径及原 AI 权限。来源提交：72795a1、70c4260、1d9d87d；运行不依赖 Prototype。
+这是当前事件合同，合并原生命周期、等级、人工结束和一次删除修复说明。SQLite仍为v2，水质诊断阈值、视觉三窗恢复规则保持原实现。
 
-## 等级关联与显示
+## 一个风险周期一行
 
-同设备、通道、指标、风险方向、规则身份的水质等级组成事件族。低氧三级同族，温度/pH 的偏高和偏低分别管理；视觉 code 和不同设备不合并。各 code 保留事件 ID、首末观测、状态和批次，等级变化不是恢复证明。
+同设备、同指标、同风险类型及规则身份下，稳定risk_family.episode_id关联不同等级code，保留原始事件ID、证据和变化轨迹。页面按稳定周期汇总，不同设备/风险/规则版本不合并；旧legacy-*推断身份不强行归族。
 
-risk_family 通过原入库事务保存周期身份及等级变化证据，保留首次和最近 99 次变化，公开 omitted_transitions。消退后复发形成新周期。旧记录只读保守关联，不伪造缺失历史。
+活动摘要展示当前可靠等级与最近观测；已恢复展示首次/恢复时间和历史最高等级，读数标“异常时读数”。新严重等级出现不证明旧等级已经恢复；降级不是恢复。首页当前异常与最近事件使用同一周期投影。
 
-首页优先展示当前有可靠依据的等级；没有可靠当前等级时显示一个“当前等级未知”的族提示，不把历史最高等级冒充当前结论。事件列表和详情仍保留各等级记录。
+## 观测状态与人工状态分开
 
-| 显示条件 | 文案 |
+| 状态 | 依据 |
 |---|---|
-| 原等级 INDETERMINATE、OTHER_RISK_CONDITION_ACTIVE，当前可靠等级更高且为严重/极低氧 | 已升级为严重低氧／已升级为极低氧 |
-| 其他等级转换或升级方向证据不足 | 同指标等级已变化 |
-| INDETERMINATE，当前明确 offline 或新报文缺失视觉通道 | 监测数据中断 |
-| 其他 INDETERMINATE，包括仅过期但在线、无效、不完整、规则变化和旧记录 | 恢复状态待确认 |
-| ACTIVE 且视觉恢复 CLEAR 计数为 1/2 | 恢复观察中 1/3、2/3 |
-| 其他 ACTIVE | 异常持续 |
-| RESOLVED | 规则条件已消退 |
+| 异常中 | 可靠HIT，或仍在恢复观察中 |
+| 状态待核实 | 缺测、过期、离线、证据不足、旧规则身份不可靠 |
+| 已恢复 | 规则有可靠CLEAR并满足本规则恢复条件 |
+| 已人工结束 | 人工结束旧提醒；原Monitoring状态和证据仍保留 |
+| 已确认/未确认 | 人员知晓当前周期当前等级，不代表风险消退 |
 
-首页、列表、详情及关联成员共用 eventStateName；详情通过 eventStateReasonName 解释原因，保留原因代码。历史 continuity=interrupted 仅说明过去存在不连续，不单独证明当前离线。SIMULATOR 来源和非疾病确诊说明始终保留。
+视觉异常需连续三个完整、可靠、新鲜的CLEAR窗口恢复。缺测、离线、Session变化、部分无信号覆盖不算CLEAR；Session变化打断连续证明。消退只代表未再检出该规则信号，不代表疾病治愈。读时过期投影不回写历史、不伪造恢复时间。
 
-current_data_quality 和 family_level_change 仅为读取投影，不落盘；它们不改变原始证据、时间、code、诊断阈值或状态机。没有 Schema 迁移，user_version 仍为 1。[视觉三窗恢复](EVENT_LIFECYCLE.md)继续有效。
+详情文案按结构化原因区分“已升级为…”、“同指标等级已变化”、“恢复状态待确认”、“监测数据中断”、“规则条件已消退”；不能靠标题字符串猜原因。
 
-## 历史查询
+## ACK
 
-GET /api/events 支持 lookback_minutes=5/10/30/60/all（默认 all），q、severity、status 可组合；limit 默认 50、最大 100，offset 默认 0。
+只在当前有效周期/等级接受“确认已知晓”，由操作者确认。本机未登录，只记录本机操作，不伪造认证工作人员。
 
-范围按事件关注区间相交计算：occurred_at 到 resolved_at；未结束事件保持开放关注区间，所以早先发生的活动或未知事件仍可出现在最近五分钟。未知期间不等于持续检出。旧 closed 记录缺少可靠结束时间时仅在全部记录展示。
+ACK绑定稳定周期、等级序号与grade_token/version和人工revision。同等级HIT保留；升级或等级版本变化重新待确认，旧操作保留。消退后不能新ACK；复发是新周期，不能继承旧确认。失联本身不清除历史确认。
 
-对完整留存集合先筛选再分页，不仅过滤首页最近几条。“全部记录”不包含已经裁剪或删除的数据。
+SQLite独立event_handling、event_actions、event_handling_members保存引用和操作历史；幂等请求ID防重复，事务校验周期/等级/revision。legacy推断身份默认只读。
 
-## 硬删除保护
+## 失联风险人工结束
 
-只有 RESOLVED + closed、具有有效恢复时间、无 alerts 关联且未被其他事件 superseded_by 引用的记录可删除。ACTIVE、恢复观察、未知和恢复证据不明的旧记录均不可删除。
+只有因过期、离线、缺测或无效导致待核实，且同周期没有可靠ACTIVE或恢复观察的风险可操作。详情填写1–200字原因并确认；数据质量告警仍可靠命中时不属此范围。
 
-- 单条删除：一次确认。
-- 清理全部已结束事件：预览与最终确认两步，展示服务端预计数量。
-- 批量范围：全部设备、全部时间的可删除记录，忽略当前筛选和分页。
-- 取消不提交；硬删除没有应用内撤销功能。
+操作追加manual_ends证据与本机来源，不改Monitoring ACTIVE/INDETERMINATE/RESOLVED、不填规则恢复时间、不删alerts/ACK/观测。稳定周期处理整周期，推断旧记录只处理所选原始ID。新可靠HIT、新等级或规则身份变化会重新提醒。
 
-POST /api/events/deletion-preview 只预览；POST /api/events/delete 提交同一 scope/event_id/revision。要求回环来源、允许 Host/Origin、JSON 和当前进程生成的 X-Management-Events 能力令牌。该令牌不是用户身份认证，不向 AI Tool 开放写能力。
+相同请求幂等、人工revision排序、预览和提交CAS、事务重读观测；最多50次，不静默裁审计。不含Snooze、派单或通用Close工作流。
 
-提交在 BEGIN IMMEDIATE 内重新核对状态、alerts/superseded_by 引用和候选原 payload revision；并发变化返回冲突，不自动重试。只删除 events，不删除水质 history、batches、current、Knowledge、Settings、Policy 或 Trace。事件族快照保留历史标识与证据；关联成员列表只列仍存在的记录。
+## 时间与筛选
 
-人工 ACK/Close/Snooze、操作审计和长期归档尚未实现。后续加入人工操作记录时，必须同时调整手动删除与自动留存保护。
+事件列表支持关键词、等级、状态和最近5/10/30/60分钟/全部组合筛选。时间按风险活动区间是否与所选区间相交：开始早但仍持续的事件不会被误排除，已结束需恢复时间与区间相交。查询从服务端完整留存事件投影成周期后筛选/分页，不只合并前端已加载一页。
 
-## 实现与验收入口
+首页当前异常独立于历史时间筛选。无活动异常但可靠观测不足时不显示“全部正常”。保留完整原始记录、来源和原时间，不回算历史。
 
-monitoring/events.py：状态迁移与只读质量投影；event_families.py：等级关联；event_records.py：查询及删除合同；repository.py：事务、保留及引用检查；service.py：统一读取。Web 的 event_api.py、app.py 和 static/ 下对应模块承载门禁与显示。
+## 永久删除
 
-离线入口见 [生命周期文档](EVENT_LIFECYCLE.md#离线验证)。专项包含 test_event_lifecycle、test_event_management、test_event_wording、monitoring-ui.test.mjs 和 view-model.test.mjs；预览助手 apps/management_web/tests/event_preview.py 仅创建临时数据库，不装配 AI、凭据或上报写入口。
+### 单个周期
 
-2026-10-23 同步验收：事件 Targeted Python 32 项、Node 30 项通过；Management 独立完整入口 524 项 Python、106 项 Node 通过，阻断旧 fishery_ai 导入。虚构预览在 1440/1024/900/390px 无页面横向溢出；桌面核对升级详情、保留原等级及批次证据，390px 首页异常概况纵向排列、事件表内部滚动。没有读取或迁移正式业务数据，没有真实 Provider/NPU 请求。启动器、品牌、实例路径及 AI 权限未改动；同步结果等待最终人工验收，尚未提交。
+身份可靠且所有成员均RESOLVED、closed、有有效恢复时间，页面提供“删除已结束周期”。确认框列出全部等级原始记录和ACK历史数量；确认一次后同事务全部删除，避免只删一个等级而同一行还在。
+
+新显式scope=cycle复用原ACK周期事务；旧single与ack_cycle保持兼容。无法可靠归族的旧已结束记录按原单条规则处理，不冒充可靠恢复。
+
+### 批量清理
+
+“清理全部已结束事件”作用于全部设备/全部时间的可删除记录，**忽略当前筛选和分页**；预览数量、二次确认。批量不隐式删除ACK审计。取消不提交。
+
+### 保护与事务
+
+- 活动、恢复观察、状态待核实拒绝；人工结束审计及必要原始记录继续保留，即使后来恢复也不参与本次开放的删除。
+- 预览revision绑定成员、payload和ACK；提交BEGIN IMMEDIATE内重查状态、成员、告警、外部superseded_by与审计引用，不信任前端数量。
+- 外部引用、成员不完整、并发变化或SQL失败拒绝；中途失败整笔回滚，不靠级联删除绕过约束。重复删除已不存在ID返回明确错误，不复活记录或自动重试。
+- 只删除选中周期及明确批准的ACK；不删水质history/current/batches、Knowledge、Settings、Policy、Trace和其他周期。
+
+永久删除在应用内无法撤销。自动300条历史裁剪同样保留活动与审计关联，不应被当作强制清库。升级后重启Web、Ctrl+F5获取新前端。
+
+## API与验证
+
+HTTP只读列表/详情与本机维护API分离；写操作需回环来源、Host/Origin、JSON和本进程X-Management-Events能力令牌。模型没有事件写Tool，这种本机令牌也不是生产用户鉴权。
+
+隔离专项位于monitoring/tests：生命周期、等级、wording、ACK、manual_end、cycle_delete_once；Node monitoring-ui验证详情/取消/一次提交/刷新。完整离线入口见 [维护说明](OPERATIONS.md)。不对真实业务实例运行删除测试。

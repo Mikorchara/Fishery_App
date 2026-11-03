@@ -30,5 +30,4 @@ htmlcov/
 *.pth
 *.onnx
 
-# Local video demonstration asset, never a source artifact
-/sample.mp4
+# sample.mp4 is an intentional demo asset; keep it available for source handoff.

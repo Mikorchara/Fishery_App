@@ -94,7 +94,7 @@ $selectionPlan = .\.venv\Scripts\python.exe scripts/manual_real_tests/run_qualif
 
 其余案例须分别替换 `--case`、重新 Dry-run、使用对应 hash。每个命令只执行一次，不自动重试、补跑或换模型。失败/中断/报告保存失败先盘点安全结果，凭据错误不复制Key或改ACL。临时预览可省略，不写正文；安全报告复用 `outputs/assistant-qualification/`，含真实调用顺序、Result传递、Ledger、Source/Commit、实际编码、清理、Usage及延迟。单案例CLI不经过HTTP；管理HTTP组合路径另有Fake测试，不能宣称已有真实三工具网页资格。
 
-技术结果交回审阅，不自动升级released。三工具本地试用已获本轮用户批准，无须重复研究；原W+K资格不会被改写。管理Streaming资格CLI仍只验证旧两工具，三工具Streaming请按[网页验收步骤](../../apps/docs/deep-dive/R2D2B_UNIFIED_TOOLS.md#离线验证与人工验收)手动测试。没有新Runner、Registry或执行循环，也不按问题关键词路由。
+技术结果交回审阅，不自动升级released。三工具本地试用已获本轮用户批准，无须重复研究；原W+K资格不会被改写。管理Streaming资格CLI仍只验证旧两工具，三工具Streaming请按[网页验收步骤](../../apps/docs/deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)手动测试。没有新Runner、Registry或执行循环，也不按问题关键词路由。
 - 回答质量：单独安排人工抽样；技术 PASS、人工可用性观察和正式 released 是不同证据，不自动转换。
 
-管理启动/回滚见 [BUILD_RUN](../../apps/docs/BUILD_RUN.md#一行式常用命令)。本轮仅离线准备，没有执行以上真实命令。
+管理启动/回滚见 [BUILD_RUN](../../apps/docs/DEPLOYMENT.md)。本轮仅离线准备，没有执行以上真实命令。

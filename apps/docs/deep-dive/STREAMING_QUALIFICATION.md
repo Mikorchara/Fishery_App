@@ -1,8 +1,10 @@
+> 历史技术资格参考：保留固定案例、证据与审批方法，不等于当前源码的新联网许可。日常部署见[部署指南](../DEPLOYMENT.md)，实际工具与预算以当前Scope、资源和Policy为准。
+
 # 管理 Assistant Streaming 资格与本地试用
 
 R2C-1D 更新：当前管理 CLI 使用独立 apps.ai_backend，计划版本为 management-streaming-qualification@2（backend_implementation=apps.ai_backend@1），需重新 dry-run 和逐案例授权。此前三个真实 PASS 报告保留旧 Runtime 归属；迁移阶段以离线等价测试验收，未重跑 Provider 或升级 released。Scope/512/2/2/3/120秒和已有 local_experimental 授权不变。
 
-R2C-1E 更新：用户另行报告独立 Backend 的真实管理网页 Qwen Normal 水质查询、Streaming 水质 + Knowledge 与 Final 提交正常。该基本人工观察记录在 [迁移收尾](research/R2C1B_AI_BACKEND_FORK_MIGRATION_PLAN.md#15-r2c-1e-工程收尾与人工验收)，不是本 CLI 的新资格报告，不补造 run_id 或人工回答质量批准。
+R2C-1E 更新：用户另行报告独立 Backend 的真实管理网页 Qwen Normal 水质查询、Streaming 水质 + Knowledge 与 Final 提交正常。该基本人工观察记录在 [迁移收尾](AI_BACKEND_DEVELOPMENT_GUIDE.md)，不是本 CLI 的新资格报告，不补造 run_id 或人工回答质量批准。
 
 **R2B-5E：三个真实案例技术 PASS；用户已批准 Qwen 精确两工具 local_experimental。默认关闭，人工回答质量待审，非 released。**
 
@@ -94,7 +96,7 @@ SDK 不公开原始 `[DONE]`，只记录 `NOT_OBSERVABLE_BY_SDK`。关闭调用�
 
 启动：`python -m apps.management_web --enable-assistant --assistant-streaming-trial`。启动参数只将本进程冻结配置 enabled 置 true，磁盘仍 false。使用已有 Tool Manager 明确授权精确两工具，不自动改用户 Policy；在管理页选择 Qwen/Streaming，核对 local_experimental、512 tokens、最多三请求并逐次确认。Normal 默认1/1/2；如需其既有多轮可另加 --assistant-multi-round-trial。
 
-网页待人工检查：新问题跟随、向上读历史暂停、编号/键盘跳转、预览原位转 Final、跨模式 History；各请求阶段 Stop、断线和截断撤销；验证只有一条成功回复。失败不自动重发或转 Normal；具体操作见 [BUILD_RUN](../BUILD_RUN.md#r2b-5eqwen-streaming-本地实验)。
+网页待人工检查：新问题跟随、向上读历史暂停、编号/键盘跳转、预览原位转 Final、跨模式 History；各请求阶段 Stop、断线和截断撤销；验证只有一条成功回复。失败不自动重发或转 Normal；具体操作见 [BUILD_RUN](../DEPLOYMENT.md)。
 
 回滚：Stop 后停止自己启动的 Web，去掉 --assistant-streaming-trial，以 `python -m apps.management_web --enable-assistant` 重启（可保留独立 Normal 多轮参数）。新 epoch 撤销旧确认/Session，Streaming 再次拒绝，保留数据库、Policy 和 Credential。Ollama、DeepSeek、评分及三工具 Streaming 未开放，History/真实数据老化与回答质量没有因这次授权获得资格结论。
 

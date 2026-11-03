@@ -1,36 +1,31 @@
 # Fishery Management 文档
 
-这是独立管理项目的文档入口，不需要安装旧 Prototype。MIG-1～MIG-5 的主要迁移与人工验收已完成；旧仓库历史仅作为设计来源，不是运行前提。凭据和真实网页验收完成状态按用户确认记录，不代表新增正式模型资格。
+交接版文档按“上手、使用、开发”阅读。当前事实以源码、固定合同和新验收结果为准；本机研究能力不等于生产发布。
 
-- [使用与学习指南（用户入口）](USER_GUIDE.md)
-- [技术路线说明（组员阅读版）](TECHNICAL_ROUTE_TEAM.md)
-- [技术路线与逐页提纲（PPT Agent 版）](TECHNICAL_ROUTE_PPT_BRIEF.md)
-- [真实设备接入：数据、视频与接口要求（设计初稿）](deep-dive/plan/REAL_DEVICE_INTEGRATION.md)
-- [当前模拟数据格式与传输方式（简略版）](DEVICE_INTERFACE_QUICK.md)
-- [启动指南：普通／带视频的两终端及三终端](BUILD_RUN.md)
-- [本地视频、首页与评分同步验收](deep-dive/VIDEO_SCORE_SYNC_ACCEPTANCE.md)
-- [当前水质实验评分规则与开启方式](deep-dive/EXPERIMENTAL_WATER_SCORE.md)
-- [事件私聊提醒与交付验收](deep-dive/QQ_PRIVATE_EVENT_DELIVERY.md)
-- [QQ回复失败排查、错误提示与2048 Token预算](deep-dive/QQ_REPLY_FAILURE_FIX.md)
-- [组员首次配置与交接](deep-dive/MANAGEMENT_HANDOFF.md)
-- [运行维护、正式实例与开发测试](deep-dive/BUILD_RUN_REFERENCE.md)
-- [两项目启动方式比较与统一边界](deep-dive/LAUNCHER_COMPARISON.md)
-- [目录与职责](STRUCTURE.md)
-- [监测与业务数据合同](INTEGRATION.md)
-- [历史趋势图、归一化与布局](deep-dive/HISTORY_CHART_UI.md)
-- [事件生命周期与首页异常概况](deep-dive/EVENT_LIFECYCLE.md)
-- [事件族、状态文案、筛选与历史清理](deep-dive/EVENT_MANAGEMENT.md)
-- [已结束风险周期一次删除及保护规则](deep-dive/EVENT_CYCLE_DELETE_ONCE.md)
-- [AI Backend 与 Assistant 开发指南](deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)
-- [M1 共享安全基础、兼容性与回滚](deep-dive/M1_SHARED_SAFETY_ACCEPTANCE.md)
-- [M2 独立 QQ Hybrid 离线集成与验收](deep-dive/M2_QQ_HYBRID_OFFLINE_ACCEPTANCE.md)
-- [M3 三终端、独立 Bot、审批与停止](deep-dive/M3_MANAGEMENT_STACK.md)
-- [后续路线](ROADMAP.md)
-- [MIG-3 迁移记录与边界](deep-dive/MIG3_STANDALONE.md)
-- [MIG-4 数据迁移记录与备份边界](deep-dive/MIG4_DATA_MIGRATION.md)
-- [独立发行与实例机制](deep-dive/MANAGEMENT_STANDALONE.md)
-- [知识内容合同](deep-dive/KNOWLEDGE_CONTENT.md)
-- [用户手动真实测试](../../scripts/manual_real_tests/README.md)
-- [工程规则](../AGENTS.md)
+## 组员先看这四份
 
-deep-dive/research/、history/ 和带 R / MIG 阶段编号的说明保留来源脉络；其中“待提交”“未来迁移”等属于当时状态。日常操作以使用指南和 BUILD_RUN 为准。历史资格、人工观察、回答质量与发布许可不能互相替代；实际能力以当前资源与代码为准。
+| 文档 | 解决什么问题 |
+|---|---|
+| [部署与配置](DEPLOYMENT.md) | 新电脑建环境、选实例、配置Web/QQ、离线检查和交接验收 |
+| [日常启动](BUILD_RUN.md) | 两终端/三终端、带视频入口、场景与停止 |
+| [网页使用](USER_GUIDE.md) | 页面、AI工具、事件、知识、设置 |
+| [技术路线（组员版）](TECHNICAL_ROUTE_TEAM.md) | 汇报时如何解释整体系统 |
+
+制作PPT看 [PPT Agent版](TECHNICAL_ROUTE_PPT_BRIEF.md)。对接设备先看 [当前模拟报文简略版](DEVICE_INTERFACE_QUICK.md)，真实设备与视频服务属于 [后续规划](deep-dive/plan/REAL_DEVICE_INTEGRATION.md)。
+
+## 维护和开发
+
+- [运行维护、数据库备份/升级、日志与回滚](deep-dive/OPERATIONS.md)
+- [QQ Hybrid、预算、权限、会话与通知限制](deep-dive/QQ_BOT.md)
+- [事件周期、确认、人工结束与永久删除](deep-dive/EVENT_MANAGEMENT.md)
+- [实验评分规则](deep-dive/EXPERIMENTAL_WATER_SCORE.md)
+- [历史趋势图](deep-dive/HISTORY_CHART_UI.md)
+- [统一监测协议与服务合同](INTEGRATION.md)
+- [模块目录与职责](STRUCTURE.md)
+- [AI Backend与Tool开发](deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)
+- [知识内容、导出与维护](deep-dive/KNOWLEDGE_CONTENT.md)
+- [下一步与已知缺口](ROADMAP.md)
+
+仅资格维护者需要 [Streaming技术资格](deep-dive/STREAMING_QUALIFICATION.md)、[历史Tool技术资格](deep-dive/HISTORY_QUALIFICATION.md) 和 [人工真实资格脚本](../../scripts/manual_real_tests/README.md)。这些历史技术记录不授予当前源码新的联网许可。
+
+重复阶段验收、旧迁移计划和PRE_MIG3副本已从日常docs中清理；当前约束合并进上述主题。原提交留在Git，清理前副本与映射保存在本机outputs中的独立维护目录，不加入交付源码。工程约束见 [AGENTS](../AGENTS.md)。

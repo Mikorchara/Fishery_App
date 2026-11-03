@@ -4,14 +4,14 @@
 
 ```text
 一次性迁移：旧用户 SQLite + 旧 eel_knowledge.json → 备份 / 校验 → 新 SQLite
-正常运行：管理网页 → KnowledgeContentService → apps/knowledge_data/knowledge.sqlite3
+正常运行：管理网页 → KnowledgeContentService → 显式实例的knowledge.sqlite3
                            ↓ 一个不可变索引快照
 AI Knowledge Handler → apps.knowledge.retrieval → 本地 KnowledgeEvidence
 ```
 
-SQLite 是管理端唯一权威文本来源。`apps/knowledge/` 只放程序；运行数据、备份位于 Git 忽略的 `apps/knowledge_data/`，不进入 wheel。管理端正常启动、CRUD、检索均不加载旧 JSON 或 `fishery_ai.knowledge` / 旧 Evidence。旧 Prototype 原实现与资源完全不动。旧 JSON 转换只在显式迁移与历史资格的隔离固定夹具中使用；后者不读取用户知识。
+SQLite 是管理端唯一权威文本来源。`apps/knowledge/` 只放程序；运行数据、备份位于所选实例（旧apps/knowledge_data只是兼容路径），不进入 wheel。管理端正常启动、CRUD、检索均不加载旧 JSON 或 `fishery_ai.knowledge` / 旧 Evidence。旧 Prototype 原实现与资源完全不动。旧 JSON 转换只在显式迁移与历史资格的隔离固定夹具中使用；后者不读取用户知识。
 
-**R2D-3B阶段只验证隔离迁移；R2D-3C已按用户批准完成本项目实际迁移，原数据库和JSON保留。新环境仍需先显式迁移：新库未准备时启动返回 `KNOWLEDGE_MIGRATION_REQUIRED`，不静默建立空库、跳过用户数据或回退旧双来源。**
+**新电脑使用DEPLOYMENT中的显式新实例初始化，可建立空白统一知识库，不需要旧JSON或Prototype。下文旧资料迁移仅供已授权的已有数据维护，不是新部署必经步骤。已有库缺失或损坏仍须停下核查，不能用空库掩盖。**
 
 ## SQLite 格式与版本
 

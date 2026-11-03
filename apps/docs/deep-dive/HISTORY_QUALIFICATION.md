@@ -1,3 +1,5 @@
+> 历史技术资格参考：保留固定案例、证据与审批方法，不等于当前源码的新联网许可。日常部署见[部署指南](../DEPLOYMENT.md)，实际工具与预算以当前Scope、资源和Policy为准。
+
 # Qwen 历史水质 Tool 单案例资格
 
 **当前：固定15个真实样本技术通过，用户已完成真实管理网页基本验收；Qwen Normal历史单工具仍为local_experimental、Web默认关闭、非released。回答质量独立抽样，不阻塞普通功能开发；用户观察不等于正式资格。操作见第9～11节及BUILD_RUN。下文1～8节保留准备/停止记录，不代表永久网络授权。**
@@ -137,7 +139,7 @@ $historyBatch.batch.plans | ConvertTo-Json -Depth 15
 
 普通样本失败保留结果并继续下一固定项；`CREDENTIAL_FILE_ERROR`、零请求preflight、取消、报告/计数异常立即停止。未知请求数用`requests_may_be_unreported=true`，`known_actual_network_requests`仅是下界；不得推断为0、自动resume或从头重跑。先盘点新生成安全报告，再申请剩余顺序的新授权。
 
-技术完成不会自动开放Web。下一轮最小开放改动与当前Normal产品预算编码缺口见[成本审计](research/R2D1F_TOOL_INTEGRATION_COST_AUDIT.md#7-技术通过后的最短本地开放路径)。本轮仍candidate/关闭，不继承旧资格。
+技术完成不会自动开放Web。下一轮最小开放改动与当前Normal产品预算编码缺口见[成本审计](AI_BACKEND_DEVELOPMENT_GUIDE.md)。本轮仍candidate/关闭，不继承旧资格。
 
 离线：`python -m unittest apps.ai_service.tests.test_history_batch apps.ai_service.tests.test_history_qualification`。完整qualification层213项（212通过、1跳过），History Tool/candidate/Policy 38项与FAST164项通过；三单案例及批次Dry-run为0请求。这些结果不构成真实模型稳定性证据。
 
@@ -173,7 +175,7 @@ $historyBatch.batch.plans | ConvertTo-Json -Depth 15
 - 资格CLI继续构造获批的**关闭candidate**配置快照，不把产品local_experimental批准改写成技术/人工资格。其Scope、三个计划hash保持原值；产品revision另行包含发布状态、开关、Policy、设备和epoch。未来再运行仍需新的明确网络授权。
 - Profile切换只影响下一条消息、清除确认，保留成功pairs；pending期间冻结。错误/截断/Stop/Trace失败不提交，History不含Tool协议、Ledger或原始历史数据。
 
-启动、网页步骤与关闭命令以[BUILD_RUN](../BUILD_RUN.md#r2d-1g历史水质单工具本地试用)为唯一操作入口。关闭开关并重启、刷新页面即可回滚；不删除数据库/报告/用户Policy。本轮Fake SDK覆盖实际管理HTTP中的OK/NO_DATA/PARTIAL、真实编码、权限与Scope拒绝、Stop/超时/失败/重放、设备冻结及原六路径；前端覆盖Profile选择与确认/History。最终真实网页验收由用户进行，本轮不自动联网。
+启动、网页步骤与关闭命令以[BUILD_RUN](../DEPLOYMENT.md)为唯一操作入口。关闭开关并重启、刷新页面即可回滚；不删除数据库/报告/用户Policy。本轮Fake SDK覆盖实际管理HTTP中的OK/NO_DATA/PARTIAL、真实编码、权限与Scope拒绝、Stop/超时/失败/重放、设备冻结及原六路径；前端覆盖Profile选择与确认/History。最终真实网页验收由用户进行，本轮不自动联网。
 
 ### 本轮实现与离线结果
 
@@ -194,7 +196,7 @@ $historyBatch.batch.plans | ConvertTo-Json -Depth 15
 
 现移除执行Profile控件和旧 selection state。历史查询为明确的下一条业务操作，显示所需开关、授权、模型和模式；成功后恢复普通提问。失败保留原操作、不自动换模式。配置不可用时确认框与发送同步禁用/清空；revision变更须重新勾选。服务端只接受有限业务action，不允许浏览器指定内部Profile、Scope或预算。
 
-三工具候选 `management-normal-three-tools@1` 使用正式多轮Prompt/History及原Registry/循环，精确Qwen OFF、Normal、2/2/3、1024 tokens、retry=0、120秒。Scope额外绑定历史数据合同和来源版本；candidate、enabled=false，既不加入普通请求，也不开放Streaming。离线Fake证明模型响应可以选择任一工具、按首个真实结果继续选择第二个、提前Final及拒绝第三个调用；不证明真实LLM的选择稳定性。开放条件和启动操作见[BUILD_RUN](../BUILD_RUN.md#r2d-1h可用状态与三工具候选)。
+三工具候选 `management-normal-three-tools@1` 使用正式多轮Prompt/History及原Registry/循环，精确Qwen OFF、Normal、2/2/3、1024 tokens、retry=0、120秒。Scope额外绑定历史数据合同和来源版本；candidate、enabled=false，既不加入普通请求，也不开放Streaming。离线Fake证明模型响应可以选择任一工具、按首个真实结果继续选择第二个、提前Final及拒绝第三个调用；不证明真实LLM的选择稳定性。开放条件和启动操作见[BUILD_RUN](AI_BACKEND_DEVELOPMENT_GUIDE.md)。
 
 离线验收（各层含重叠，不相加）：Backend 175项通过（28.382秒）；随后候选专项7项通过（1.885秒，含追加的JSON不得自行升级/启用门禁）；FAST 165项通过；管理HTTP/API 93项通过；历史/Streaming/批次资格基础设施46项通过；前端Node 60项通过。原六条Normal/Streaming路径与已冻结资格计划哈希对比通过，未改写基线。浏览器Fake SDK经真实HTTP完成历史查询并恢复普通提问；1280×900和390×844下无横向溢出，长禁用原因与输入/发送均未被卡片裁切，页面JS错误为0。Markdown本地链接/锚点、Python/JS/JSON语法、常见敏感模式和diff检查通过。未调用真实Provider/NPU，未更改真实数据、用户授权或现有发布范围。
 | 当前文档 | apps/docs 的BUILD_RUN、HISTORY_QUALIFICATION、INTEGRATION、STRUCTURE、README、AI_BACKEND_DEVELOPMENT_GUIDE；apps/ai_service/runtime/README.md |
@@ -211,4 +213,4 @@ $historyBatch.batch.plans | ConvertTo-Json -Depth 15
 
 用户确认：Qwen在真实管理网页成功选择历史Tool，Monitoring返回实际统计，Tool Execution与Source Gate正常，生成完整Final；管理设置和启动开关可禁用。此处记录用户观察，本轮没有读取真实报告、数据库或私有配置，没有新增qualification_id、人工回答质量批准或released状态。
 
-历史Tool作为可长期维护的有限业务模块保留；模型组合发布、默认开关与用户授权继续分别控制。后续真实连接由用户从[manual_real_tests](../../../scripts/manual_real_tests/README.md)亲自执行，原单案例/批次CLI不搬迁；默认Dry-run，真实执行需要本次计划与明确确认，旧hash不作为永久授权。完整复盘及并发保存问题见[R2D-1最终审计](research/R2D1_TOOL_RETROSPECTIVE_AUDIT.md)。
+历史Tool作为可长期维护的有限业务模块保留；模型组合发布、默认开关与用户授权继续分别控制。后续真实连接由用户从[manual_real_tests](../../../scripts/manual_real_tests/README.md)亲自执行，原单案例/批次CLI不搬迁；默认Dry-run，真实执行需要本次计划与明确确认，旧hash不作为永久授权。完整复盘及并发保存问题见[R2D-1最终审计](AI_BACKEND_DEVELOPMENT_GUIDE.md)。
