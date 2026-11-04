@@ -18,6 +18,7 @@ Fishery_Management/
 │   ├── ai_backend/                通用模型Gateway、SDK、工具循环、取消与资源门禁
 │   ├── monitoring/                观测、规则、事件、Repository、Service、显式迁移
 │   ├── knowledge/                 知识CRUD、检索、导出和显式维护
+│   ├── device_reports/            独立设备报告HTTP接收、校验与专用存储
 │   ├── simulator/                 独立HTTP生产端，不直接写库
 │   ├── qq_bot/                    独立Gateway、权限、会话、预算、交付和通知
 │   └── docs/                      根目录仅保留五份常用文档
@@ -39,6 +40,7 @@ Fishery_Management/
 - Monitoring/Knowledge提供权威数据；网页和Tool共用它们，不各建一份current状态。
 - Simulator只通过带本机令牌的HTTP批次上报，由Monitoring事务写入。
 - QQ独立进程复用相同Service与Backend，通过只读Repository看一个批准实例。Bot退出或SDK隔离不会传播到Web进程。
+- device_reports只写独立报告库，Web以只读方式读取；不写Monitoring、不生成监测事件或AI来源。
 - 视频播放器独立于统计和事件，不推断画面内容。
 
 ## 需要改哪里

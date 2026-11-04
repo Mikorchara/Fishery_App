@@ -28,6 +28,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Fishery management Web (local monitoring, optional Assistant)")
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument('--demo-video',type=Path,help='Explicit local MP4; never observation evidence')
+    parser.add_argument('--simulation-mode',choices=('full','water-only'),default='full')
+    parser.add_argument('--device-report-directory',type=Path)
+    parser.add_argument('--device-report-device-id')
     locations = parser.add_mutually_exclusive_group()
     locations.add_argument('--data-root', type=Path, help='Explicit existing management instance; no workspace fallback')
     locations.add_argument('--user-data', action='store_true', help='Use LOCALAPPDATA/FisheryManagement; explicit opt-in')
@@ -51,6 +54,16 @@ def main(argv=None):
         parser.error(str(error))
     if not 1 <= args.port <= 65535:
         parser.error("port must be between 1 and 65535")
+    report_store=None
+    if args.device_report_directory is not None or args.device_report_device_id is not None:
+        from apps.device_reports.binding import validate_binding
+        from apps.device_reports.storage import ReportStore
+        from apps.device_reports.contracts import ReportError
+        try:
+            validate_binding(args.simulation_mode,args.device_report_directory,args.device_report_device_id)
+            report_store=ReportStore(args.device_report_directory,read_only=True)
+        except (ValueError,ReportError) as error:
+            parser.error(getattr(error,'code',str(error)))
     demo_video=None
     if args.demo_video is not None:
         from .demo_video import LocalDemoVideo
@@ -130,6 +143,7 @@ def main(argv=None):
     if args.enable_assistant:
         from apps.ai_service.settings import ManagementSettingsService
         settings = ManagementSettingsService(ai_options['ai'].backend, paths.settings)
+    if args.simulation_mode!='full':ai_options.update(simulation_mode=args.simulation_mode,device_report_store=report_store,device_report_device_id=args.device_report_device_id)
     if demo_video is not None:ai_options['demo_video']=demo_video
     app = create_app(allowed_hosts=(f"127.0.0.1:{args.port}", f"localhost:{args.port}"),
                      data_service=data_service, ingestion_token=token, knowledge_service=knowledge,

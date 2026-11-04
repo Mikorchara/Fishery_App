@@ -181,11 +181,11 @@
       "apps/qq_bot/live_transport.py": "2806805cb6838735644c2d241f7614e7aaa58b17121d34b1eb2b7c5ce3bdae1f",
       "apps/qq_bot/demo_runtime.py": "a64235054f8ee1f359fa27e0e8ce34d5175dacc5213e2ef4f97d823479089e0b",
       "apps/management_process.py": "9d2dd07caacb9a70e34093a617bcfd6615357f60c4bca396cb787c2fcd1ca915",
-      "apps/management_web/__main__.py": "6783a4883fd0ecbcb6eb24283f8f88a3c4be06f7ea80978288dbc2d0c9e2c4ee",
+      "apps/management_web/__main__.py": "c3f03bd3c6582e82b4ea18c71a46493d1a9192d88396fef6c0ba5077604591e3",
       "apps/ai_service/management_channel_budget.py": "648495ccaacf7bbc7c7e56e44159aa12e264d461cb8cd6852ae4809ae2aaaba9"
     }
   },
-  "scope_sha256": "2b31aa928cbb0fc7783d4b3c458eef04f47118056990f6ca7acfc4a051438147",
+  "scope_sha256": "c034c848c6bc8203c4d1a26e471ab6f2523643af826ac9652a2190dc14887519",
   "old_approvals_accepted": false,
   "real_execution_requires": "CURRENT_PROCESS_OPERATOR_RUNCONSENT"
 }

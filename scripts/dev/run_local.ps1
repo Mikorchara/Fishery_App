@@ -1,4 +1,5 @@
-﻿param(
+﻿param([ValidateSet('full','water-only')][string]$SimulationMode='full', [switch]$InteractiveMode,
+ [string]$DeviceReportDirectory, [string]$DeviceReportDeviceId,
     [ValidateSet('normal','low_oxygen','oxygen_drop_recovery','suspected_disease','reduced_feeding','combined_anomaly','device_offline')]
     [string]$Scenario = 'normal',
     [ValidateRange(1,65535)][int]$Port = 8766,
@@ -21,6 +22,11 @@
 $ErrorActionPreference = 'Stop'
 try {
 if ($InteractiveScenario -and -not $ShowTerminals) { throw 'LOCAL_SCENARIO_MENU_REQUIRES_TERMINALS' }
+if ($InteractiveMode) {
+ do { $choice=Read-Host '运行模式：1. 完整模拟（默认）  2. 设备联调（仅模拟水质）  0. 退出；选择 [1/2/0]' } while ($choice -notin @('','1','2','0'))
+ if ($choice -eq '0') { exit 0 }
+ $SimulationMode=if ($choice -eq '2') {'water-only'} else {'full'}
+}
 if ($Detach) {
     # Keep only the two service consoles visible. No elevated execution/policy bypass.
     $detachedArgs = @('-NoLogo','-NoProfile','-File',('"{0}"' -f $PSCommandPath),
@@ -30,6 +36,9 @@ if ($Detach) {
     }
     if ($DataRoot) { $detachedArgs += @('-DataRoot',('"{0}"' -f $DataRoot)) }
     if ($DemoVideo) { $detachedArgs += @('-DemoVideo',('"{0}"' -f $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DemoVideo))) }
+    $detachedArgs += @('-SimulationMode',$SimulationMode)
+    if ($DeviceReportDirectory) { $detachedArgs += @('-DeviceReportDirectory',('"{0}"' -f $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DeviceReportDirectory))) }
+    if ($DeviceReportDeviceId) { $detachedArgs += @('-DeviceReportDeviceId',$DeviceReportDeviceId) }
     Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $detachedArgs -WindowStyle Hidden -ErrorAction Stop | Out-Null
     exit 0
 }
@@ -52,6 +61,9 @@ if ($DemoVideo) { $launchArgs += @('--demo-video',$ExecutionContext.SessionState
 if ($ScoreTrial) { $launchArgs += '--score-trial' }
 # Approved Qwen unified trial follows History/transport switches in the supervisor.
 # Foreground supervisor owns only its two children; no Provider call on startup.
+$launchArgs+=@('--simulation-mode',$SimulationMode)
+if ($DeviceReportDirectory) { $launchArgs+=@('--device-report-directory',$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DeviceReportDirectory)) }
+if ($DeviceReportDeviceId) { $launchArgs+=@('--device-report-device-id',$DeviceReportDeviceId) }
 & $pythonPath @launchArgs
 $result = $LASTEXITCODE
 if ($result -ne 0 -and $DialogErrors) {

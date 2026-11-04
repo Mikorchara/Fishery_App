@@ -18,7 +18,7 @@ include-package-data = false
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["apps", "apps.ai_backend", "apps.ai_backend.*", "apps.ai_service", "apps.ai_service.*", "apps.knowledge", "apps.knowledge.*", "apps.monitoring", "apps.monitoring.*", "apps.simulator", "apps.simulator.*", "apps.management_web", "apps.management_web.*", "apps.qq_bot", "apps.qq_bot.*"]
+include = ["apps", "apps.ai_backend", "apps.ai_backend.*", "apps.ai_service", "apps.ai_service.*", "apps.knowledge", "apps.knowledge.*", "apps.device_reports", "apps.device_reports.*", "apps.monitoring", "apps.monitoring.*", "apps.simulator", "apps.simulator.*", "apps.management_web", "apps.management_web.*", "apps.qq_bot", "apps.qq_bot.*"]
 exclude = ["*.tests", "*.tests.*", "apps.knowledge_data*", "apps.ai_service.development*"]
 
 [tool.setuptools.exclude-package-data]

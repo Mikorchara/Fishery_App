@@ -23,7 +23,7 @@ def build_suite(selection):
     loader = unittest.TestLoader()
     if selection == "fast":
         return loader.loadTestsFromNames(FAST_MODULES)
-    groups = ("apps/ai_backend/tests", "apps/ai_service/runtime/tests", "apps/ai_service/tests",
+    groups = ("apps/device_reports/tests", "apps/ai_backend/tests", "apps/ai_service/runtime/tests", "apps/ai_service/tests",
               "apps/monitoring/tests", "apps/simulator/tests", "apps/knowledge/tests", "apps/management_web/tests",
               "apps/qq_bot/tests")
     names = tuple(".".join(path.relative_to(ROOT).with_suffix("").parts)

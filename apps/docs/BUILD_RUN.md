@@ -18,7 +18,7 @@
 .\scripts\dev\启动QQ视频演示系统.cmd
 ```
 
-1. 在 **Simulator窗口**选场景，Enter默认正常，0退出；选择前不发送新数据，首个完整窗口约10秒。
+1. 先选运行模式：`1`完整模拟（默认）；`2`设备联调（仅模拟水质）；`0`退出。再在 **Simulator窗口**选场景，Enter默认正常，0退出；选择前不发送新数据，首个完整窗口约10秒。
 2. 打开 http://127.0.0.1:8766 。视频在“视频监控”，两侧数据可收起。右上角切换浅色/深蓝主题。
 3. 三终端需在 **Bot窗口**核对本次模型、群/成员摘要、实例、设备、时间和费用，输入本次 `APPROVE MANAGEMENT <摘要>`。未批准不联网。
 
@@ -32,7 +32,7 @@
 | 6 | 设备离线 | device_offline |
 | 7 | 溶解氧快速下降后逐步回升 | oxygen_drop_recovery |
 
-Management当前入口只有上述场景菜单；Prototype独有的“完整模拟/设备联调”模式尚未同步，不要按另一项目的菜单操作。
+设备联调模式停发模拟视觉；疑似疾病/摄食等视觉参数不生效，水质场景仍生效。四个cmd不会自动开启局域网接收器或猜测设备绑定；选择2但未绑定报告目录时，页面明确显示未接入。真正接设备请按 [设备连接步骤](DEVICE_INTERFACE_QUICK.md) 显式指定目录、设备ID并单独启动接收器。
 
 ## 数据和AI要点
 
@@ -53,8 +53,20 @@ Management当前入口只有上述场景菜单；Prototype独有的“完整模�
 .\scripts\dev\Start-ManagementStack.ps1 -Request "$PWD\outputs\qq-m3-real-config\request.json" -WithBot -NoAssistant -Scenario low_oxygen -OpenBrowser
 ```
 
-需要场景菜单时加 `-InteractiveScenario`；需要视频时加 `-DemoVideo "$PWD\sample.mp4"`；Web评分加 `-ScoreTrial` 并去掉 `-NoAssistant`。`-Port 8767`可改端口，不结束未知Python进程。PowerShell接受相对Request路径，JSON内部仍必须是本机正确的绝对路径。
+需要运行模式菜单时加 `-InteractiveMode`；直接指定模式用 `-SimulationMode water-only`（默认full）。需要场景菜单时加 `-InteractiveScenario`；需要视频时加 `-DemoVideo "$PWD\sample.mp4"`；Web评分加 `-ScoreTrial` 并去掉 `-NoAssistant`。`-Port 8767`可改端口，不结束未知Python进程。PowerShell接受相对Request路径，JSON内部仍必须是本机正确的绝对路径。
 
 **停止：**三终端在最初编排终端Ctrl+C；两终端可在Web或Simulator窗口Ctrl+C。单独关闭Bot不停止其他两项。优先正常停止以保存结果。独立停止、日志与备份见 [维护说明](deep-dive/OPERATIONS.md)。
 
 **事件删除：**列表或详情选择“删除已结束周期”，核对原始记录和ACK历史数量，确认一次即可。活动、恢复观察、状态待核实及人工结束留痕仍受保护。代码更新后重启Web并按Ctrl+F5。
+
+## 已配置QQ的设备联调
+
+先按 [连接步骤](DEVICE_INTERFACE_QUICK.md) 初始化并启动独立接收器；再使用原QQ实例启动三终端：
+
+```powershell
+.\scripts\dev\Start-ManagementStack.ps1 -Request "$PWD\outputs\qq-m3-real-config\request.json" -WithBot -NoAssistant -SimulationMode water-only -DeviceReportDirectory "$PWD\outputs\device-reports" -DeviceReportDeviceId fish-monitor-orin-01 -InteractiveScenario -OpenBrowser
+```
+
+需要录像再加 `-DemoVideo "$PWD\sample.mp4"`。Bot仍单独审批，只读取原授权的模拟水质，不读取开发板报告；不会将开发板检测报告当作QQ规则事件。独立接收器是额外的第四个终端，需单独Ctrl+C关闭。
+
+本次设备接入改变了 Web 启动文件，QQ代码指纹随之更新。已有本机request若提示 `MANAGEMENT_SCOPE_REVIEW_REQUIRED`，应由维护者审查后生成匹配当前准备记录的新request，再Check并重新人工审批；不要复用旧批准或手工关闭指纹检查。本次同步未修改任何已有request或批准。

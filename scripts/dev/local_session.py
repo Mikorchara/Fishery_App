@@ -61,7 +61,9 @@ def require_free_port(port):
 
 
 def commands(python, scenario, port, seed, *, assistant=True, streaming=True, multi_round=True, history=True,
-             data_root=None, user_data=False, demo_video=None, score_trial=False):
+             data_root=None, user_data=False, demo_video=None, score_trial=False, simulation_mode='full',device_report_directory=None,device_report_device_id=None):
+    from apps.device_reports.binding import validate_binding
+    validate_binding(simulation_mode,device_report_directory,device_report_device_id)
     if score_trial and not assistant:raise RuntimeError('SCORE_TRIAL_REQUIRES_ASSISTANT')
     server = [python,'-m','apps.management_web','--port',str(port),'--enable-ingestion']
     if data_root is not None:
@@ -69,6 +71,8 @@ def commands(python, scenario, port, seed, *, assistant=True, streaming=True, mu
     if user_data:
         server += ['--user-data']
     if demo_video is not None:server+=['--demo-video',str(Path(demo_video).absolute())]
+    if simulation_mode!='full':server+=['--simulation-mode',simulation_mode]
+    if device_report_directory is not None:server+=['--device-report-directory',str(Path(device_report_directory).absolute()),'--device-report-device-id',device_report_device_id]
     if assistant:
         server += ['--enable-assistant']
         server += [flag for enabled,flag in ((multi_round,'--assistant-multi-round-trial'),
@@ -76,7 +80,7 @@ def commands(python, scenario, port, seed, *, assistant=True, streaming=True, mu
         if history and (multi_round or streaming):server += ['--assistant-tools-trial']
         if score_trial:server+=['--assistant-score-trial']
     return (server,[python,'-m','apps.simulator','--scenario',scenario,'--server',f'http://127.0.0.1:{port}',
-                    '--seed',str(seed),'--interval','10'])
+                    '--seed',str(seed),'--interval','10',*(['--mode',simulation_mode] if simulation_mode!='full' else [])])
 
 
 def ready(port):
@@ -95,7 +99,7 @@ def run_local(scenario='normal', port=8766, seed=42, *, root=ROOT, python=None,
               assistant=True, streaming=True, multi_round=True, history=True,
               data_root=None, user_data=False, show_terminals=False, open_browser=False, interactive_scenario=False,
               launch=subprocess.Popen, is_ready=ready, sleep=time.sleep, emit=print,
-              browse=webbrowser.open, demo_video=None, score_trial=False):
+              browse=webbrowser.open, demo_video=None, score_trial=False, simulation_mode='full',device_report_directory=None,device_report_device_id=None):
     if interactive_scenario and not show_terminals:
         raise RuntimeError('LOCAL_SCENARIO_MENU_REQUIRES_TERMINALS')
     require_free_port(port)
@@ -108,7 +112,7 @@ def run_local(scenario='normal', port=8766, seed=42, *, root=ROOT, python=None,
     try:
         server,simulator = commands(python or sys.executable,scenario,port,seed,
             assistant=assistant,streaming=streaming,multi_round=multi_round,history=history,
-            data_root=data_root,user_data=user_data,demo_video=demo_video,score_trial=score_trial)
+            data_root=data_root,user_data=user_data,demo_video=demo_video,score_trial=score_trial,simulation_mode=simulation_mode,device_report_directory=device_report_directory,device_report_device_id=device_report_device_id)
         options = dict(cwd=root,env=child_env)
         if show_terminals:
             if os.name != 'nt':
@@ -184,7 +188,10 @@ def console_role(argv):
         raise RuntimeError('INVALID_LOCAL_CONSOLE')
     port = arguments[arguments.index('--port')+1] if role == 'web' else arguments[arguments.index('--server')+1].rsplit(':',1)[1]
     ctypes.windll.kernel32.SetConsoleTitleW('AI 监测系统 · '+('Web' if role == 'web' else 'Simulator')+' · '+port)
-    print('AI 监测系统 · '+('Web 服务' if role == 'web' else '模拟器（每10秒更新水质与视觉数据）'), flush=True)
+    water_only = role == 'simulator' and '--mode' in arguments and arguments[arguments.index('--mode')+1] == 'water-only'
+    print('AI 监测系统 · '+('Web 服务' if role == 'web' else '模拟器（每10秒更新水质）' if water_only else '模拟器（每10秒更新水质与视觉数据）'), flush=True)
+    if water_only:
+        print('设备联调：仅模拟水质，疑似疾病、摄食等视觉场景参数不生效。设备报告由独立接收器提供，不自动生成监测事件。', flush=True)
     print('按 Ctrl+C 或关闭任一窗口，停止本次启动的两个服务。', flush=True)
     try:
         if interactive:
@@ -232,7 +239,16 @@ def main(argv=None):
         parser.add_argument('--no-'+name,action='store_true')
     parser.add_argument('--demo-video',type=Path)
     parser.add_argument('--score-trial',action='store_true')
+    parser.add_argument('--simulation-mode',choices=('full','water-only'),default='full')
+    parser.add_argument('--interactive-mode',action='store_true')
+    parser.add_argument('--device-report-directory',type=Path)
+    parser.add_argument('--device-report-device-id')
     args=parser.parse_args(arguments)
+    from scripts.dev.device_mode import select_mode
+    try:
+        if not select_mode(args):return 0
+    except ValueError as error:
+        parser.error(str(error))
     if not 1 <= args.port <= 65535:
         parser.error('INVALID_LOCAL_PORT')
     if args.interactive_scenario and not args.show_terminals:
@@ -265,7 +281,7 @@ def main(argv=None):
                 streaming=not args.no_streaming,multi_round=not args.no_multi_round,history=not args.no_history,
                 data_root=args.data_root,user_data=args.user_data,show_terminals=args.show_terminals,
                 open_browser=args.open_browser,interactive_scenario=args.interactive_scenario,
-                demo_video=args.demo_video,score_trial=args.score_trial)
+                demo_video=args.demo_video,score_trial=args.score_trial,simulation_mode=args.simulation_mode,device_report_directory=args.device_report_directory,device_report_device_id=args.device_report_device_id)
     except (RuntimeError, OSError, ValueError, SecureFileError, KnowledgeError, ToolPolicyError) as error:
         code = str(error) if isinstance(error, (RuntimeError, ValueError)) else getattr(error, 'code', 'LOCAL_STORAGE_OR_PERMISSION_ERROR')
         print(code+' · '+ERROR_HELP.get(code, '启动已停止。请保留现有数据，核对演示实例或手动运行以查看错误。'),file=sys.stderr)

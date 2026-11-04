@@ -61,8 +61,10 @@ def preflight(*,request=None,data_root=None,port=8766,with_bot=False,offline=Fal
 
 def launch_stack(*,request=None,data_root=None,port=8766,scenario='normal',with_bot=False,
                  offline=False,bot_only=False,seconds=None,no_assistant=False,
-                 interactive_scenario=False,open_browser=False,emit=print,demo_video=None,score_trial=False):
+                 interactive_scenario=False,open_browser=False,emit=print,demo_video=None,score_trial=False,simulation_mode='full',device_report_directory=None,device_report_device_id=None):
     from scripts.dev import local_session
+    from apps.device_reports.binding import validate_binding
+    validate_binding(simulation_mode,device_report_directory,device_report_device_id)
     from scripts.dev.windows_job import own_process_tree
     from scripts.dev.console_job import ConsoleJob
     from scripts.dev.stack_console import stopped
@@ -160,7 +162,7 @@ def launch_stack(*,request=None,data_root=None,port=8766,scenario='normal',with_
                     time.sleep(seconds_to_sleep)
                 result=local_session.run_local(scenario,port,assistant=not no_assistant,
                     data_root=root,show_terminals=True,interactive_scenario=interactive_scenario,
-                    demo_video=demo_video,score_trial=score_trial,
+                    demo_video=demo_video,score_trial=score_trial,simulation_mode=simulation_mode,device_report_directory=device_report_directory,device_report_device_id=device_report_device_id,
                     open_browser=open_browser,launch=launch,sleep=sleep,emit=lambda text:report(dict(code='STACK_WEB_SIMULATOR',message=text)))
     except KeyboardInterrupt:result=0
     except Exception as error:
@@ -205,22 +207,29 @@ def main(argv=None):
     p.add_argument('--interactive-scenario',action='store_true')
     p.add_argument('--open-browser',action='store_true')
     p.add_argument('--demo-video',type=Path);p.add_argument('--score-trial',action='store_true')
+    p.add_argument('--simulation-mode',choices=('full','water-only'),default='full')
+    p.add_argument('--interactive-mode',action='store_true')
+    p.add_argument('--device-report-directory',type=Path)
+    p.add_argument('--device-report-device-id')
     p.add_argument('--stop-directory',type=Path);p.add_argument('--stop-role',choices=('bot','all'),default='all')
     args=p.parse_args(argv)
     try:
         if args.stop_directory:print(json.dumps(request_stop(args.stop_directory,args.stop_role),ensure_ascii=False));return 0
         if not 1<=args.port<=65535:raise RuntimeError('INVALID_LOCAL_PORT')
         if args.seconds is not None and not 1<=args.seconds<=1800:raise RuntimeError('INVALID_RUN_DURATION')
+        from scripts.dev.device_mode import select_mode
+        if not select_mode(args):return 0
         if args.bot_only:args.with_bot=True
         if args.check:
             root,summary=preflight(request=args.request,data_root=args.data_root,port=args.port,with_bot=args.with_bot,offline=args.offline_demo,bot_only=args.bot_only,
                 demo_video=args.demo_video,score_trial=args.score_trial,no_assistant=args.no_assistant)
             print(json.dumps(dict(code='STACK_PREFLIGHT_OK',data_root=str(root),bot=args.with_bot,summary=summary,video_enabled=args.demo_video is not None,
-                score_trial_enabled=args.score_trial),ensure_ascii=False));return 0
+                score_trial_enabled=args.score_trial,simulation_mode=args.simulation_mode,
+                device_reports_bound=args.device_report_directory is not None),ensure_ascii=False));return 0
         return launch_stack(request=args.request,data_root=args.data_root,port=args.port,scenario=args.scenario,
             with_bot=args.with_bot,offline=args.offline_demo,bot_only=args.bot_only,seconds=args.seconds,no_assistant=args.no_assistant,
             interactive_scenario=args.interactive_scenario,open_browser=args.open_browser,
-            demo_video=args.demo_video,score_trial=args.score_trial)
+            demo_video=args.demo_video,score_trial=args.score_trial,simulation_mode=args.simulation_mode,device_report_directory=args.device_report_directory,device_report_device_id=args.device_report_device_id)
     except Exception as error:
         from apps.qq_bot.management_cli import emit
         emit(getattr(error,'code',str(error) if isinstance(error,RuntimeError) else 'STACK_PREFLIGHT_FAILED'));return 1

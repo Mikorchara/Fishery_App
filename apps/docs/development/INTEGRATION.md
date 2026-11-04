@@ -4,7 +4,7 @@
 
 ## 1. 当前执行链
 
-Simulator → 带本机接入令牌的HTTP批次 → MonitoringService → DomainAnalysis/EventService → 单事务Repository。Web和AI Tool使用同一Service读取；QQ是独立进程的显式只读Repository，不复制SQL或规则。Management当前生产源为SIMULATOR，设备报文适配和真实视频/NPU尚未合入。
+Simulator → 带本机接入令牌的HTTP批次 → MonitoringService → DomainAnalysis/EventService → 单事务Repository。Web和AI Tool使用同一Service读取；QQ是独立进程的显式只读Repository，不复制SQL或规则。Monitoring当前观测源仍为SIMULATOR。独立 `apps.device_reports` 已支持开发板报告HTTP接收及专用存储，Web只读展示；不接入Monitoring事件/Tool，真实视频/NPU尚未合入。设备联调启动见 [连接步骤](../DEVICE_INTERFACE_QUICK.md)。
 
 后端apps.ai_backend只处理通用模型协议、执行、工具循环、取消和资源；业务Prompt/Registry/Policy/Source/Commit在apps.ai_service。程序不得导入旧fishery_ai或运行时依赖Prototype路径。
 
@@ -149,3 +149,19 @@ result = monitoring.query_water_history(
 开发上报接口只在显式enable-ingestion、本机Host/Origin/地址与一次性Token有效时启用，Simulator不直接写Repository。客户端不能声明自己是正式传感器。真实生产端需独立身份、质量、时钟、视频与规则证据合同，不能把sample.mp4当现场采样。
 
 简略格式见 [设备接口](../DEVICE_INTERFACE_QUICK.md)，未来设计见 [真实设备规划](../deep-dive/plan/REAL_DEVICE_INTEGRATION.md)。本轮没有实施任何新硬件、写Tool或Schema。
+
+
+## 独立设备报告接入（2026-11-04）
+
+- `apps.device_reports` 选择性复用 Prototype 的 TEXT_PACKAGE_API v1接收机制；端点 `/api/fish/reports`，必须绑定设备ID和专用令牌，默认只监听回环，局域网须显式绑定私网IPv4。
+- 独立 `device-reports.sqlite3` 为报告Schema v1；仅显式初始化、已有文件拒绝覆盖。不更改Monitoring v2、Settings、Policy、规则和事件生命周期。Web使用mode=ro/query_only读取最近20条。
+- 确认持久提交后才返回accepted；重复ID相同内容duplicate，不同内容409；最多5000条，不自动清理。写入失败不假报成功。
+- 四个cmd增加运行模式菜单；`full`保持原行为，`water-only`停止模拟视觉且服务器拒绝混入模拟视觉。绑定报告须显式指定目录和设备；不自动启动LAN监听或改防火墙。
+- 设备原文用纯文本渲染，报告新鲜度阈值120秒，只说明报告时效；不声称连续在线、疾病确诊、可靠恢复或真实视频已接入。
+- 发行白名单新增接收模块和启动辅助文件；不依赖Prototype路径。QQ运行准备记录只刷新Web启动文件的实现摘要及总Scope摘要，candidate/qualification/权限/预算不变，旧本机request需维护者重新核对，新运行仍需人工批准。
+- 回退代码前正常停止接收器和本次Web/Simulator。专用报告库保留；关闭接收器、使用full模式即可停止设备联调，不需要修改或回滚Monitoring数据。未执行真实硬件、QQ或模型联网验收。
+
+
+验证记录：设备/模式专项13项通过；本机独立HTTP进程合成报告accepted→duplicate、仅1条入库并回收接收进程；Node全量130项通过。Python全量804项：802通过，2项启动测试失败（参数连续顺序断言、一次模拟器启动等待超时）；调整cmd参数顺序后，两项与模式专项合计6项复测全部通过，未再次重跑整套804项。此前旧QQ指纹拒绝已通过只更新candidate准备摘要修复；一个撤权测试5秒启动等待曾超时，单独复测及最终全量中的该用例均通过。慢机器启动/异步测试仍存在时间敏感性，未放宽等待或删除断言。
+
+打包白名单/隔离导入与演示启动专项10项通过，PowerShell启动文件及7个文档命令块解析通过，199个本地文档链接有效，pip check和git diff --check通过。日志保留于本次工作区忽略目录 `outputs/device-*.log`；没有修改真实数据库或已有QQ请求/批准，没有连接硬件、QQ或Qwen。正式硬件验收尚未执行。

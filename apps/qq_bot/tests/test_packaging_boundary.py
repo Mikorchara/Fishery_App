@@ -19,9 +19,11 @@ class PackagingBoundaryTests(unittest.TestCase):
                      'ai_backend/sdk_resources.py', 'ai_service/channel_hybrid.py',
                      'management_web/demo_video.py', 'ai_service/score_execution.py',
                      'ai_service/business_tools/water_quality_score.py',
-                     'ai_service/resources/assistant_score_trial.json'):
+                     'ai_service/resources/assistant_score_trial.json',
+                     'device_reports/__main__.py', 'device_reports/storage.py', 'device_reports/binding.py'):
             self.assertTrue((stage/'apps'/name).is_file())
-        for name in ('启动视频演示系统.cmd','启动QQ视频演示系统.cmd'):
+        for name in ('启动视频演示系统.cmd','启动QQ视频演示系统.cmd',
+                     'Start-DeviceReports.ps1','device_report_cli.py','device_mode.py'):
             self.assertTrue((stage/'scripts/dev'/name).is_file())
         self.assertFalse((stage/'sample.mp4').exists())
         for path in stage.rglob('*'):
@@ -33,7 +35,7 @@ from pathlib import Path
 sys.path.insert(0,sys.argv[1])
 root=Path(sys.argv[1])
 for name in ('apps.qq_bot.hybrid_run','apps.qq_bot.gateway','apps.ai_service.service','apps.monitoring.repository',
-             'apps.management_web.demo_video','apps.ai_service.score_execution'):
+             'apps.management_web.demo_video','apps.ai_service.score_execution','apps.device_reports.__main__'):
     module=importlib.import_module(name)
     assert Path(module.__file__).is_relative_to(root)
 assert not any(n=='fishery_ai' or n.startswith('fishery_ai.') for n in sys.modules)

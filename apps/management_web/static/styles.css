@@ -298,3 +298,5 @@ body:has(.video-workspace) main{padding-top:20px}
  .video-stage-hint{max-width:100px;line-height:1.6}
  .video-stage-empty .video-placeholder{min-height:240px}
 }
+
+.device-report{margin-top:12px;border-top:1px solid var(--border);padding-top:12px}.device-report-text{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}.device-report summary{cursor:pointer}
