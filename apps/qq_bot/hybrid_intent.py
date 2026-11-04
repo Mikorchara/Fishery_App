@@ -6,6 +6,7 @@ from apps.ai_service.channel_identity import INTRODUCTION
 from apps.ai_backend.model_gateway import GatewayError
 from .hybrid_conversations import valid_question
 from .intent import Intent
+from .service import is_current_query
 
 CONTRACT = 'qq-hybrid-routing@1'
 
@@ -22,6 +23,7 @@ class HybridIntent:
 def classify(text, *, topic=None, command_priority=True):
     if not valid_question(text):raise GatewayError('INVALID_HYBRID_QUESTION')
     text = text.strip()
+    if command_priority and is_current_query(text):return Intent('fixed')
     head = text.split(maxsplit=1)[0]
     if command_priority and head.lstrip('/').lower() in (
             'help', '帮助', '当前水质', '历史水质', '知识', '当前异常', '问ai', 'ai'):

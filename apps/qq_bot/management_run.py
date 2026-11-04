@@ -11,10 +11,15 @@ from .management_config import ROOT, PREPARATION, RISK, load_request
 from .trial_configuration import read_json
 from .contracts import BotError
 from apps.ai_service.management_channel_budget import CHANNEL_BUDGET, OUTPUT_TOKENS
+from .management_limits import ManagementRunLimits
 
 
 class ManagementLedger(HybridLedger):
     output_token_limit=OUTPUT_TOKENS
+    limits_type=ManagementRunLimits
+
+    def quota_limit_code(self):
+        return 'RUN_BUDGET_EXHAUSTED' if self.limits.budget_only else 'RUN_TURN_LIMIT'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -23,6 +28,7 @@ class ManagementLedger(HybridLedger):
 
 class ManagementRun(HybridRun):
     channel_budget=CHANNEL_BUDGET
+    quota_feedback=True
 
     def __init__(self, request, directory, *, async_client_factory=None, clock=None, monotonic=None):
         import time

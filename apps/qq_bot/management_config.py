@@ -12,7 +12,7 @@ from apps.ai_service.runtime.assistant import assistant_profile
 from apps.ai_service.runtime.release_contracts import _hash
 from .conversations import ConversationOptions
 from .contracts import BotError
-from .run_consent import RunLimits
+from .management_limits import ManagementRunLimits as RunLimits
 from .trial_configuration import TrialInputs, inputs_snapshot as trial_inputs_snapshot, local_path, read_json
 from contextlib import contextmanager
 

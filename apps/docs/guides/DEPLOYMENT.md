@@ -91,7 +91,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Check 未通过，禁止继续 Run' }
 
 预期 `STACK_PREFLIGHT_OK` / `MANAGEMENT_QQ_CHECKED_APPROVAL_REQUIRED`；`credential_checked=false`、`database_opened=false`、`network_requests=0`。复核 Provider、Preset、模型、实例、设备、群/成员摘要和 Scope。
 
-当前固定模型为 `qwen3.8-flash` / `dashscope-qwen38-flash-r1`；5 Turn、1800 秒、每轮最多2次请求、每请求2048输出Token、每轮90秒、零重试。每轮保守预留1.611060元，五轮最低8.055300元，默认批准总预算8.06元；**不是实际费用预测或云账单硬上限**。普通自然语言也可能收费。
+当前固定模型为 `qwen3.8-flash` / `dashscope-qwen38-flash-r1`；新配置默认5 Turn、1800秒。每轮最多2次请求、每请求2048输出Token、每轮90秒、零重试。每轮保守预留1.611060元，五轮最低8.055300元，默认批准总预算8.06元；**不是实际费用预测或云账单硬上限**。展示时可显式采用预算模式和较长期限，见[启动指南](../BUILD_RUN.md)，仍须重新人工审批。普通自然语言也可能收费；`/当前水质`、`查询当前水质`、`查询水质`为不调用模型的直接查询。
 
 ### 4.2 操作者亲自配置密钥
 

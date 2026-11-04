@@ -17,9 +17,11 @@ from .channel_hybrid import INSTRUCTION as HYBRID_INSTRUCTION
 from .management_channel_budget import CHANNEL_BUDGET, OUTPUT_TOKENS, reservation_per_turn
 
 CONTRACT = 'management-qq-hybrid-process-run@1'
-PROMPT_ID = 'QQ_MANAGEMENT_HYBRID_DIALOGUE@4'
+PROMPT_ID = 'QQ_MANAGEMENT_HYBRID_DIALOGUE@5'
 INSTRUCTION = HYBRID_INSTRUCTION + (
-    '补充执行约束：get_current_water_quality的arguments必须严格为字符串"{}"；'
+    '工具调用示例：调用get_current_water_quality()，没有任何形参。'
+    '传给函数的JSON参数对象必须恰好是{}，不能再包一层arguments或parameters，不能添加空字段。'
+    '合法工具调用格式示例：{"name":"get_current_water_quality","arguments":"{}"}。'
     '不要传入device_id、问题、指标或任何其他字段，设备已由服务器绑定。'
     'Tool返回后不要复述整个报文，不输出长篇报告或推理过程；仅返回规定的water plan JSON。'
     'general仅简短中文，water仅选择指标ID、已有规则code与建议code，不新增事实数值。')
@@ -33,16 +35,21 @@ def prepared_scope(options):
              'apps/qq_bot/management_config.py', 'apps/qq_bot/management_cli.py',
              'apps/qq_bot/live_transport.py', 'apps/qq_bot/demo_runtime.py',
              'apps/management_process.py', 'apps/management_web/__main__.py',
-             'apps/ai_service/management_channel_budget.py')
+             'apps/ai_service/management_channel_budget.py', 'apps/qq_bot/management_limits.py')
     # Runtime authorization remains enforceable from an installed Wheel without
     # source-only PowerShell scripts. Distribution launchers have a separate
     # allowlist/manifest and cannot mint a permit or bypass the CLI approval.
     return {**base, 'contract': CONTRACT, 'environment': 'EXPLICIT_MANAGEMENT_EXPERIMENT',
             'runtime':{**base['runtime'],'prompt_id':PROMPT_ID,'prompt_sha256':_hash(INSTRUCTION)},
             'execution':{**base['execution'],'max_output_tokens':OUTPUT_TOKENS},
+            'process':{**base['process'],'max_seconds':28800,'max_turns':None,
+                       'turn_bound':'EXPLICIT_CAP_OR_FLOOR_APPROVED_BUDGET_DIV_RESERVATION',
+                       'max_budget_cny':'2000'},
             'cost':{**base['cost'],'output_tokens_per_request':OUTPUT_TOKENS,
                     'reservation_cny':str(reservation_per_turn()),'reservation_per_turn_cny':str(reservation_per_turn())},
             'approval': 'PROCESS_NONCE_OPERATOR_RUNCONSENT_GENERAL_RISK@1',
+            'run_limits': {'contract':'management-budget-bounded-run@1','optional_turn_cap':True,
+                           'max_seconds':28800,'max_budget_cny':'2000','refund':False},
             'failure_notice':'TWO_FIXED_ERRORS_PASSIVE_ONCE_NO_HISTORY@1',
             'publication': 'OPERATOR_APPROVED_GENERAL_RESIDUAL_RISK',
             'websocket_dependency': 'websockets==15.0.1',

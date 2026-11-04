@@ -16,7 +16,7 @@ from .service import plain
 from .transport import QQAPI
 
 FAILURE_MESSAGES={
-    'INVALID_TOOL_ARGUMENTS':'本次查询未完成：AI生成的工具参数不符合要求，未取得有效结果。没有自动重试。',
+    'INVALID_TOOL_ARGUMENTS':'AI 本次未能正确发起查询，没有自动重试。请发送 /当前水质，直接获取系统读数，不调用模型。',
     'ASSISTANT_RESPONSE_TRUNCATED':'本次查询未完成：AI回答达到输出上限而被截断，未发送不完整的水质结论。没有自动重试。',
 }
 

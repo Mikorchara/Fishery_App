@@ -108,9 +108,13 @@ class RunLedger:
     permanently poisons this Run; reserved capacity is never refunded.
     """
     output_token_limit=512
+    limits_type=RunLimits
+
+    def quota_limit_code(self):
+        return 'RUN_TURN_LIMIT'
 
     def __init__(self,directory,*,scope_sha256,bindings_sha256,limits=RunLimits(),clock=None,monotonic=time.monotonic):
-        if type(limits) is not RunLimits:raise BotError('INVALID_RUN_LIMITS')
+        if type(limits) is not self.limits_type:raise BotError('INVALID_RUN_LIMITS')
         self.reservation_per_turn=cost_reservation(output_tokens=self.output_token_limit)
         if money(limits.total_budget_cny)<self.reservation_per_turn*limits.max_turns:
             raise BotError('RUN_BUDGET_INSUFFICIENT')
@@ -192,7 +196,7 @@ class RunLedger:
     def can_admit(self):
         self.check()
         with self._lock:
-            if self._turns>=self.limits.max_turns:raise BotError('RUN_TURN_LIMIT')
+            if self._turns>=self.limits.max_turns:raise BotError(self.quota_limit_code())
             if self._reserved+self.reservation_per_turn>money(self.limits.total_budget_cny):raise BotError('RUN_BUDGET_EXHAUSTED')
 
     def remaining(self):
@@ -209,7 +213,7 @@ class RunLedger:
                 self._check_fast()
                 if message_key in self._messages:
                     raise BotError('RUN_MESSAGE_ALREADY_USED' if self._messages[message_key]==fingerprint else 'RUN_MESSAGE_CONFLICT')
-                if self._turns>=self.limits.max_turns:raise BotError('RUN_TURN_LIMIT')
+                if self._turns>=self.limits.max_turns:raise BotError(self.quota_limit_code())
                 if self._reserved+self.reservation_per_turn>money(self.limits.total_budget_cny):raise BotError('RUN_BUDGET_EXHAUSTED')
                 self._turns+=1;self._reserved+=self.reservation_per_turn;self._messages[message_key]=fingerprint
                 sequence=self._turns

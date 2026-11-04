@@ -72,14 +72,18 @@ class OfflineQQAIRouter:
             except BotError as error:
                 # Only explicit AI-authorized users get safe busy/disabled errors.
                 # Replays, identity denial and transport failures are never replied to twice.
-                if error.code not in ('BUSY','AI_SESSION_BUSY','AI_DISABLED'):
+                if error.code not in ('BUSY','AI_SESSION_BUSY','AI_DISABLED','RUN_TURN_LIMIT','RUN_BUDGET_EXHAUSTED'):
+                    return error.code,None
+                if error.code in ('RUN_TURN_LIMIT','RUN_BUDGET_EXHAUSTED') and not getattr(self.coordinator.session_run,'quota_feedback',False):
                     return error.code,None
                 if error.code!='AI_DISABLED':self.coordinator._permission(message)
                 result=self.adapter.receive(raw,transport_app_id=transport_app_id)
                 if result.reply is None:return result.code,None
                 text={'BUSY':'AI_BUSY：队列已满，请稍后发送新消息。',
                     'AI_SESSION_BUSY':'AI_SESSION_BUSY：当前会话已有任务，请等待本轮结束。',
-                    'AI_DISABLED':'AI_DISABLED：未启用真实AI调用。'}[error.code]
+                    'AI_DISABLED':'AI_DISABLED：未启用真实AI调用。',
+                    'RUN_TURN_LIMIT':'本次 AI 回答额度已用完。仍可发送 /当前水质 直接查询；继续 AI 对话需重新批准运行。',
+                    'RUN_BUDGET_EXHAUSTED':'本次 AI 预算预留已用完。仍可发送 /当前水质 直接查询；没有继续扣费或自动续额。'}[error.code]
                 return self._fixed(message,transport_app_id,text)
         result=self.adapter.receive(raw,transport_app_id=transport_app_id)
         if result.reply is None:return result.code,None

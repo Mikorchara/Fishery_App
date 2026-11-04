@@ -40,7 +40,8 @@
 - 本地录像标为LOCAL VIDEO，与SIMULATOR水质/视觉、事件和时间独立；不做实时检测或NPU推理。
 - 两个视频入口显式启用Web实验评分。还须在设置勾选“水质实验评分”并确认本次模型发送。原无视频三终端关闭Web AI；QQ始终只有当前水质只读Tool。
 - QQ群中真正@机器人，可问“什么是溶解氧？”、“现在水质怎么样？”、“那溶解氧呢？”。`/清空会话`只清自己的记忆。普通自然语言可能收费。
-- 当前QQ批准最长30分钟、5 Turn、每请求2048输出Token、最多2请求/Turn、90秒、零重试；总预算8.06元，不是云账单硬上限。**本次运行到期Bot会退出**，不会自动续批；Web/Simulator可继续运行。
+- 展示时直接发送 `@机器人 /当前水质`、`@机器人 查询水质` 或 `@机器人 查询当前水质`，由系统直接查数据，不调用模型、不扣AI轮数。只有这几个明确指令走直接查询；`/问AI 查询水质`仍调用模型。
+- 新配置仍默认30分钟、5轮、预算8.06元。Management现支持预算模式：request的`limits.max_turns`设为`null`，以明确批准的总预算决定可用轮数。例如`seconds: 7200`、`total_budget_cny: "100.00"`可预留62轮，运行2小时；不是预估会花100元。每轮最多2请求、2048输出Token/请求、90秒、零重试，失败仍消耗许可。**运行到期Bot会退出**，不自动续批；Web/Simulator可继续运行。预算不是云账单硬上限。
 - 新配置默认无事件通知。已受控绑定接收人并另行批准时，只向已验证好友发指定设备的SIMULATOR新异常、升级和可靠消退；私聊通知不是私聊AI问答。详见 [QQ合同](deep-dive/QQ_BOT.md)。
 
 ## 检查、指定场景和停止
@@ -70,3 +71,14 @@
 需要录像再加 `-DemoVideo "$PWD\sample.mp4"`。Bot仍单独审批，只读取原授权的模拟水质，不读取开发板报告；不会将开发板检测报告当作QQ规则事件。独立接收器是额外的第四个终端，需单独Ctrl+C关闭。
 
 本次设备接入改变了 Web 启动文件，QQ代码指纹随之更新。已有本机request若提示 `MANAGEMENT_SCOPE_REVIEW_REQUIRED`，应由维护者审查后生成匹配当前准备记录的新request，再Check并重新人工审批；不要复用旧批准或手工关闭指纹检查。本次同步未修改任何已有request或批准。
+
+## 本机模型排查（可选）
+
+以下入口只使用新建模拟实例，不连接QQ、不发送群消息。默认离线检查；加`--run`须在终端另行批准，才从Management私有凭据存储请求Qwen。每批1～20题，默认6题、最多12次HTTP，失败停批、不自动重试。结果在`outputs/provider-checks/`；没有QQ客户端验收含义。
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 -I -B scripts/dev/check_qq_provider.py
+.\.venv\Scripts\python.exe -X utf8 -I -B scripts/dev/check_qq_provider.py --run --cases 6
+```
+
+若报`PROVIDER_CREDENTIAL_UNAVAILABLE_NO_REQUESTS`，在此前能正常调用Web/Bot的Windows账号终端运行；不要复制密钥到命令行，也不要放宽凭据目录权限。

@@ -2,7 +2,13 @@
 from apps.monitoring.contracts import METRICS
 from apps.ai_service.business_tools.current_water_quality import project_water_tool
 
-HELP = 'Management QQ 离线候选：/当前水质、/帮助；Hybrid 仅供 Fake 验收。\n不支持 Knowledge、历史、事件或写操作。'
+HELP = ('鳗鲡养殖智能体：/当前水质、查询当前水质、查询水质是直接只读查询，不调用模型。'
+        '\n其他自然语言仅在本次 AI 授权有效时调用模型；不支持切换设备或写操作。')
+
+
+def is_current_query(text):
+    """Exact no-argument aliases only; no fuzzy matching or device extraction."""
+    return text.strip().rstrip('。.!！?？') in ('查询当前水质', '查询水质')
 
 def plain(value, limit=350):
     text = ''.join(c for c in str(value).replace('@', '＠') if c.isprintable() or c == '\n')
@@ -20,7 +26,8 @@ class ReadOnlyQueries:
         self._instance_id = instance_id
 
     def execute(self, message, access):
-        pieces = message.content.lstrip('/').split(maxsplit=1)
+        content = '/当前水质' if is_current_query(message.content) else message.content
+        pieces = content.lstrip('/').split(maxsplit=1)
         command, argument = pieces[0], pieces[1] if len(pieces) == 2 else ''
         if command.lower() in ('help','帮助') and not argument:
             return 'OK', HELP

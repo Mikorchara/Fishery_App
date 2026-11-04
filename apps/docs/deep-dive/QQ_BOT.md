@@ -26,7 +26,9 @@ Chat 展示是同轮可信事实与经校验解释的投影，不重新查询/�
 
 合同为 `management-qq-hybrid-process-run@1`，准备资源仍为 candidate、qualification_id=null。不是 released，也不继承 Prototype 或旧实验批准。人工本次审批派生不可反序列化的内部许可与 TurnLease。
 
-当前固定 `dashscope-qwen38-flash-r1` / `qwen3.8-flash`；最长1800秒、5 Turn、最多10请求、2048输出Token/请求、90秒/Turn、零重试，1 worker、2等待位置。每轮保守预留1.611060元，默认总预算8.06元。准入成功后失败、取消、拒绝或未知送达不退款；BUSY与未授权不扣费。额度不是云端最终账单硬上限。
+当前固定 `dashscope-qwen38-flash-r1` / `qwen3.8-flash`；新配置默认1800秒、5 Turn、8.06元。Management独立额度合同`management-budget-bounded-run@1`支持显式轮数（1～1000）或`max_turns:null`预算模式；后者以`floor(总预算/1.611060)`计算有限容量，不再叠加5轮限制。运行期限上限28800秒、预算上限2000元，必须由本次启动摘要重新人工批准；不扩展旧FAST/双轮合同。
+
+每请求2048输出Token、90秒/Turn、最多2请求/Turn、零重试，1 worker、2等待位置。每轮保守预留1.611060元，100元可预留62轮；不是实际费用预测。准入成功后失败、取消、拒绝或未知送达不退款；BUSY与未授权不扣费。额度不是云端最终账单硬上限。原子账本、跨进程消费保护及最后一个已预留任务的完成规则不变。
 
 批准绑定当前进程、源码 Scope、Prompt、Tool、预算、成员、实例和设备。独占锁与写前 fsync 账本防止批准被多个进程消费；复制文件或重启不能恢复旧额度。权限、Scope、绑定或所有权变化失效，严重 SDK/账本故障停止 AI。
 
@@ -64,6 +66,7 @@ Chat 展示是同轮可信事实与经校验解释的投影，不重新查询/�
 | AI_ADMITTED | 仅准入，不是执行/回复成功 |
 | AI_TASK_FINISHED | 查看 backend、交付与错误码；不自动再发相同问题补偿 |
 | INVALID_TOOL_ARGUMENTS | 参数不符合当前工具（仅{}），不绕过参数验证 |
+| RUN_TURN_LIMIT / RUN_BUDGET_EXHAUSTED | 本次批准轮数/预算已用完；给授权成员一次明确提示。有效运行期间仍可用`/当前水质`，不自动续额 |
 | ASSISTANT_RESPONSE_TRUNCATED | 输出截断；最多一次固定失败提示，不发布残缺正文、不成功提交历史 |
 | QQ_REPLY_API_ACCEPTED | QQ接受被动回复；客户端是否显示需人工确认 |
 | DELIVERY_UNKNOWN | 不重发、不追加成功历史；保守消耗本轮额度 |
@@ -72,5 +75,13 @@ Chat 展示是同轮可信事实与经校验解释的投影，不重新查询/�
 | MANAGEMENT_BOT_REPORT_SAVED | 报告落盘；还须核对结果中的backend、SDK、交付、历史和额度 |
 
 原无回复问题曾由多余Tool参数与512输出Token截断引起；Management独立升至2048并有终态状态和一次性安全失败提示。Web输出预算没有因此改变。错误提示只在可安全发送时提交一次，不保证所有故障都能回群通知。
+
+2026-11-04复核：用户提供的5轮中两次失败，脱敏Trace均为`definition / UNEXPECTED_ARGUMENTS`，分别19/14字节、各1个字段；没有记录字段名，不能推测具体参数。五轮SDK均CLOSED且线程已退出，未发现SDK卡死证据。Management Prompt更新为`QQ_MANAGEMENT_HYBRID_DIALOGUE@5`并增加空参数示例；仍拒绝任意多余字段，不保证仅靠Prompt消除模型错误。
+
+展示保障：精确的“查询水质”“查询当前水质”（允许末尾句读）作为固定命令别名，复用原权限/限流/只读查询与单次回复Owner，不调用模型、不提交AI历史。带额外设备或其他内容不匹配；显式`/问AI`仍走Agent。错误回复提供`/当前水质`替代入口，不自动重试。共享Web Prompt、Tool定义与执行循环不变。
+
+本次变更刷新Management候选Scope及实现摘要，资格仍为candidate。旧批准不可复用；本机request需备份后更新Scope和明确的limits，再Check/重新审批。离线回归不能证明真实模型成功率；本机有限批测见启动指南。
+
+验证：2026-11-04完整独立Python回归811/811、Node 130/130通过；新增额度/固定查询及本机批测专项通过。批测CLI以MockTransport完成两题、四次内存HTTP、零QQ发送；真实Qwen尚未复测，自动化进程的凭据接口返回`CREDENTIAL_FILE_ERROR`，未绕过保护读取密钥。完整日志为`outputs/test-tmp/qq-demo-regression-final-20261104.log`（本机输出、不随Git交付）。
 
 停止与报告路径见 [维护与回滚](OPERATIONS.md)。官方平台权限、可达性和密钥是否有效不能由离线 Check 证明；实际联网只能由操作者另行批准。
