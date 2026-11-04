@@ -1,6 +1,6 @@
 # 日常启动
 
-在 **Fishery_Management 根目录**打开PowerShell。新电脑先完成 [部署与配置](DEPLOYMENT.md)，已有配置的机器直接选一个入口。启动前正常停止上一次演示。
+在 **Fishery_Management 根目录**打开PowerShell。新电脑先完成根目录的 [开始使用](../../开始使用.md)，已有配置的机器直接选一个入口。启动前正常停止上一次演示。
 
 ## 四个入口
 

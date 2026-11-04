@@ -1,4 +1,4 @@
-> 历史技术资格参考：保留固定案例、证据与审批方法，不等于当前源码的新联网许可。日常部署见[部署指南](../DEPLOYMENT.md)，实际工具与预算以当前Scope、资源和Policy为准。
+> 历史技术资格参考：保留固定案例、证据与审批方法，不等于当前源码的新联网许可。日常部署见[部署指南](../guides/DEPLOYMENT.md)，实际工具与预算以当前Scope、资源和Policy为准。
 
 # Qwen 历史水质 Tool 单案例资格
 
@@ -175,7 +175,7 @@ $historyBatch.batch.plans | ConvertTo-Json -Depth 15
 - 资格CLI继续构造获批的**关闭candidate**配置快照，不把产品local_experimental批准改写成技术/人工资格。其Scope、三个计划hash保持原值；产品revision另行包含发布状态、开关、Policy、设备和epoch。未来再运行仍需新的明确网络授权。
 - Profile切换只影响下一条消息、清除确认，保留成功pairs；pending期间冻结。错误/截断/Stop/Trace失败不提交，History不含Tool协议、Ledger或原始历史数据。
 
-启动、网页步骤与关闭命令以[BUILD_RUN](../DEPLOYMENT.md)为唯一操作入口。关闭开关并重启、刷新页面即可回滚；不删除数据库/报告/用户Policy。本轮Fake SDK覆盖实际管理HTTP中的OK/NO_DATA/PARTIAL、真实编码、权限与Scope拒绝、Stop/超时/失败/重放、设备冻结及原六路径；前端覆盖Profile选择与确认/History。最终真实网页验收由用户进行，本轮不自动联网。
+启动、网页步骤与关闭命令以[BUILD_RUN](../guides/DEPLOYMENT.md)为唯一操作入口。关闭开关并重启、刷新页面即可回滚；不删除数据库/报告/用户Policy。本轮Fake SDK覆盖实际管理HTTP中的OK/NO_DATA/PARTIAL、真实编码、权限与Scope拒绝、Stop/超时/失败/重放、设备冻结及原六路径；前端覆盖Profile选择与确认/History。最终真实网页验收由用户进行，本轮不自动联网。
 
 ### 本轮实现与离线结果
 

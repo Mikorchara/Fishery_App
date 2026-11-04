@@ -85,21 +85,21 @@ water 或 visual 可以为 null，但不能同时为空。两个通道独立更�
 
 规则HIT、CLEAR、INSUFFICIENT_EVIDENCE、NOT_EVALUATED分开；非HIT没有异常严重等级。水质阈值只在diagnosis中，rules负责质量/时效证据门禁，不复制阈值。旧读数、缺测或另一等级出现不能自动证明恢复。
 
-风险周期、三窗视觉恢复、ACK、人工结束及删除的完整当前合同见 [事件管理](deep-dive/EVENT_MANAGEMENT.md)，不在本页另存一份状态机。
+风险周期、三窗视觉恢复、ACK、人工结束及删除的完整当前合同见 [事件管理](../deep-dive/EVENT_MANAGEMENT.md)，不在本页另存一份状态机。
 
 ## 5. 统一读取和AI来源
 
 当前水质Tool的设备由服务端绑定，模型参数仅{}，不得从正文选择实例/路径/设备。返回有限值、来源、观测/接收/评估时间、质量、新鲜度、连接和规则；Source Gate核对本轮Receipt，历史聊天不产生新来源。
 
-Knowledge只返回启用文本的有限Evidence，和现场事实分开。评分是可选独立合同，见 [评分规则](deep-dive/EXPERIMENTAL_WATER_SCORE.md)。Web默认Knowledge要求不因Monitoring-only QQ而取消。
+Knowledge只返回启用文本的有限Evidence，和现场事实分开。评分是可选独立合同，见 [评分规则](../deep-dive/EXPERIMENTAL_WATER_SCORE.md)。Web默认Knowledge要求不因Monitoring-only QQ而取消。
 
-Normal/Streaming共享原ToolCallingService；停止、超时、资源关闭和Commit条件不因渠道而跳过。QQ General无Tool路径不伪造Monitoring Receipt；Water实际调用本轮工具。QQ预算与发布合同见 [QQ Bot](deep-dive/QQ_BOT.md)，Web工具/Prompt扩展见 [开发指南](deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。
+Normal/Streaming共享原ToolCallingService；停止、超时、资源关闭和Commit条件不因渠道而跳过。QQ General无Tool路径不伪造Monitoring Receipt；Water实际调用本轮工具。QQ预算与发布合同见 [QQ Bot](../deep-dive/QQ_BOT.md)，Web工具/Prompt扩展见 [开发指南](../deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。
 
 ## 6. 历史统计合同
 
 ### 服务入口与统计边界
 
-R2D-1B 提供 Monitoring 只读服务，没有新增 HTTP API。R2D-1C 的历史 Tool 仅为离线候选，见下节；正式网页仍未开放。设计依据见 [R2D-1A](deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。
+R2D-1B 提供 Monitoring 只读服务，没有新增 HTTP API。R2D-1C 的历史 Tool 仅为离线候选，见下节；正式网页仍未开放。设计依据见 [R2D-1A](../deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。
 
 ```python
 result = monitoring.query_water_history(
@@ -148,4 +148,4 @@ result = monitoring.query_water_history(
 
 开发上报接口只在显式enable-ingestion、本机Host/Origin/地址与一次性Token有效时启用，Simulator不直接写Repository。客户端不能声明自己是正式传感器。真实生产端需独立身份、质量、时钟、视频与规则证据合同，不能把sample.mp4当现场采样。
 
-简略格式见 [设备接口](DEVICE_INTERFACE_QUICK.md)，未来设计见 [真实设备规划](deep-dive/plan/REAL_DEVICE_INTEGRATION.md)。本轮没有实施任何新硬件、写Tool或Schema。
+简略格式见 [设备接口](../DEVICE_INTERFACE_QUICK.md)，未来设计见 [真实设备规划](../deep-dive/plan/REAL_DEVICE_INTEGRATION.md)。本轮没有实施任何新硬件、写Tool或Schema。

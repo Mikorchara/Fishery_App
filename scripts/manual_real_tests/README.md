@@ -97,4 +97,4 @@ $selectionPlan = .\.venv\Scripts\python.exe scripts/manual_real_tests/run_qualif
 技术结果交回审阅，不自动升级released。三工具本地试用已获本轮用户批准，无须重复研究；原W+K资格不会被改写。管理Streaming资格CLI仍只验证旧两工具，三工具Streaming请按[网页验收步骤](../../apps/docs/deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)手动测试。没有新Runner、Registry或执行循环，也不按问题关键词路由。
 - 回答质量：单独安排人工抽样；技术 PASS、人工可用性观察和正式 released 是不同证据，不自动转换。
 
-管理启动/回滚见 [BUILD_RUN](../../apps/docs/DEPLOYMENT.md)。本轮仅离线准备，没有执行以上真实命令。
+管理启动/回滚见 [BUILD_RUN](../../apps/docs/guides/DEPLOYMENT.md)。本轮仅离线准备，没有执行以上真实命令。

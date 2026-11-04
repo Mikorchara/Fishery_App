@@ -393,4 +393,4 @@ Authorization: Bearer <设备接入专用凭据，由私有存储管理>
 - [monitoring/service.py](../../../monitoring/service.py)：数据投影、默认时效和 `stream_url=null`。
 - [management_web/static/app.js](../../../management_web/static/app.js)：当前视频占位与模拟统计页面。
 - [ai_service/channel.py](../../../ai_service/channel.py)：SourceSummary 的 simulator 限制。
-- [组员技术路线](../../TECHNICAL_ROUTE_TEAM.md)、[启动指南](../../BUILD_RUN.md)：当前项目能力和使用边界。
+- [组员技术路线](../../presentations/TECHNICAL_ROUTE_TEAM.md)、[启动指南](../../BUILD_RUN.md)：当前项目能力和使用边界。

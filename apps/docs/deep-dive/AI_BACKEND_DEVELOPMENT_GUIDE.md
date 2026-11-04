@@ -4,7 +4,7 @@
 
 本指南用于管理平台的代码定位、扩展与验证。当前依赖为 `management_web → ai_service → ai_backend`。旧 Prototype 留在独立仓库，本项目没有 src/fishery_ai，也不依赖它。以下路径以仓库根目录为起点；示例不构成权限或真实请求授权。
 
-先读 [工程规则](../../AGENTS.md)、[结构地图](../STRUCTURE.md)；启动与数据接入见 [BUILD_RUN](../BUILD_RUN.md)，数据合同见 [INTEGRATION](../INTEGRATION.md)。运行及回滚见 [维护说明](OPERATIONS.md)。本指南不复制完整协议、Prompt 或发布 JSON。
+先读 [工程规则](../../AGENTS.md)、[结构地图](../STRUCTURE.md)；启动与数据接入见 [BUILD_RUN](../BUILD_RUN.md)，数据合同见 [INTEGRATION](../development/INTEGRATION.md)。运行及回滚见 [维护说明](OPERATIONS.md)。本指南不复制完整协议、Prompt 或发布 JSON。
 
 ## 1. 架构与职责
 
@@ -129,7 +129,7 @@ traces = JsonlTraceSink(test_trace_path, tool_names=HISTORY_CANDIDATE_TOOL_NAMES
 
 Schema 用于模型说明；Executor 校验有界 JSON/object 后调用 ToolDefinition.validate_arguments，不运行通用 JSON Schema 引擎。有参数 Handler 接收归一化 dict，再经服务器绑定的 device_id 调用 MonitoringService.query_water_history()，原样返回 Monitoring 的有界统计 DTO，不直接读库或重新诊断。
 
-历史范围、统计、质量、边界覆盖和 720/12/24 KiB 预算见 [集成合同](../INTEGRATION.md)。result_metadata() 只校验用于 Receipt/Activity 的有限合同与一致性，不重算统计。持续低氧、恢复等仍为 NOT_EVALUATED。
+历史范围、统计、质量、边界覆盖和 720/12/24 KiB 预算见 [集成合同](../development/INTEGRATION.md)。result_metadata() 只校验用于 Receipt/Activity 的有限合同与一致性，不重算统计。持续低氧、恢复等仍为 NOT_EVALUATED。
 
 ### 2.4 来源、展示与实验授权
 
@@ -293,7 +293,7 @@ node --test apps/management_web/tests/*.test.mjs
 
 ## 管理端 Tool 授权与历史候选
 
-[management_policy.py](../../ai_service/management_policy.py) 是管理 Assistant 的授权 owner；`runtime/policy.py` 保留共享旧格式与缺省选择。不存在管理覆盖文件时只读继承，不创建目录/文件；首次明确保存时才独立持有完整选择。设置入口、并发与撤销语义见 [运行说明](../BUILD_RUN.md)，合同见 [集成说明](../INTEGRATION.md)。
+[management_policy.py](../../ai_service/management_policy.py) 是管理 Assistant 的授权 owner；`runtime/policy.py` 保留共享旧格式与缺省选择。不存在管理覆盖文件时只读继承，不创建目录/文件；首次明确保存时才独立持有完整选择。设置入口、并发与撤销语义见 [运行说明](../BUILD_RUN.md)，合同见 [集成说明](../development/INTEGRATION.md)。
 
 新增 Tool 必须分别完成业务Definition/Handler装配、用户Policy授权及维护者精确Scope许可。当前Qwen三工具Normal/Streaming为既有local_experimental，非released；不自动授予新工具、新模型或新预算资格。历史单工具候选/试用合同独立，详见当前BUILD_RUN和发布资源。
 

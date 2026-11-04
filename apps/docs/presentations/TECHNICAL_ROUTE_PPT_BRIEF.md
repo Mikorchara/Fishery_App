@@ -147,7 +147,7 @@
 - **屏幕要点：**Fake/Mock 验证主要正常和故障路径；Management 用户确认 QQ 回复可见；Web/Simulator/Bot 可独立编排。
 - **视觉：**左侧验证维度表，右侧一张脱敏 QQ 截图；如截图未归档则使用明确占位，不伪造聊天气泡。
 - **讲解备注：**截图证明对应回复可见，不能独立证明完整内部状态。若没有同版本量化报告，不放响应速度、正确率或费用的成绩图。
-- **事实依据：**F15、F16；[组员版第8节](TECHNICAL_ROUTE_TEAM.md)、[M1](deep-dive/QQ_BOT.md)、[M2](deep-dive/QQ_BOT.md)、[M3](deep-dive/QQ_BOT.md)。
+- **事实依据：**F15、F16；[组员版第8节](TECHNICAL_ROUTE_TEAM.md)、[M1](../deep-dive/QQ_BOT.md)、[M2](../deep-dive/QQ_BOT.md)、[M3](../deep-dive/QQ_BOT.md)。
 
 ### S12 总结与后续：先完成可追溯问答，再扩展真实场景
 
@@ -256,7 +256,7 @@ sequenceDiagram
 | 两轮追问截图 | S09或备查 | 必须核对来源项目；只有 Prototype 素材时标注 Prototype，不改称 Management 验收 |
 | 架构图、路由图、时序图 | S03/S07/S08 | 本文 G01～G03 可直接重绘，无需真实数据 |
 | 定量性能 / 正确率 / 费用图 | 可选备查 | 本文未提供可直接引用的数据集；缺证据则省略，不用示例值填充 |
-| 运行命令 | A02 | 见 [BUILD_RUN](BUILD_RUN.md)，只展示入口，不把运行配置正文放入 PPT |
+| 运行命令 | A02 | 见 [BUILD_RUN](../BUILD_RUN.md)，只展示入口，不把运行配置正文放入 PPT |
 
 素材缺失时：草稿可显示“待补：Management 首页截图”等明确占位，最终交付清单须注明；不制造逼真的假截图替代验收证据。流程示意图可以自制，但应标为“示意”。
 
@@ -305,8 +305,8 @@ sequenceDiagram
 ## 9. 配套阅读
 
 - [组员技术路线说明](TECHNICAL_ROUTE_TEAM.md)：详细原理、边界和源码入口。
-- [启动指南](BUILD_RUN.md)：两终端/三终端和场景选择。
-- [组员首次配置](DEPLOYMENT.md)：项目文件夹交接注意事项。
-- [M1](deep-dive/QQ_BOT.md)、[M2](deep-dive/QQ_BOT.md)、[M3](deep-dive/QQ_BOT.md)：共享基础、独立 Bot 与运行编排的当前主题合同；原阶段证据保存在Git与维护备份，不作为新的运行批准。
+- [启动指南](../BUILD_RUN.md)：两终端/三终端和场景选择。
+- [组员首次配置](../guides/DEPLOYMENT.md)：项目文件夹交接注意事项。
+- [M1](../deep-dive/QQ_BOT.md)、[M2](../deep-dive/QQ_BOT.md)、[M3](../deep-dive/QQ_BOT.md)：共享基础、独立 Bot 与运行编排的当前主题合同；原阶段证据保存在Git与维护备份，不作为新的运行批准。
 
 若其他材料与组员版或当前源码冲突，先列出矛盾并请用户确认，不自行选择更夸大的版本。新增加的性能、硬件或功能成果，应先补足对应证据，再修改 PPT 内容。

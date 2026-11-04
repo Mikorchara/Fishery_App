@@ -5,6 +5,7 @@
 ```text
 Fishery_Management/
 ├── pyproject.toml / README.md / AGENTS.md
+├── 开始使用.md                   新下载源码后的逐步操作
 ├── sample.mp4                    获准的本地录像；源码可跟踪，Wheel不包含
 ├── apps/
 │   ├── management_paths.py        统一业务数据路径
@@ -19,7 +20,11 @@ Fishery_Management/
 │   ├── knowledge/                 知识CRUD、检索、导出和显式维护
 │   ├── simulator/                 独立HTTP生产端，不直接写库
 │   ├── qq_bot/                    独立Gateway、权限、会话、预算、交付和通知
-│   └── docs/                      当前文档；入口README
+│   └── docs/                      根目录仅保留五份常用文档
+│       ├── guides/                详细部署与网页使用
+│       ├── development/           数据接口与集成合同
+│       ├── presentations/         组员技术路线与PPT材料
+│       └── deep-dive/             专题技术、维护与未来规划
 ├── scripts/
 │   ├── dev/                       两/三终端、带视频、停止、离线测试
 │   ├── maintenance/               已有受控旧数据迁移，不是日常初始化
@@ -47,4 +52,4 @@ Fishery_Management/
 | QQ配置和启动 | qq_bot/management_cli.py、management_config.py、management_run.py；scripts/dev/Start-*.ps1 |
 | 数据库升级 | monitoring/migrate.py；只显式维护，不在启动中调用 |
 
-数据根与源码目录分开，凭据又是独立私有Store。两终端与QQ三终端默认不同数据根，见 [部署指南](DEPLOYMENT.md)。不要为了目录整齐挪动实际数据库。
+数据根与源码目录分开，凭据又是独立私有Store。两终端与QQ三终端默认不同数据根，见 [部署指南](guides/DEPLOYMENT.md)。不要为了目录整齐挪动实际数据库。

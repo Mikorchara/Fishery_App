@@ -2,7 +2,7 @@
 
 独立的本机智慧渔业管理应用：统一水质与事件、Web AI、知识库、Simulator、本地录像，以及独立QQ Hybrid Bot。Python 3.11+ / Flask / SQLite / 原生JavaScript，无需npm构建，不依赖Prototype安装。
 
-**第一次交接先读 [Windows部署与配置](apps/docs/DEPLOYMENT.md)。** 已配置的机器看 [日常启动](apps/docs/BUILD_RUN.md)，全部文档从 [docs目录](apps/docs/README.md) 进入。
+**第一次下载源码，只需先读 [开始使用](开始使用.md)，按步骤安装、启动和配置。** 已配置的机器看 [日常启动](apps/docs/BUILD_RUN.md)，全部文档从 [docs目录](apps/docs/README.md) 进入。
 
 ```powershell
 # 两终端：Simulator + Web
@@ -32,4 +32,4 @@ python -m venv .venv
 
 安装可访问包索引；自动回归只用Fake和合成数据，不连接QQ/Qwen。真实模型、QQ群与数据披露必须由操作者另行明确批准。
 
-[网页使用](apps/docs/USER_GUIDE.md) · [技术路线](apps/docs/TECHNICAL_ROUTE_TEAM.md) · [维护与回滚](apps/docs/deep-dive/OPERATIONS.md) · [工程规则](AGENTS.md)
+[网页使用](apps/docs/guides/USER_GUIDE.md) · [技术路线](apps/docs/presentations/TECHNICAL_ROUTE_TEAM.md) · [维护与回滚](apps/docs/deep-dive/OPERATIONS.md) · [工程规则](AGENTS.md)

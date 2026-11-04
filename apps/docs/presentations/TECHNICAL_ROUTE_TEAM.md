@@ -252,7 +252,7 @@ SDK 清理失败时，系统保留故障隔离并停止新模型调用，不能�
 .\scripts\dev\启动QQ演示系统.cmd
 ```
 
-两种方式都在 Simulator 窗口选场景。三终端还需在 Bot 窗口人工批准；该入口关闭本次 Web AI，但保留 QQ AI。其他 Web AI 启动方式见 [启动指南](BUILD_RUN.md) 和 [运行维护参考](deep-dive/OPERATIONS.md)。
+两种方式都在 Simulator 窗口选场景。三终端还需在 Bot 窗口人工批准；该入口关闭本次 Web AI，但保留 QQ AI。其他 Web AI 启动方式见 [启动指南](../BUILD_RUN.md) 和 [运行维护参考](../deep-dive/OPERATIONS.md)。
 
 当前本机两终端使用 `outputs/demo-instance`，三终端使用 `outputs/qq-m3-real-test`；它们不是同一份数据库。三终端内部的 Web、Simulator 和 Bot 才绑定到同一隔离实例。
 
@@ -266,7 +266,7 @@ SDK 清理失败时，系统保留故障隔离并停止新模型调用，不能�
 
 七种场景是启动时选择，不是当前运行中的热切换。演示要预留10秒窗口形成和新鲜度变化的等待时间，不应期待选完立刻出现完整新状态。
 
-组员换电脑或移动目录后，应按 [首次配置说明](DEPLOYMENT.md) 重建环境和本机配置，亲自录入凭据。源码、配置、数据库和凭据是不同的交接对象；不要直接打包别人机器的密钥、正式数据库或旧批准账本。
+组员换电脑或移动目录后，应按 [首次配置说明](../guides/DEPLOYMENT.md) 重建环境和本机配置，亲自录入凭据。源码、配置、数据库和凭据是不同的交接对象；不要直接打包别人机器的密钥、正式数据库或旧批准账本。
 
 ## 8. 目前完成到什么程度
 
@@ -299,17 +299,17 @@ Prototype 的实验数字不能直接当作 Management 的性能或正确率。Q
 
 | 想了解什么 | 入口 |
 |---|---|
-| 启动入口与组员交接 | [BUILD_RUN](BUILD_RUN.md)、[首次配置](DEPLOYMENT.md) |
-| 数据生成与上报 | [generator.py](../simulator/generator.py)、[transport.py](../simulator/transport.py) |
-| 监测统一事实、规则与事件 | [service.py](../monitoring/service.py)、[rules.py](../monitoring/rules.py)、[events.py](../monitoring/events.py) |
-| 数据库只读边界 | [repository.py](../monitoring/repository.py)、[Monitoring 适配](../qq_bot/monitoring_source.py) |
-| Web/QQ 共享 AI 装配 | [AI Service](../ai_service/service.py)、[工具 Registry](../ai_service/business_tools/registry.py) |
-| Hybrid Prompt 与 General/Water 判定 | [channel_hybrid.py](../ai_service/channel_hybrid.py)、[展示合同](../ai_service/channel_presentation.py) |
-| 许可、队列、交付和记忆 | [run_consent.py](../qq_bot/run_consent.py)、[ai_scheduler.py](../qq_bot/ai_scheduler.py)、[ai_delivery.py](../qq_bot/ai_delivery.py)、[conversations.py](../qq_bot/conversations.py) |
-| Management 真实运行装配 | [channel_management_live.py](../ai_service/channel_management_live.py)、[QQ运行合同](deep-dive/QQ_BOT.md) |
-| SDK 清理与资源门禁 | [sdk_resources.py](../ai_backend/sdk_resources.py)、[SDK安全边界](deep-dive/QQ_BOT.md) |
-| Web 知识检索 | [retrieval.py](../knowledge/retrieval.py)、[知识内容说明](deep-dive/KNOWLEDGE_CONTENT.md) |
-| 移植与兼容性依据 | [QQ集成边界](deep-dive/QQ_BOT.md) |
+| 启动入口与组员交接 | [BUILD_RUN](../BUILD_RUN.md)、[首次配置](../guides/DEPLOYMENT.md) |
+| 数据生成与上报 | [generator.py](../../simulator/generator.py)、[transport.py](../../simulator/transport.py) |
+| 监测统一事实、规则与事件 | [service.py](../../monitoring/service.py)、[rules.py](../../monitoring/rules.py)、[events.py](../../monitoring/events.py) |
+| 数据库只读边界 | [repository.py](../../monitoring/repository.py)、[Monitoring 适配](../../qq_bot/monitoring_source.py) |
+| Web/QQ 共享 AI 装配 | [AI Service](../../ai_service/service.py)、[工具 Registry](../../ai_service/business_tools/registry.py) |
+| Hybrid Prompt 与 General/Water 判定 | [channel_hybrid.py](../../ai_service/channel_hybrid.py)、[展示合同](../../ai_service/channel_presentation.py) |
+| 许可、队列、交付和记忆 | [run_consent.py](../../qq_bot/run_consent.py)、[ai_scheduler.py](../../qq_bot/ai_scheduler.py)、[ai_delivery.py](../../qq_bot/ai_delivery.py)、[conversations.py](../../qq_bot/conversations.py) |
+| Management 真实运行装配 | [channel_management_live.py](../../ai_service/channel_management_live.py)、[QQ运行合同](../deep-dive/QQ_BOT.md) |
+| SDK 清理与资源门禁 | [sdk_resources.py](../../ai_backend/sdk_resources.py)、[SDK安全边界](../deep-dive/QQ_BOT.md) |
+| Web 知识检索 | [retrieval.py](../../knowledge/retrieval.py)、[知识内容说明](../deep-dive/KNOWLEDGE_CONTENT.md) |
+| 移植与兼容性依据 | [QQ集成边界](../deep-dive/QQ_BOT.md) |
 
 ### 讲解常用词
 
