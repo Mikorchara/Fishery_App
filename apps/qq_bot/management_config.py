@@ -71,6 +71,8 @@ def load_request(path):
         raise BotError('INVALID_MANAGEMENT_REQUEST')
     inputs = TrialInputs.parse(value['inputs'])
     limits = RunLimits(**value['limits'])
+    from .gateway import validate_run_duration
+    validate_run_duration(limits.seconds,max_seconds=limits.seconds)
     if Decimal(limits.total_budget_cny)<reservation_per_turn()*limits.max_turns:
         raise BotError('RUN_BUDGET_INSUFFICIENT')
     access, ai, source, grant, _ = inputs_snapshot(inputs)

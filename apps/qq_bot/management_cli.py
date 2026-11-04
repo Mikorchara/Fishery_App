@@ -93,6 +93,10 @@ def save_qq_secret(*, replace=False):
 def run(request_path, directory, *, offline=False, seconds=None, stop_requested=lambda:False, read=input, emit_status=emit):
     request, summary=check_request(request_path,offline=offline)
     if not request.enabled: raise BotError('AI_DISABLED')
+    from .gateway import validate_run_duration
+    duration=request.limits.seconds if seconds is None else seconds
+    # Fail before approval/credentials if an override exceeds this run's consent.
+    validate_run_duration(duration,max_seconds=request.limits.seconds)
     import logging
     for name in ('openai','httpx','httpcore','websockets'):
         logging.getLogger(name).disabled=True  # Dedicated Bot process only; no wire/body logging.
@@ -159,7 +163,7 @@ def run(request_path, directory, *, offline=False, seconds=None, stop_requested=
                 except Exception:journal.close();raise
                 notifier.start()
             def drive():
-                try: gateway.run(min(request.limits.seconds,seconds or request.limits.seconds))
+                try: gateway.run(duration,max_seconds=request.limits.seconds)
                 except Exception as error: failures.append(getattr(error,'code','MANAGEMENT_GATEWAY_FAILED'))
             worker=threading.Thread(target=drive,name='management-qq-gateway',daemon=False)
             worker.start()

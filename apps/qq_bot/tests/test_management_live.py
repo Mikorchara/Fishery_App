@@ -207,8 +207,22 @@ class ManagementLiveTests(unittest.TestCase):
         self.assertEqual(report['code'],'MANAGEMENT_APPROVAL_DECLINED')
         self.assertEqual(report['quota']['consumed_turns'],0);self.assertEqual(self.http,[])
 
+    def test_invalid_duration_override_fails_before_approval_or_keys(self):
+        from unittest.mock import Mock
+        prompt=Mock(side_effect=AssertionError('must validate before approval'))
+        for seconds in (0,-1,True,1.0,1801):
+            with self.subTest(seconds=seconds), self.assertRaisesRegex(BotError,'INVALID_RUN_DURATION'):
+                run(self.path,self.root/'invalid-duration',seconds=seconds,read=prompt)
+        prompt.assert_not_called()
+        self.assertFalse((self.root/'invalid-duration').exists())
+        self.assertEqual(self.http,[])
+
     def test_real_io_constructors_are_exercised_with_memory_transports_only(self):
         """Synthetic human permit; real SDK classes, zero real HTTP/WSS/key access."""
+        # Use the actual approved two-hour request, not a short --seconds override:
+        # otherwise a hidden one-hour Gateway cap is never exercised.
+        value=json.loads(self.path.read_text());value['limits']['seconds']=7200
+        self.path.write_text(json.dumps(value))
         import re
         from apps.ai_backend.credentials import CredentialStore
         from apps.ai_service.runtime.assistant import assistant_profile
@@ -237,7 +251,7 @@ class ManagementLiveTests(unittest.TestCase):
         with (patch.object(httpx,'AsyncClient',MemoryAsync),patch.object(httpx,'Client',MemorySync),
               patch.object(management_cli,'CredentialStore',memory_store),patch.object(management_run,'CredentialStore',memory_store),
               patch('websockets.sync.client.connect',side_effect=websocket)):
-            code=run(self.path,self.root/'real-types-mocked',seconds=30,
+            code=run(self.path,self.root/'real-types-mocked',
                 stop_requested=lambda:(self.root/'real-types-mocked/turn-1.result.json').exists(),
                 read=lambda prompt:'APPROVE MANAGEMENT '+re.search(r'APPROVE MANAGEMENT ([a-f0-9]+)',prompt).group(1),
                 emit_status=lambda *_a,**_k:None)

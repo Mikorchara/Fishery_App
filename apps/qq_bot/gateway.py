@@ -17,6 +17,18 @@ RETRYABLE = {'QQ_HTTP_UNAVAILABLE', 'QQ_HTTP_TIMEOUT', 'GATEWAY_DISCONNECTED',
              'GATEWAY_HELLO_TIMEOUT', 'GATEWAY_CLOSE_TIMEOUT'}
 
 
+def validate_run_duration(seconds, *, max_seconds=3600):
+    """Default CLI stays at one hour; a trusted run may supply its approved cap.
+
+    This is a transport deadline, not an AI permit. Consent, fees and per-turn
+    deadlines are still checked by the existing router/service boundaries.
+    """
+    if (type(max_seconds) is not int or not 1 <= max_seconds <= 28800
+            or type(seconds) is not int or not 1 <= seconds <= max_seconds):
+        raise BotError('INVALID_RUN_DURATION')
+    return seconds
+
+
 def audit(code, **fields):
     """Safe JSON lines, no packet text, IDs, credentials, headers or exception text."""
     code = code if re.fullmatch(r'[A-Z][A-Z0-9_]{0,80}', str(code)) else 'QQ_UNEXPECTED_ERROR'
@@ -271,9 +283,8 @@ class QQGateway:
                     raise BotError('QQ_EVENT_BEFORE_AUTH')
             arm_liveness()
 
-    def run(self, seconds=600):
-        if type(seconds) is not int or not 1 <= seconds <= 3600:
-            raise BotError('INVALID_RUN_DURATION')
+    def run(self, seconds=600, *, max_seconds=3600):
+        validate_run_duration(seconds, max_seconds=max_seconds)
         self._deadline = self.now()+seconds
         try:
             if self.adapter:

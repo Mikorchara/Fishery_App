@@ -39,7 +39,8 @@ class ManagementStackTests(unittest.TestCase):
         log=self.root/'controller.log'
         output=log.open('wb');self.addCleanup(output.close)
         command=[sys.executable,'-X','utf8','-I','-B','-u',str(ROOT/'scripts/dev/management_stack.py'),
-            '--request',str(self.request),'--port',str(self.port),'--offline-demo','--no-assistant','--seconds',str(seconds)]
+            '--request',str(self.request),'--port',str(self.port),'--offline-demo','--no-assistant']
+        if seconds is not None:command+=['--seconds',str(seconds)]
         if demo_video is not None:command+=['--demo-video',str(demo_video)]
         if score_trial:
             command.remove('--no-assistant');command+=['--score-trial']
@@ -173,9 +174,11 @@ runpy.run_path(script,run_name='__main__')'''
 
     def test_video_and_score_three_consoles_with_fake_bot_stop_independently(self):
         import urllib.request
+        value=json.loads(self.request.read_text());value['limits']['seconds']=7200
+        self.request.write_text(json.dumps(value))
         video=self.root/'sample.mp4';content=b'\x00\x00\x00\x18ftypisom'+b'fictional-video'*20
         video.write_bytes(content)
-        child,directory=self.start(demo_video=video,score_trial=True)
+        child,directory=self.start(demo_video=video,score_trial=True,seconds=None)
         self.wait(lambda:self.status(directory,'bot').get('state')=='READY' or child.poll() is not None)
         self.assertIsNone(child.poll(),(directory/'controller.log').read_text())
         records=[self.status(directory,r) for r in ('web','simulator','bot')]
@@ -188,6 +191,10 @@ runpy.run_path(script,run_name='__main__')'''
             policy=json.load(response)
         self.assertTrue(policy['score_trial']['enabled'])
         self.assertIn('score_current_water_quality',[tool['name'] for tool in policy['tools']])
+        self.wait(lambda:(directory/'bot-run/turn-1.result.json').exists())
+        turn=json.loads((directory/'bot-run/turn-1.result.json').read_text())
+        self.assertTrue(turn['verified'])
+        self.assertEqual(turn['outcome']['history_code'],'HISTORY_COMMITTED')
         request_stop(directory,'bot')
         self.wait(lambda:self.status(directory,'bot').get('state')=='EXITED')
         before=self.count();self.wait(lambda:self.count()>before,timeout=15)

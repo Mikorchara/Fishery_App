@@ -72,6 +72,7 @@ Chat 展示是同轮可信事实与经校验解释的投影，不重新查询/�
 | DELIVERY_UNKNOWN | 不重发、不追加成功历史；保守消耗本轮额度 |
 | SDK资源隔离/清理失败 | 停止新AI，保留报告，正常停Bot；不重置门禁 |
 | MANAGEMENT_SCOPE_REVIEW_REQUIRED | 源码与准备/本机配置不一致；维护者审查后更新准备与新配置，不改旧批准 |
+| INVALID_RUN_DURATION | 运行时长不符合本次批准。已修复“两小时request被Gateway旧一小时限制拒绝”的问题；Management显式传入已批准上限，普通Gateway默认仍限一小时 |
 | MANAGEMENT_BOT_REPORT_SAVED | 报告落盘；还须核对结果中的backend、SDK、交付、历史和额度 |
 
 原无回复问题曾由多余Tool参数与512输出Token截断引起；Management独立升至2048并有终态状态和一次性安全失败提示。Web输出预算没有因此改变。错误提示只在可安全发送时提交一次，不保证所有故障都能回群通知。
@@ -83,5 +84,9 @@ Chat 展示是同轮可信事实与经校验解释的投影，不重新查询/�
 本次变更刷新Management候选Scope及实现摘要，资格仍为candidate。旧批准不可复用；本机request需备份后更新Scope和明确的limits，再Check/重新审批。离线回归不能证明真实模型成功率；本机有限批测见启动指南。
 
 验证：2026-11-04完整独立Python回归811/811、Node 130/130通过；新增额度/固定查询及本机批测专项通过。批测CLI以MockTransport完成两题、四次内存HTTP、零QQ发送；真实Qwen尚未复测，自动化进程的凭据接口返回`CREDENTIAL_FILE_ERROR`，未绕过保护读取密钥。完整日志为`outputs/test-tmp/qq-demo-regression-final-20261104.log`（本机输出、不随Git交付）。
+
+后续启动修复：上述回归的真实类型装配用例曾以`seconds=30`缩短运行，未覆盖两小时request的完整传递。现用本次7200秒配置经过审批、Gateway、Mock HTTP及成功历史提交后主动停止；同时覆盖普通Gateway一小时默认、已批准八小时边界及非法/超批准时长在审批前拒绝。用户失败运行的结果为`INVALID_RUN_DURATION`、0 Turn、0额度消费、RAM已清空；不据此推断发生模型扣费。
+
+本次修复验证：QQ全部专项162/162通过；另外以7200秒request、不加短时覆盖，完成三个独立终端（视频、评分Web、Simulator、Fake Bot）的启动、Mock回复/历史提交及独立停Bot测试。全部使用新建合成实例及内存HTTP，未连接真实QQ/Qwen。本机request仅备份后刷新Scope，原两小时/100元预算及成员、设备、通知绑定不变。
 
 停止与报告路径见 [维护与回滚](OPERATIONS.md)。官方平台权限、可达性和密钥是否有效不能由离线 Check 证明；实际联网只能由操作者另行批准。

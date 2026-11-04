@@ -229,6 +229,26 @@ class GatewayTests(unittest.TestCase):
         self.assertFalse(gateway._worker.is_alive())
         self.assertIn('QQ_STOPPED', self.codes)
 
+    def test_duration_matches_explicit_cap_and_keeps_default_one_hour(self):
+        connector=Mock(side_effect=AssertionError('no connection expected'))
+        for duration,maximum in ((7200,7200),(28800,28800),(3600,3600)):
+            with self.subTest(duration=duration):
+                gateway=self.make(connector=connector)
+                gateway.stop.set()
+                gateway.run(duration,max_seconds=maximum)
+                self.assertEqual(gateway._deadline,self.clock()+duration)
+                self.assertFalse(gateway._worker.is_alive())
+        for duration,maximum in ((7200,3600),(28801,28801),(7201,7200),(0,7200),
+                                 (-1,7200),(True,7200),(1.0,7200),(1,True)):
+            with self.subTest(duration=duration,maximum=maximum):
+                gateway=self.make(connector=connector)
+                with self.assertRaisesRegex(BotError,'INVALID_RUN_DURATION'):
+                    gateway.run(duration,max_seconds=maximum)
+                self.assertIsNone(gateway._worker)
+        with self.assertRaisesRegex(BotError,'INVALID_RUN_DURATION'):
+            self.make(connector=connector).run(3601)
+        connector.assert_not_called()
+
     def test_reconnect_limit_uses_same_adapter_and_joins_worker(self):
         connector = Mock(side_effect=OSError('raw endpoint private'))
         gateway = self.make(connector=connector)

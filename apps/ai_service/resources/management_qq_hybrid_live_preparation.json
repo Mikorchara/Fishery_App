@@ -136,7 +136,7 @@
       "qq_bot/configuration.py": "6921d9967ba233d89ef1f6a72963ca9b9d27187fa3546093507a7ce1e7314666",
       "qq_bot/contracts.py": "f14716510d3f4906eb734dbfaf0671b5252d3b62364154a9128fad7765c4d7de",
       "qq_bot/conversations.py": "0706c530175e7a0e6b2e878b24ef7bb9eda9ddee2e5099c1529047780e6a9efd",
-      "qq_bot/gateway.py": "20ee0fe2d4f578f16532199cfc3cabda03834bcb3986c14b47fa3482385775a5",
+      "qq_bot/gateway.py": "103624cd1fb2bd861a9a19b592f007ecc730f9ccabc32f7ef8cedd2e9bc08e45",
       "qq_bot/hybrid_conversations.py": "743d9ae0893e18c5820b3ed9ee5014763bd9b11266db0820c2eccebc344b548f",
       "qq_bot/hybrid_intent.py": "a419b406e939395a03e02c46d4567610cf534847384878934c26ae0489952313",
       "qq_bot/hybrid_run.py": "ae8dcf965b792954b9253b8c46a1debb825b20d352672597a8c1879520c8a215",
@@ -185,8 +185,8 @@
       "apps/qq_bot/event_recipients.py": "c9f4d69d27a77a9790557da6d7426ed6ec90dea5d9459d0e10de6b7a1ed40856",
       "apps/ai_service/channel_management_live.py": "81e305956455d008ee0fb74c5107b9b317cb20353bc694bb977e4e5ac4333b68",
       "apps/qq_bot/management_run.py": "3c334728bd973952dde274e6d706b5abbe3119d211ec8ee6755e5712d20e6ba4",
-      "apps/qq_bot/management_config.py": "513367579ac261317440b7efd32695e833d844da1ef143c97df93efa9f75dbf2",
-      "apps/qq_bot/management_cli.py": "ca1781adecb4144788086094ad348293c67d5e6cbaf77162bb572803feb5ed6e",
+      "apps/qq_bot/management_config.py": "c7c6e0d36cd1dbb4e514695f3d41970bcfa371e2c719ed84575f7b35d90c5e93",
+      "apps/qq_bot/management_cli.py": "e5e6380cd284c561261f7340bb8d4a30558e49c7e72711653e5fdf0eed3d59f9",
       "apps/qq_bot/live_transport.py": "2806805cb6838735644c2d241f7614e7aaa58b17121d34b1eb2b7c5ce3bdae1f",
       "apps/qq_bot/demo_runtime.py": "a64235054f8ee1f359fa27e0e8ce34d5175dacc5213e2ef4f97d823479089e0b",
       "apps/management_process.py": "9d2dd07caacb9a70e34093a617bcfd6615357f60c4bca396cb787c2fcd1ca915",
@@ -195,7 +195,7 @@
       "apps/qq_bot/management_limits.py": "b5b636735ba6af63645486ca0c8a92ed11de88d912e1c37a747e9d42ce6edd36"
     }
   },
-  "scope_sha256": "459ef99f935d066b1efcd3eb7f30d2ae391c438a493cf41ced00e4fe6be63829",
+  "scope_sha256": "60655adbd93ed9a6e30a9d2ad2ec4bd841f2e00ba2f828753b23c18ad1107b0b",
   "old_approvals_accepted": false,
   "real_execution_requires": "CURRENT_PROCESS_OPERATOR_RUNCONSENT"
 }
