@@ -370,6 +370,9 @@ class MonitoringRepository:
     @staticmethod
     def _deletion_plan(db, scope, event_id):
         validate_delete(scope, event_id)
+        if scope in ('reset_cycle','reset_all'):
+            from .event_reset import deletion_plan
+            return deletion_plan(db,scope,event_id)
         if scope in ('ack_cycle','cycle'):
             return ack_cycle_plan(db, event_id,scope=scope)
         all_rows = db.execute("SELECT e.id,e.payload,EXISTS(SELECT 1 FROM alerts a WHERE a.event_id=e.id) AS linked FROM events e ORDER BY e.id").fetchall()
@@ -399,6 +402,9 @@ class MonitoringRepository:
         try:
             with self.connection() as db:
                 db.execute('BEGIN IMMEDIATE')
+                if scope in ('reset_cycle','reset_all'):
+                    from .event_reset import delete_records
+                    return delete_records(db,scope,event_id,revision)
                 candidates, plan = self._deletion_plan(db, scope, event_id)
                 if plan['revision'] != revision:
                     raise EventRecordError('EVENT_DELETE_CONFLICT', 409)

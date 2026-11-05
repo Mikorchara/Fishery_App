@@ -211,19 +211,20 @@ test('EVT-3A explicit ACK confirmation, cancellation and reload preserve separat
   p.run("location.hash='#events';render()");await p.ready();assert.match(p.node('content').textContent,/已知晓/);
 });
 
-test('EVT-3A conflicts never retry; unsupported legacy and protected audit records cannot ACK or delete',async()=>{
+test('EVT-3A conflicts never retry; unsupported legacy cannot ACK but explicit maintenance deletion is available',async()=>{
   const p=ackPage({conflict:true});await p.open();
   p.find(p.node('dialog-body'),'确认已知晓').events.click();p.find(p.node('dialog-body'),'确认知晓此风险').events.click();await p.ready();
   assert.equal(p.writes.length,1);assert.match(p.node('dialog-title').textContent,/确认未完成/);
   assert.match(p.node('dialog-body').textContent,/未自动重试/);assert.match(p.node('content').textContent,/待确认/);
   const old=ackPage({legacy:true});await old.open();
-  assert.equal(old.find(old.node('dialog-body'),'确认已知晓'),undefined);assert.match(old.node('dialog-body').textContent,/仅供查看/);
+  assert.equal(old.find(old.node('dialog-body'),'确认已知晓'),undefined);assert.match(old.node('dialog-body').textContent,/不能确认知晓/);
+  assert.ok(old.find(old.node('dialog-body'),'删除此轮事件'));
   const ended=ackPage({ended:true});ended.item.handling.action_count=1;
   ended.item.handling.history=[{acted_at:'2026-10-23T00:00:00Z',grade_code:'SUSPECTED_LESION'}];
   await ended.open();assert.match(ended.node('dialog-body').textContent,/历史已知晓/);
   assert.equal(ended.find(ended.node('dialog-body'),'确认已知晓'),undefined);
   ended.run("location.hash='#events';render()");await ended.ready();
-  assert.match(ended.node('content').textContent,/知晓审计留存，不可删除/);
+  assert.ok(ended.find(ended.node('content'),'删除此轮事件'));
 });
 
 test('ended ACK cycle deletion previews both counts, cancellation keeps data, explicit commit uses revision',async()=>{
@@ -397,6 +398,117 @@ test('EVT-2 conflicting deletion stays explicit, never retries or clears local d
   assert.equal(p.writes.filter(w=>w.url.endsWith('/delete')).length,1);
   assert.equal(p.run('state.data.events.length'),1);
 });
+function resetPage({conflict=false,record={},maintenance=true,count=3,reappears=false}={}){
+  const data=fixture();data.event_management={enabled:maintenance,write_token:'fictional-reset-token'};
+  const item={...data.events[0],id:'selected-risk',device_id:'sim-pond-1',channel:'visual',lifecycle_state:'INDETERMINATE',
+    deletable:false,deletion_block_reason:'MANUAL_END_AUDIT_RETAINED',...record};
+  data.events=[item];const writes=[],queries=[];let bootstrapReads=0;
+  const p=page(data,async(url,options)=>{
+    if(url.startsWith('/api/bootstrap')){bootstrapReads++;return {ok:true,json:async()=>structuredClone(data)};}
+    if(url.startsWith('/api/events?')){
+      queries.push(new URL(url,'http://localhost').searchParams);
+      return {ok:true,json:async()=>({items:structuredClone(data.events),total:data.events.length?151:0,limit:50,offset:0})};
+    }
+    if(url==='/api/events/deletion-preview'){
+      writes.push({url,value:JSON.parse(options.body),token:options.headers['X-Management-Events']});
+      return {ok:true,json:async()=>({count,ack_count:2,manual_end_count:1,active_count:1,revision:'e'.repeat(64)})};
+    }
+    if(url==='/api/events/delete'){
+      writes.push({url,value:JSON.parse(options.body),token:options.headers['X-Management-Events']});
+      if(conflict)return {ok:false,json:async()=>({error_code:'EVENT_DELETE_CONFLICT'})};
+      data.events=reappears?[{...item,id:'new-observation-risk',title:'新观测检出的风险',lifecycle_state:'ACTIVE'}]:[];
+      return {ok:true,json:async()=>({deleted_count:count,deleted_ack_count:2,deleted_manual_end_count:1})};
+    }
+    return {ok:true,json:async()=>({items:[],total:0})};
+  });
+  const walk=node=>[node,...node.children.flatMap(walk)];
+  return {...p,data,writes,queries,item,reads:()=>bootstrapReads,
+    find:(root,text)=>walk(root).find(n=>n.tagName==='button'&&n.textContent===text),
+    open:async()=>{await p.ready();p.run("location.hash='#events';render()");await p.ready();}};
+}
+
+test('explicit maintenance deletion covers active recovery unknown manual end ACK device and legacy without dead ends',async()=>{
+  const cases=[
+    {lifecycle_state:'ACTIVE'},
+    {lifecycle_state:'ACTIVE',state_reason:'RECOVERY_OBSERVATION'},
+    {lifecycle_state:'INDETERMINATE'},
+    {manual_end:{active:true,can_end:false,history:[]}},
+    {handling:{state:'ACKNOWLEDGED',confirmed:true,can_ack:false,action_count:1,history:[]}},
+    {source_kind:'device_report',device_report:{report_id:'device-report-1',abnormalities:[]}},
+    {source_kind:undefined,lifecycle_state:undefined,status:'pending'},
+  ];
+  for(const record of cases){
+    const p=resetPage({record});await p.open();
+    assert.ok(p.find(p.node('content'),'删除此轮事件'));
+    assert.doesNotMatch(p.node('content').textContent,/不可删除/);
+    p.run('eventDetail(state.data.events[0])');
+    assert.ok(p.find(p.node('dialog-body'),'删除此轮事件'));
+  }
+  const unavailable=resetPage({maintenance:false});await unavailable.open();
+  assert.equal(unavailable.find(unavailable.node('content'),'清空全部事件记录'),undefined);
+  unavailable.run('eventDetail(state.data.events[0])');
+  assert.equal(unavailable.find(unavailable.node('dialog-body'),'删除此轮事件'),undefined);
+});
+
+test('reset selected cycle previews all audit counts then one confirmation sends one commit and refreshes',async()=>{
+  const p=resetPage();await p.open();
+  await p.find(p.node('content'),'删除此轮事件').events.click();
+  assert.equal(p.writes[0].value.scope,'reset_cycle');assert.equal(p.writes[0].value.event_id,'selected-risk');
+  assert.match(p.node('dialog-body').textContent,/3 条事件记录、2 条确认历史、1 条人工结束历史/);
+  assert.match(p.node('dialog-body').textContent,/1 条尚未由规则确认结束/);
+  assert.match(p.node('dialog-body').textContent,/后续新观测.*新的事件/);
+  p.find(p.node('dialog-body'),'取消').events.click();
+  assert.equal(p.writes.filter(w=>w.url.endsWith('/delete')).length,0);
+  await p.find(p.node('content'),'删除此轮事件').events.click();
+  const commit=p.find(p.node('dialog-body'),'确认永久删除此轮事件');
+  await Promise.all([commit.events.click(),commit.events.click()]);await p.ready();
+  const commits=p.writes.filter(w=>w.url.endsWith('/delete'));
+  assert.equal(commits.length,1);assert.equal(commits[0].value.revision,'e'.repeat(64));
+  assert.equal(commits[0].token,'fictional-reset-token');
+  assert.equal(p.run('state.data.events.length'),0);assert.match(p.node('content').textContent,/没有符合条件的记录/);
+});
+
+test('clear all is global across filters pages and statuses with one explicit confirmation and cancellable preview',async()=>{
+  const p=resetPage({count:123});await p.open();
+  p.run("state.eventFilters.q='仅一页';state.eventFilters.status='RESOLVED';state.eventOffset=50;render()");await p.ready();
+  await p.find(p.node('content'),'清空全部事件记录').events.click();
+  assert.deepEqual(Object.keys(p.writes[0].value),['scope']);assert.equal(p.writes[0].value.scope,'reset_all');
+  assert.match(p.node('dialog-body').textContent,/全部设备、全部来源、全部时间/);
+  assert.match(p.node('dialog-body').textContent,/不受当前筛选或分页影响/);
+  assert.match(p.node('dialog-body').textContent,/123 条事件记录/);
+  p.find(p.node('dialog-body'),'取消').events.click();
+  assert.equal(p.writes.filter(w=>w.url.endsWith('/delete')).length,0);
+  await p.find(p.node('content'),'清空全部事件记录').events.click();
+  await p.find(p.node('dialog-body'),'确认清空全部事件记录').events.click();await p.ready();
+  const commit=p.writes.find(w=>w.url.endsWith('/delete'));
+  assert.deepEqual(Object.keys(commit.value).sort(),['revision','scope']);assert.equal(commit.value.scope,'reset_all');
+  assert.equal(p.run('state.eventOffset'),0);assert.equal(p.run('state.eventFilters.q'),'');
+  assert.equal(p.run('state.eventFilters.status'),'');assert.equal(p.run('state.data.events.length'),0);
+});
+
+test('reset conflict refreshes authoritative records without retry or clearing local results',async()=>{
+  const p=resetPage({conflict:true});await p.open();const before=p.reads();
+  await p.find(p.node('content'),'删除此轮事件').events.click();
+  await p.find(p.node('dialog-body'),'确认永久删除此轮事件').events.click();await p.ready();
+  assert.equal(p.writes.filter(w=>w.url.endsWith('/delete')).length,1);
+  assert.ok(p.reads()>before);assert.equal(p.run('state.data.events.length'),1);
+  assert.match(p.node('dialog-title').textContent,/删除未完成/);
+  assert.match(p.node('dialog-body').textContent,/已刷新当前记录.*没有自动重试/);
+});
+
+test('empty clear has no commit and a later new observation is shown distinctly after deletion',async()=>{
+  const empty=resetPage({count:0});await empty.open();
+  await empty.find(empty.node('content'),'清空全部事件记录').events.click();
+  assert.equal(empty.find(empty.node('dialog-body'),'确认清空全部事件记录'),undefined);
+  assert.match(empty.node('dialog-body').textContent,/当前没有事件记录可清空/);
+  const p=resetPage({reappears:true});await p.open();
+  await p.find(p.node('content'),'删除此轮事件').events.click();
+  await p.find(p.node('dialog-body'),'确认永久删除此轮事件').events.click();await p.ready();
+  assert.equal(p.run('state.data.events[0].id'),'new-observation-risk');
+  assert.match(p.node('content').textContent,/新观测检出的风险/);
+  assert.match(p.node('refresh-status').textContent,/监测继续运行/);
+});
+
 test('all page timestamps display Beijing seconds and weighted length statistics remain distinct',async()=>{
   const d=fixture();d.cameras[0].summary.valid_frames=3;d.cameras[0].summary.frames_processed=4;
   d.cameras[0].summary.length={average_length_cm:17.5,length_sample_count:8,valid_frame_count:2,calibration:'simulated'};
