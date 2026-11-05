@@ -136,3 +136,10 @@ class InstanceMonitoring:
     def event_cycles(self, *, device_id):
         return self._read(lambda device: self._service.event_cycles(device_id=device), device_id)
 
+    def notification_event_cycles(self, *, device_id, approved_device_id):
+        """Explicit notification-only board access; it never enters Tool devices()."""
+        if device_id!=approved_device_id or device_id in self.config.devices:
+            raise BotError('MONITORING_DEVICE_NOT_APPROVED')
+        identifier(device_id)
+        return self._read(lambda _:self._service.event_cycles(device_id=device_id),self.config.devices[0])
+

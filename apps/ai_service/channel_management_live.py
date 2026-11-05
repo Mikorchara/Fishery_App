@@ -35,7 +35,8 @@ def prepared_scope(options):
              'apps/qq_bot/management_config.py', 'apps/qq_bot/management_cli.py',
              'apps/qq_bot/live_transport.py', 'apps/qq_bot/demo_runtime.py',
              'apps/management_process.py', 'apps/management_web/__main__.py',
-             'apps/ai_service/management_channel_budget.py', 'apps/qq_bot/management_limits.py')
+             'apps/ai_service/management_channel_budget.py', 'apps/qq_bot/management_limits.py',
+             'apps/monitoring/device_events.py','apps/device_reports/bridge.py','apps/device_reports/storage.py')
     # Runtime authorization remains enforceable from an installed Wheel without
     # source-only PowerShell scripts. Distribution launchers have a separate
     # allowlist/manifest and cannot mint a permit or bypass the CLI approval.

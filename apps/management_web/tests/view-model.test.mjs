@@ -1,8 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {routes,routeFor,metricText,filterItems,chartGeometry,timeText,validateBootstrap,eventStateName,eventStateReasonName,eventHandlingName,cycleConfirmationName} from '../static/view-model.js';
+import {routes,routeFor,metricText,filterItems,chartGeometry,timeText,validateBootstrap,eventStateName,eventStateReasonName,eventHandlingName,cycleConfirmationName,sourceName,managedEvent} from '../static/view-model.js';
 import fs from 'node:fs';
 import {execFileSync} from 'node:child_process';
+
+test('device report source is managed without turning absence or expiry into recovery',()=>{
+  const event={source_kind:'device_report',channel:'visual',cycle_summary:{}};
+  assert.equal(sourceName(event.source_kind),'DEVICE REPORT · 设备检测报告');
+  assert.equal(managedEvent(event),true);assert.equal(managedEvent({source_kind:'simulator'}),true);
+  assert.equal(managedEvent({source_kind:'demo'}),false);
+  assert.equal(eventStateName({...event,lifecycle_state:'ACTIVE'}),'异常中');
+  assert.equal(eventStateName({...event,lifecycle_state:'INDETERMINATE'}),'状态待核实');
+  assert.match(eventStateReasonName({...event,lifecycle_state:'ACTIVE'}),/设备模型检测信号，需核查；非确诊/);
+  assert.match(eventStateReasonName({...event,lifecycle_state:'INDETERMINATE'}),/停止上报或旧报告过期不代表异常消退/);
+  assert.doesNotMatch(eventStateName({...event,lifecycle_state:'RESOLVED'}),/已恢复|治愈/);
+  assert.equal(eventStateName({...event,manual_end:{active:true}}),'已人工结束');
+});
 
 test('cycle confirmation uses current or last grade rather than any previous ACK history',()=>{
   assert.equal(cycleConfirmationName({handling:{confirmed:true,ended:true,state:'PENDING'}}),'已确认');

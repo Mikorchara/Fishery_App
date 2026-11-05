@@ -27,7 +27,8 @@ def request_stop(directory,role):
     else:write_new(path,value)
     return {'code':'STACK_STOP_REQUESTED','role':role,'run_directory':str(directory)}
 
-def preflight(*,request=None,data_root=None,port=8766,with_bot=False,offline=False,bot_only=False,demo_video=None,score_trial=False,no_assistant=False):
+def preflight(*,request=None,data_root=None,port=8766,with_bot=False,offline=False,bot_only=False,demo_video=None,score_trial=False,no_assistant=False,
+              device_report_device_id=None):
     from scripts.dev.local_session import require_free_port
     if os.name!='nt':raise RuntimeError('STACK_WINDOWS_REQUIRED')
     if score_trial and no_assistant:raise RuntimeError('SCORE_TRIAL_REQUIRES_ASSISTANT')
@@ -37,7 +38,7 @@ def preflight(*,request=None,data_root=None,port=8766,with_bot=False,offline=Fal
     if not bot_only:require_free_port(port)
     if with_bot:
         from apps.qq_bot.management_config import check_request
-        selected,summary=check_request(request,offline=offline)
+        selected,summary=check_request(request,offline=offline,device_report_device_id=device_report_device_id)
         if not selected.enabled:raise RuntimeError('AI_DISABLED')
         root=Path(summary['data_root'])
         if data_root is not None and data_root.resolve()!=root.resolve():raise RuntimeError('STACK_INSTANCE_MISMATCH')
@@ -72,7 +73,7 @@ def launch_stack(*,request=None,data_root=None,port=8766,scenario='normal',with_
     from apps.ai_service.runtime.release_contracts import _hash
     from apps.qq_bot.trial_configuration import write_new
     root,summary=preflight(request=request,data_root=data_root,port=port,with_bot=with_bot,offline=offline,bot_only=bot_only,
-        demo_video=demo_video,score_trial=score_trial,no_assistant=no_assistant)
+        demo_video=demo_video,score_trial=score_trial,no_assistant=no_assistant,device_report_device_id=device_report_device_id)
     own_process_tree()
     parent=ROOT/'outputs/management-stack';parent.mkdir(parents=True,exist_ok=True)
     directory=parent/('stack-'+uuid.uuid4().hex);directory.mkdir()
@@ -90,6 +91,7 @@ def launch_stack(*,request=None,data_root=None,port=8766,scenario='normal',with_
             '--role',role,'--run-directory',str(directory),'--job',job.name]
         if role=='bot':
             vector+=['--request',str(Path(request).absolute())]
+            if device_report_device_id:vector+=['--device-report-device-id',device_report_device_id]
             if offline:vector+=['--offline-demo']
             if seconds:vector+=['--seconds',str(seconds)]
         else:vector+=['--',*command]
@@ -222,7 +224,8 @@ def main(argv=None):
         if args.bot_only:args.with_bot=True
         if args.check:
             root,summary=preflight(request=args.request,data_root=args.data_root,port=args.port,with_bot=args.with_bot,offline=args.offline_demo,bot_only=args.bot_only,
-                demo_video=args.demo_video,score_trial=args.score_trial,no_assistant=args.no_assistant)
+                demo_video=args.demo_video,score_trial=args.score_trial,no_assistant=args.no_assistant,
+                device_report_device_id=args.device_report_device_id)
             print(json.dumps(dict(code='STACK_PREFLIGHT_OK',data_root=str(root),bot=args.with_bot,summary=summary,video_enabled=args.demo_video is not None,
                 score_trial_enabled=args.score_trial,simulation_mode=args.simulation_mode,
                 device_reports_bound=args.device_report_directory is not None),ensure_ascii=False));return 0

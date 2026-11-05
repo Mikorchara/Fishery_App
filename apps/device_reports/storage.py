@@ -104,3 +104,16 @@ class ReportStore:
         return dict(device_id=device_id,source_kind='device_report',items=items,
                     semantics='RAW_REPORT_ONLY_NO_EVENT_RECOVERY',water_source='SIMULATOR',
                     connectivity='unknown',task_coverage='unknown')
+
+    def pending(self,device_id,*,after=0,limit=100):
+        """Inbox arrival order for the local bridge; duplicates keep the same rowid.
+
+        The consumer commits this cursor with its event transaction, so a crash
+        cannot create a second event or lose an acknowledged inbox report.
+        """
+        with self.connection() as db:
+            rows=db.execute('SELECT rowid,payload,received_at FROM reports '
+                'WHERE device_id=? AND rowid>? ORDER BY rowid LIMIT ?',
+                (device_id,after,limit)).fetchall()
+        return [dict(cursor=cursor,report=json.loads(payload),received_at=received)
+                for cursor,payload,received in rows]

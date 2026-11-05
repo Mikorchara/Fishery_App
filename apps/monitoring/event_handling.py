@@ -19,6 +19,14 @@ def digest(value):
 
 
 GRADE_VERSION = 'ack-grades-v1:' + digest(RANKS)[:16]
+# Keep the exact legacy hash/tokens for every existing simulator ACK. New report
+# signals own their grade version rather than changing the legacy registry hash.
+RANKS['DEVICE_REPORT_SIGNAL']=1
+DEVICE_GRADE_VERSION='device-report-ack-grades-v1'
+
+
+def grade_version(code):
+    return DEVICE_GRADE_VERSION if code=='DEVICE_REPORT_SIGNAL' else GRADE_VERSION
 
 
 def cycle_reference(event):
@@ -61,9 +69,10 @@ def contexts(events, linked):
         # The explicit rank registry owns ACK grades. Unknown identities remain read-only.
         code = current['code'] if current else members[0]['code']
         rank = RANKS[code]
-        token = digest([GRADE_VERSION, cycle_id, code, rank, transition])
+        version=grade_version(code)
+        token = digest([version, cycle_id, code, rank, transition])
         result[cycle_id] = dict(cycle_id=cycle_id, anchor_event_id=anchor, grade_code=code,
-            grade_rank=rank, grade_version=GRADE_VERSION, grade_token=token,
+            grade_rank=rank, grade_version=version, grade_token=token,
             current=current, active=active, members=members)
     return result
 
@@ -127,7 +136,7 @@ def project_handling(db, events):
             ended=ended, can_ack=can_ack, revision=state['revision'], acked_at=state['acked_at'] if not ended else None,
             latest_ack_at=history[0]['acted_at'] if history else None, actor_kind='local_visitor' if history else None,
             cycle_id=reference[0] if reference else None, grade_code=context['grade_code'] if context else None,
-            grade_rank=context['grade_rank'] if context else None, grade_version=GRADE_VERSION,
+            grade_rank=context['grade_rank'] if context else None, grade_version=context['grade_version'] if context else GRADE_VERSION,
             grade_token=context['grade_token'] if context else None,
             action_count=counts.get(reference[0],0) if reference else 0, history=history,
             unavailable_reason='LEGACY_OR_UNSUPPORTED_IDENTITY' if not context else
@@ -197,7 +206,7 @@ def acknowledge(db, value, at):
     row = db.execute('SELECT * FROM event_handling WHERE cycle_id=?',(reference[0],)).fetchone()
     revision = row['revision'] if row else 0
     if (value['cycle_id'] != reference[0] or value['grade_token'] != context['grade_token']
-            or value['grade_version'] != GRADE_VERSION or value['revision'] != revision):
+            or value['grade_version'] != context['grade_version'] or value['revision'] != revision):
         raise EventRecordError('EVENT_ACK_CONFLICT',409)
     if row and row['acked_at']:
         raise EventRecordError('EVENT_ALREADY_ACKNOWLEDGED',409)
@@ -207,12 +216,12 @@ def acknowledge(db, value, at):
         grade_code=excluded.grade_code,grade_rank=excluded.grade_rank,grade_token=excluded.grade_token,
         grade_version=excluded.grade_version,revision=excluded.revision,acked_at=excluded.acked_at''',
         (reference[0],context['anchor_event_id'],context['grade_code'],context['grade_rank'],context['grade_token'],
-         GRADE_VERSION,revision,stamp))
+         context['grade_version'],revision,stamp))
     for member in context['members']:
         db.execute('INSERT OR IGNORE INTO event_handling_members VALUES (?,?)',(member['id'],reference[0]))
     db.execute('''INSERT INTO event_actions (request_id,request_hash,cycle_id,event_id,action,acted_at,
         grade_code,grade_rank,grade_version,grade_token,handling_revision,actor_kind,event_snapshot)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''',(value['request_id'],request_hash,reference[0],event['id'],'ACK',stamp,
-        context['grade_code'],context['grade_rank'],GRADE_VERSION,context['grade_token'],revision,'local_visitor',
+        context['grade_code'],context['grade_rank'],context['grade_version'],context['grade_token'],revision,'local_visitor',
         json.dumps(event,ensure_ascii=True,sort_keys=True)))
     return dict(status='ACK_RECORDED',request_id=value['request_id'],acted_at=stamp,revision=revision)

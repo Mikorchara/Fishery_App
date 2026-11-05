@@ -15,7 +15,8 @@ from .event_api import register_event_api
 def create_app(*, monitoring=None, ai=None, video=None, files=None, events=None,
                allowed_hosts=("127.0.0.1:8766", "localhost:8766", "localhost"),
                data_service=None, ingestion_token=None, knowledge_service=None, settings_service=None, demo_video=None,
-               simulation_mode='full',device_report_store=None,device_report_device_id=None):
+               simulation_mode='full',device_report_store=None,device_report_device_id=None,
+               device_event_bridge=None):
     if simulation_mode not in ('full','water-only'):raise ValueError('INVALID_SIMULATION_MODE')
     if device_report_store is not None:
         from apps.device_reports.storage import ReportStore
@@ -102,7 +103,9 @@ def create_app(*, monitoring=None, ai=None, video=None, files=None, events=None,
         from apps.monitoring.event_cycles import summarize_cycles
         return jsonify(**({'video_preview':demo_video.metadata()} if demo_video is not None else {}),
             schema_version=1, application="management-web-r1", data_mode=mode, preferences=preferences,
-            **({'integration':dict(simulation_mode=simulation_mode,device_reports=device_reports)} if simulation_mode!='full' else {}),
+            **({'integration':dict(simulation_mode=simulation_mode,device_reports=device_reports,
+                **({'device_events':dict(enabled=True,error_code=device_event_bridge.code)}
+                    if device_event_bridge is not None else {}))} if simulation_mode!='full' else {}),
             devices=devices, monitoring=snapshot, cameras=video.cameras(),
             event_management=event_access(),
             events=original_events, event_cycles=summarize_cycles(original_events) if data_service is not None else None,

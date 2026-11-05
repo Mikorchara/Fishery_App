@@ -143,6 +143,15 @@ def main(argv=None):
     if args.enable_assistant:
         from apps.ai_service.settings import ManagementSettingsService
         settings = ManagementSettingsService(ai_options['ai'].backend, paths.settings)
+    bridge=None
+    if report_store is not None:
+        if data_service is None:parser.error('DEVICE_EVENTS_REQUIRE_MONITORING')
+        if args.device_report_device_id in data_service.device_names:
+            parser.error('DEVICE_REPORT_DEVICE_CONFLICT')
+        from apps.device_reports.bridge import DeviceEventBridge
+        bridge=DeviceEventBridge(report_store,data_service.repository,args.device_report_device_id,
+                                 clock=data_service.clock)
+        ai_options['device_event_bridge']=bridge
     if args.simulation_mode!='full':ai_options.update(simulation_mode=args.simulation_mode,device_report_store=report_store,device_report_device_id=args.device_report_device_id)
     if demo_video is not None:ai_options['demo_video']=demo_video
     app = create_app(allowed_hosts=(f"127.0.0.1:{args.port}", f"localhost:{args.port}"),
@@ -154,7 +163,11 @@ def main(argv=None):
     try:
         with marked_instance_writer(paths.data_root):
             print(f"Management Web · Local: http://127.0.0.1:{args.port}", flush=True)
-            app.run(host="127.0.0.1", port=args.port, debug=False, load_dotenv=False)
+            try:
+                if bridge is not None:bridge.start()
+                app.run(host="127.0.0.1", port=args.port, debug=False, load_dotenv=False)
+            finally:
+                if bridge is not None:bridge.close()
     except InstanceWriterBusy as error:
         parser.error(error.code)
 

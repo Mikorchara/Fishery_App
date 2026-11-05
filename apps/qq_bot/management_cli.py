@@ -90,8 +90,9 @@ def save_qq_secret(*, replace=False):
     emit('MANAGEMENT_QQ_SECRET_SAVED')
 
 
-def run(request_path, directory, *, offline=False, seconds=None, stop_requested=lambda:False, read=input, emit_status=emit):
-    request, summary=check_request(request_path,offline=offline)
+def run(request_path, directory, *, offline=False, seconds=None, stop_requested=lambda:False, read=input, emit_status=emit,
+        device_report_device_id=None):
+    request, summary=check_request(request_path,offline=offline,device_report_device_id=device_report_device_id)
     if not request.enabled: raise BotError('AI_DISABLED')
     from .gateway import validate_run_duration
     duration=request.limits.seconds if seconds is None else seconds
@@ -112,6 +113,7 @@ def run(request_path, directory, *, offline=False, seconds=None, stop_requested=
             from .demo_runtime import provider_factory
             host=ManagementRun(request,directory,async_client_factory=provider_factory if offline else None)
             if summary.get('event_notifications'):
+                if device_report_device_id is not None:host.enable_device_events(device_report_device_id)
                 host.enable_event_notifications(request.event_recipient_file)
             plan=host.plan(); digest=_hash(plan)[:12]
             emit_status('MANAGEMENT_BOT_APPROVAL_REQUIRED',summary=summary,plan_sha256=_hash(plan))
@@ -120,6 +122,9 @@ def run(request_path, directory, *, offline=False, seconds=None, stop_requested=
                     print('另行批准：向已验证好友（摘要 '+plan['event_notifications']['recipient_ref']+
                         '）主动发送本次指定设备的 SIMULATOR 事件、观测时间。新异常、升级、可靠消退各一次；'
                         '不调用模型，未知送达不重发，每10秒最多1次、每日最多100次。仅本进程有效。',flush=True)
+                    if device_report_device_id is not None:
+                        print('同时向上述接收人发送绑定设备 '+device_report_device_id+
+                            ' 的视觉检测异常提醒（DEVICE REPORT，非确诊）；不自动判断恢复，不调用模型。',flush=True)
                 answer=read('如同意本进程模型、披露、General 风险及费用，请输入 APPROVE MANAGEMENT '+digest+'：')
                 if answer.strip()!='APPROVE MANAGEMENT '+digest: raise BotError('MANAGEMENT_APPROVAL_DECLINED')
             host.approve(plan,confirmed=True)  # Offline consent cannot construct real I/O.
@@ -215,6 +220,7 @@ def main(argv=None):
     sub=parser.add_subparsers(dest='command',required=True)
     for name in ('check','run'):
         p=sub.add_parser(name);p.add_argument('--request',type=Path,required=True);p.add_argument('--offline-demo',action='store_true')
+        p.add_argument('--device-report-device-id')
         if name=='run':p.add_argument('--run-directory',type=Path,required=True);p.add_argument('--seconds',type=int)
     p=sub.add_parser('prepare-demo');p.add_argument('--data-root',type=Path,required=True);p.add_argument('--config-directory',type=Path,required=True)
     p.add_argument('--app-id',default='123456789');p.add_argument('--group-id',default='fictional-group')
@@ -222,8 +228,10 @@ def main(argv=None):
     p=sub.add_parser('save-secret');p.add_argument('--replace',action='store_true')
     args=parser.parse_args(argv)
     try:
-        if args.command=='check':emit('MANAGEMENT_CHECK',summary=check_request(args.request,offline=args.offline_demo)[1]);return 0
-        if args.command=='run':return run(args.request,args.run_directory,offline=args.offline_demo,seconds=args.seconds)
+        if args.command=='check':emit('MANAGEMENT_CHECK',summary=check_request(args.request,offline=args.offline_demo,
+            device_report_device_id=args.device_report_device_id)[1]);return 0
+        if args.command=='run':return run(args.request,args.run_directory,offline=args.offline_demo,seconds=args.seconds,
+            device_report_device_id=args.device_report_device_id)
         if args.command=='save-secret':save_qq_secret(replace=args.replace);return 0
         path=initialize_demo(args.data_root,args.config_directory,app_id=args.app_id,group_id=args.group_id,
             members=tuple(args.member or ['fictional-member']),enable=args.enable_ai)

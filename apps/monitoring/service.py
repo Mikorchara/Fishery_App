@@ -178,7 +178,11 @@ class MonitoringService:
         if device_id is None:
             events, current = self.repository.events(), None
         else:
-            self._device(device_id)
+            # Event-only boards are not water devices and never enter bind(),
+            # devices(), current water or the original simulator ingestion path.
+            if device_id not in self.device_names:
+                identifier(device_id)
+                if not self.repository.device_report_cursor(device_id):return []
             events, current = self.repository.capture_events(device_id)
         now = self.clock()
         result = []
@@ -187,6 +191,11 @@ class MonitoringService:
                 result.append(event)
                 continue
             key = (event["device_id"], event["channel"])
+            if event.get('source_kind')=='device_report':
+                from .device_events import project as project_report_event
+                row=self.repository.read(*key) if current is None else current.get(key[1])
+                result.append(project_report_event(event,row,now))
+                continue
             if key not in assessments:
                 row = self.repository.read(*key) if current is None else current.get(key[1])
                 assessments[key] = self._assess(*key, row, now)

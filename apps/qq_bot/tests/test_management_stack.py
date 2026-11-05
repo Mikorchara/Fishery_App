@@ -35,12 +35,15 @@ class ManagementStackTests(unittest.TestCase):
             time.sleep(.1)
         self.fail('owned stack condition timed out')
 
-    def start(self,*,bot=True,only=False,seconds=70,quarantine=False,interactive=False,menu_input=None,demo_video=None,score_trial=False):
+    def start(self,*,bot=True,only=False,seconds=70,quarantine=False,interactive=False,menu_input=None,demo_video=None,score_trial=False,
+              report_directory=None,report_device=None):
         log=self.root/'controller.log'
         output=log.open('wb');self.addCleanup(output.close)
         command=[sys.executable,'-X','utf8','-I','-B','-u',str(ROOT/'scripts/dev/management_stack.py'),
             '--request',str(self.request),'--port',str(self.port),'--offline-demo','--no-assistant']
         if seconds is not None:command+=['--seconds',str(seconds)]
+        if report_directory is not None:command+=['--simulation-mode','water-only','--device-report-directory',str(report_directory),
+                                                  '--device-report-device-id',report_device]
         if demo_video is not None:command+=['--demo-video',str(demo_video)]
         if score_trial:
             command.remove('--no-assistant');command+=['--score-trial']
@@ -212,6 +215,39 @@ runpy.run_path(script,run_name='__main__')'''
         self.assertEqual(solo.returncode,0,(solo_directory/'controller.log').read_text())
         self.assertFalse((solo_directory/'web.status.json').exists())
         self.assertFalse((solo_directory/'simulator.status.json').exists())
+
+    def test_bound_device_report_three_processes_web_event_and_fake_private_notice(self):
+        from datetime import datetime,timedelta,timezone
+        import urllib.request
+        from apps.device_reports.storage import ReportStore
+        from apps.device_reports.__main__ import create_receiver
+        from apps.device_reports.tests import test_reports as reports
+        from apps.qq_bot.tests.test_private_notifications import binding
+        recipient=binding(self.root)
+        value=json.loads(self.request.read_text());value['event_recipient_file']=str(recipient)
+        self.request.write_text(json.dumps(value))
+        board='stack-board-1';store=ReportStore.initialize(self.root/'reports')
+        child,directory=self.start(report_directory=self.root/'reports',report_device=board)
+        self.wait(lambda:self.status(directory,'bot').get('state')=='READY' or child.poll() is not None)
+        self.assertIsNone(child.poll(),(directory/'controller.log').read_text())
+        now=datetime.now(timezone.utc);report=reports.report()
+        report.update(device_id=board,report_id='stack-report-1',sent_at=now.isoformat())
+        report['window'].update(start=(now-timedelta(seconds=39)).isoformat(),end=now.isoformat())
+        receiver=create_receiver(store,device_id=board,token=reports.TOKEN).test_client()
+        response=receiver.post('/api/fish/reports',data=json.dumps(report),content_type='application/json',
+                              headers={'X-Device-Token':reports.TOKEN})
+        self.assertEqual(response.json['status'],'accepted')
+        def visible():
+            with urllib.request.urlopen(f'http://127.0.0.1:{self.port}/api/bootstrap',timeout=5) as response:
+                return next((e for e in json.load(response)['events'] if e['device_id']==board),None)
+        self.wait(visible)
+        self.assertEqual(visible()['source_kind'],'device_report')
+        self.wait(lambda:'QQ_EVENT_NOTICE_API_ACCEPTED' in (directory/'bot.log').read_text(encoding='utf8'),timeout=25)
+        request_stop(directory,'all');child.wait(timeout=30)
+        self.assertEqual(child.returncode,0)
+        report=json.loads((directory/'bot-run/result.json').read_text())
+        self.assertGreaterEqual(report['event_notifications']['accepted'],1)
+        self.assertTrue(report['ram_cleared'])
 
     def test_sdk_quarantine_in_bot_process_leaves_web_and_ingestion_alive(self):
         child,directory=self.start(quarantine=True)

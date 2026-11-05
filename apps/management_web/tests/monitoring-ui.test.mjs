@@ -495,6 +495,45 @@ test('dashboard shows ongoing old events before recent resolved records and open
   await p.run('refresh()');assert.ok(overview());
 });
 
+test('device event uses existing dashboard and detail with source evidence and no inferred recovery',async()=>{
+  const d=fixture();
+  d.integration={simulation_mode:'water-only',device_reports:{device_id:'board-1',items:[]}};
+  const board={...d.events[0],id:'board-event',device:'board-1',device_id:'board-1',source_kind:'device_report',
+    channel:'visual',code:'DEVICE_REPORT_SIGNAL',title:'设备报告疑似异常',lifecycle_state:'ACTIVE',last_observed_at:d.monitoring.observed_at,
+    handling:{state:'PENDING',can_ack:false,action_count:0,history:[]},
+    device_report:{report_id:'report-original-1',window:{...d.monitoring.window,frames_processed:222},
+      sent_at:d.monitoring.observed_at,abnormalities:[{label:'ascites',name:'疑似腹水',targets:46,count:70}],
+      report_text:'<script>untrusted device report</script>'}};
+  d.events.push(board,{...board,id:'unbound-event',device:'other-board',device_id:'other-board',title:'不应关联的设备'});
+  const p=page(d);await p.ready();
+  const walk=n=>[n,...n.children.flatMap(walk)];
+  let overview=walk(p.node('content')).find(n=>n.attributes['data-current-anomalies']==='true');
+  assert.match(overview.textContent,/混合来源/);assert.match(overview.textContent,/设备报告疑似异常/);
+  assert.match(overview.textContent,/DEVICE REPORT/);assert.doesNotMatch(overview.textContent,/不应关联的设备/);
+  p.run('eventDetail(state.data.events[1])');
+  const detail=p.node('dialog-body');
+  for(const text of ['DEVICE REPORT','设备模型检测信号，需核查；非确诊','report-original-1','ascites','46','222'])assert.ok(detail.textContent.includes(text));
+  assert.doesNotMatch(detail.textContent,/演示处理状态|视觉信号消退仅表示连续可靠观测/);
+  assert.equal(walk(detail).filter(n=>n.tagName==='button'&&['确认已知晓','人工结束此风险','删除此原始记录'].includes(n.textContent)).length,0);
+  board.lifecycle_state='INDETERMINATE';p.setData(d);await p.run('refresh()');
+  overview=walk(p.node('content')).find(n=>n.attributes['data-current-anomalies']==='true');
+  assert.match(overview.textContent,/状态待核实/);assert.doesNotMatch(overview.textContent,/已恢复|已治愈/);
+});
+
+test('device ACK uses existing capability and confirmation; source alone grants no operation',async()=>{
+  const p=ackPage();p.item.source_kind='device_report';p.item.code='DEVICE_REPORT_SIGNAL';
+  p.item.device_report={report_id:'report-ack-1',abnormalities:[]};
+  await p.open();
+  assert.ok(p.find(p.node('dialog-body'),'确认已知晓'));
+  p.find(p.node('dialog-body'),'确认已知晓').events.click();
+  assert.equal(p.writes.length,0);
+  await p.find(p.node('dialog-body'),'确认知晓此风险').events.click();await p.ready();
+  assert.equal(p.writes.length,1);assert.equal(p.writes[0].value.event_id,p.item.id);
+  assert.equal(p.writes[0].headers['X-Management-Events'],'fictional-event-token');
+  assert.match(p.node('dialog-body').textContent,/已知晓/);
+  assert.equal(p.find(p.node('dialog-body'),'确认已知晓'),undefined);
+});
+
 test('dashboard empty current anomalies requires fresh complete evidence from both channels',async()=>{
   const d=fixture();d.events=[];
   d.monitoring.device_id='sim-pond-1';d.monitoring.findings=[];
@@ -685,7 +724,7 @@ test('dashboard prioritizes AI beside trends without a video placeholder and pre
 });
 
 test('device integration renders original reports as text and never mixes old simulated vision into device facts',async()=>{
-  const data=fixture();data.integration={simulation_mode:'water-only',device_reports:{device_id:'test-board',items:[{
+  const data=fixture();data.integration={simulation_mode:'water-only',device_events:{enabled:true},device_reports:{device_id:'test-board',items:[{
     report:{device_id:'test-board',report_id:'original-1',window:{end:data.monitoring.observed_at,frames_processed:3},
       detection:{unique_tracks:2},behavior:null,measurement:null,has_abnormality:true,
       abnormalities:[{label:'body_ulceration',name:'疑似病灶',targets:1,count:1}],report_text:'<script>untrusted</script>'},
@@ -696,7 +735,7 @@ test('device integration renders original reports as text and never mixes old si
   p.run("location.hash='#video';render()");
   const text=p.node('content').textContent;
   assert.match(text,/设备视觉报告/);assert.match(text,/过期／未知/);assert.match(text,/未提供/);
-  assert.match(text,/暂不生成 Monitoring 事件/);assert.match(text,/WINDOW_DURATION_MISMATCH/);
+  assert.match(text,/设备异常信号进入事件列表，但不自动判定恢复/);assert.match(text,/WINDOW_DURATION_MISMATCH/);
   assert.match(text,/<script>untrusted<\/script>/);
   const walk=n=>[n,...n.children.flatMap(walk)];
   assert.equal(walk(p.node('content')).filter(n=>n.tagName==='script').length,0);
@@ -708,4 +747,19 @@ test('device integration renders original reports as text and never mixes old si
   assert.equal(retained.getAttribute('open'),'');
   data.integration.device_reports={items:[],error_code:'DEVICE_REPORT_READ_UNAVAILABLE'};
   await p.run('refresh()');assert.match(p.node('content').textContent,/状态未知/);
+});
+
+test('device report card distinguishes disabled event sync and bounded sync failure without raw diagnostics',async()=>{
+  const data=fixture();data.integration={simulation_mode:'water-only',device_reports:{device_id:'test-board',items:[]}};
+  const p=page(data);await p.ready();p.run("location.hash='#video';render()");
+  assert.match(p.node('content').textContent,/事件同步未启用或暂不可用/);
+  assert.doesNotMatch(p.node('content').textContent,/设备异常信号进入事件列表/);
+  data.integration.device_events={enabled:true,error_code:'PRIVATE_INTERNAL_EXCEPTION'};
+  p.setData(data);await p.run('refresh()');
+  assert.match(p.node('content').textContent,/设备报告已保存，事件同步暂不可用/);
+  assert.doesNotMatch(p.node('content').textContent,/PRIVATE_INTERNAL_EXCEPTION|设备异常信号进入事件列表/);
+  data.integration.device_events.error_code=null;
+  p.setData(data);await p.run('refresh()');
+  assert.match(p.node('content').textContent,/设备异常信号进入事件列表，但不自动判定恢复/);
+  assert.doesNotMatch(p.node('content').textContent,/事件同步暂不可用/);
 });

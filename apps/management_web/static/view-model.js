@@ -11,7 +11,8 @@ export const routes = [
 export function routeFor(hash) { return routes.find(r=>r.id===hash.replace(/^#/,'')) || routes[0]; }
 export const qualityNames={valid:'有效',partial:'部分缺失',invalid:'无效',missing:'不可用'};
 export const freshnessNames={fresh:'新鲜',stale:'已过期',unknown:'未知'};
-export function sourceName(kind){return ({simulator:'SIMULATOR 模拟来源',demo:'DEMO 演示',connected:'已接入',mixed:'混合来源'})[kind]||'未声明来源';}
+export function sourceName(kind){return ({simulator:'SIMULATOR 模拟来源',device_report:'DEVICE REPORT · 设备检测报告',demo:'DEMO 演示',connected:'已接入',mixed:'混合来源'})[kind]||'未声明来源';}
+export function managedEvent(item){return item.source_kind==='simulator'||item.source_kind==='device_report';}
 export function connectionName(status){return ({online:'正常上报',offline:'上报中断',never_received:'尚无上报',not_connected:'未接入',connected:'已装配',demo:'演示'})[status]||'状态未知';}
 export function eventState(item){return item.lifecycle_state||(item.status==='closed'?'RESOLVED':'ACTIVE');}
 export function cycleConfirmationName(item){return (item.handling?.confirmed??(item.handling?.state==='ACKNOWLEDGED'))?'已确认':'未确认';}
@@ -23,6 +24,7 @@ export function eventHandlingName(item){
 export function eventStateName(item){
   if(item.manual_end?.active)return '已人工结束';
   if(item.legacy_closed&&item.status==='closed')return '旧版已结束（未复核）';
+  if(item.source_kind==='device_report')return ({ACTIVE:'异常中',INDETERMINATE:'状态待核实',RESOLVED:'已结束（未证实恢复）'})[eventState(item)]||'状态待核实';
   if(item.cycle_summary)return ({ACTIVE:'异常中',INDETERMINATE:'状态待核实',RESOLVED:'已恢复'})[eventState(item)]||'状态待核实';
   const state=eventState(item),progress=item.visual_recovery;
   if(state==='ACTIVE'&&progress?.clear_count>0)return `恢复观察中 ${progress.clear_count}/${progress.required_clear_windows}`;
@@ -39,6 +41,9 @@ export function eventStateName(item){
   return state==='ACTIVE'?'异常持续':'状态未知';
 }
 export function eventStateReasonName(item){
+  if(item.source_kind==='device_report')return eventState(item)==='ACTIVE'
+    ?'设备模型检测信号，需核查；非确诊。设备报告尚未提供可靠的异常消退证据。'
+    :'设备报告不足以确认当前状态；停止上报或旧报告过期不代表异常消退。';
   if(item.legacy_closed&&item.status==='closed')return '原记录已结束，但缺少完整生命周期或规则身份，未经新版规则复核；不补造恢复证据或人工确认。';
   const state=eventState(item),quality=item.current_data_quality;
   if(state==='RESOLVED')return item.channel==='visual'
@@ -57,7 +62,9 @@ export function eventStateReasonName(item){
     NO_DATA:'缺少可用观测，不能据此确认恢复。'})[item.state_reason]||'缺少足够的当前可靠证据，无法确认异常是否消退。';
 }
 export function activeEventOverview(data,deviceId){
-  const candidates=(data.event_cycles||data.events).filter(item=>(item.device_id||item.device)===deviceId&&!item.superseded_by
+  const reportDeviceId=data.integration?.device_reports?.device_id;
+  const candidates=(data.event_cycles||data.events).filter(item=>((item.device_id||item.device)===deviceId
+    ||reportDeviceId&&item.source_kind==='device_report'&&(item.device_id||item.device)===reportDeviceId)&&!item.superseded_by
     &&!item.manual_end?.active&&item.status!=='closed'&&eventState(item)!=='RESOLVED')
     .sort((a,b)=>({critical:0,warning:1,info:2}[a.severity]??3)-({critical:0,warning:1,info:2}[b.severity]??3));
   const groups=new Map();
@@ -71,7 +78,7 @@ export function activeEventOverview(data,deviceId){
   });
   const water=data.monitoring,camera=data.cameras.find(c=>(c.device_id||c.id)===deviceId);
   const quality=camera?.analysis?.data_quality;
-  const reliable=data.data_mode==='simulator'&&water?.quality==='valid'&&water?.freshness==='fresh'
+  const reliable=!reportDeviceId&&data.data_mode==='simulator'&&water?.quality==='valid'&&water?.freshness==='fresh'
     &&water?.connectivity==='online'&&camera?.summary&&quality?.quality==='valid'
     &&quality?.freshness==='fresh'&&quality?.connectivity==='online';
   // Use server assessments; never duplicate risk thresholds or infer health from zero events.

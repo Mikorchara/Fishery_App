@@ -5,10 +5,12 @@
 | 数据 | 发送到哪里 | 网页用途 |
 |---|---|---|
 | 原 Simulator 的水质/视觉统计 | 本机 `8766/api/ingestion/batches` | Monitoring、水质历史、规则事件和已授权 AI 查询 |
-| 开发板 TEXT_PACKAGE_API v1 检测报告 | 独立接收器 `8780/api/fish/reports` | 视频页右侧“设备视觉报告”，独立保存原报文 |
+| 开发板 TEXT_PACKAGE_API v1 检测报告 | 独立接收器 `8780/api/fish/reports` | 保存原报文、视频页展示，并由Web同步为设备异常事件 |
 | 根目录 `sample.mp4` | 启动时通过 `-DemoVideo` 指定 | 仅本地录像播放，与上述两路数据独立 |
 
-开发板报文目前**没有水温、pH、溶解氧**。设备联调时，这三项仍由 Simulator 模拟并标注 SIMULATOR；开发板报告不会伪装成模拟视觉，不自动生成 Monitoring 事件、恢复证据、QQ事件提醒或 AI 查询来源。报告设备也不自动加入首页 Monitoring 设备计数。
+开发板报文目前**没有水温、pH、溶解氧**。设备联调时，这三项仍由Simulator模拟并标注SIMULATOR。新鲜异常报告会进入现有事件列表，来源为 **DEVICE REPORT**，不会伪装成模拟数据。每台设备同一轮视觉异常汇总为一条提醒，具体类别和数量在详情；重复、缓存旧包不重复制造实时事件。
+
+第一版不自动判断设备异常已恢复。超过120秒未取得新鲜证据或收到未标异常的报告，旧事件转为“状态待核实”，不是“已恢复”；可沿用人工知晓与失联事件人工结束。设备报告仍不是AI水质查询来源，也不会把设备加入水质设备选择框。
 
 ## 1. 先准备电脑
 
@@ -82,6 +84,20 @@ X-Device-Token: <私下约定的令牌>
 3. 相同报文重传应返回 `duplicate`，页面不增加重复记录。
 4. 超过120秒的观测标为过期；这是报告时效，不是设备在线或疾病恢复判定。
 5. 接收器窗口按 Ctrl+C 停止；Web/Simulator按原方式停止，存储保留。
+
+## QQ设备事件提醒（已有QQ配置的电脑）
+
+先保持上面的接收器运行，再用**同一份报告目录和设备ID**启动三终端。无需新增JSON配置，Web约每2秒同步一次；Bot沿用已有私聊接收人，在原启动审批中一并显示设备报告披露范围。
+
+```powershell
+.\scripts\dev\Start-ManagementStack.ps1 -Request "$PWD\outputs\qq-m3-real-config\request.json" -WithBot -NoAssistant -SimulationMode water-only -DeviceReportDirectory "$PWD\outputs\device-reports" -DeviceReportDeviceId fish-monitor-orin-01 -InteractiveScenario -DemoVideo "$PWD\sample.mp4" -OpenBrowser
+```
+
+将示例设备ID改为开发板实际ID。没有`sample.mp4`时去掉`-DemoVideo`。尚未绑定成功验证的QQ接收人时，只记录/展示事件，不擅自选择QQ用户或群。设备报告通知只发新异常，不虚构等级升级和恢复；持续同类报告不刷屏。原Simulator事件的新异常、升级与恢复通知保持原逻辑，设备通知不调用Qwen、不占AI轮数。
+
+人工验收：让设备重新采集并上报一份新异常报告 → 接收器返回`accepted` → 网页事件列表出现“设备视觉异常报告” → QQ私聊收到`DEVICE REPORT`提醒。不要修改旧包时间冒充新观测。重发同一报文应返回`duplicate`，不增加事件/通知；等待过期后应显示“状态待核实”，不能发“已恢复”。人工结束后有新的异常证据时，会重新提醒一次。
+
+原始库继续独立保存；Monitoring仍为v2，不增加表或迁移。处理进度与设备事件同事务保存，重启会续处理已收报文；不要删除或重建报告库来清空进度。报告同步失败不停止Simulator，视频页显示事件同步暂不可用。设备接收器和Web必须同时运行；Bot只读事件，不承担入库。
 
 页面最多显示最近20条，独立库上限5000条，满后明确拒绝新报文，不自动删除历史。达到上限请停接收后由维护者备份并安排新存储，不清空旧库。
 

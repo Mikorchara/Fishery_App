@@ -68,7 +68,7 @@
 .\scripts\dev\Start-ManagementStack.ps1 -Request "$PWD\outputs\qq-m3-real-config\request.json" -WithBot -NoAssistant -SimulationMode water-only -DeviceReportDirectory "$PWD\outputs\device-reports" -DeviceReportDeviceId fish-monitor-orin-01 -InteractiveScenario -OpenBrowser
 ```
 
-需要录像再加 `-DemoVideo "$PWD\sample.mp4"`。Bot仍单独审批，只读取原授权的模拟水质，不读取开发板报告；不会将开发板检测报告当作QQ规则事件。独立接收器是额外的第四个终端，需单独Ctrl+C关闭。
+需要录像再加 `-DemoVideo "$PWD\sample.mp4"`。绑定后Web会把新鲜设备异常同步到事件列表；Bot原审批会一并显示该设备的视觉异常通知范围，使用已有已验证私聊接收人。AI仍只查询原授权模拟水质，设备提醒不调用模型。同类报告合并提醒，过期只显示状态待核实，不自动判定恢复。独立接收器是额外的第四个终端，需单独Ctrl+C关闭。详见[设备连接步骤](DEVICE_INTERFACE_QUICK.md)。
 
 本次设备接入改变了 Web 启动文件，QQ代码指纹随之更新。已有本机request若提示 `MANAGEMENT_SCOPE_REVIEW_REQUIRED`，应由维护者审查后生成匹配当前准备记录的新request，再Check并重新人工审批；不要复用旧批准或手工关闭指纹检查。本次同步未修改任何已有request或批准。
 

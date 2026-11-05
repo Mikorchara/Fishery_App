@@ -36,6 +36,7 @@ class ManagementRun(HybridRun):
         self._notice_recipient = self._notice_recipient_path = None
         self._notice_summary = None
         self._notice_report = {'enabled':False}
+        self.device_event_device_id=None
         self._issuer = LivePermitIssuer(self.check)
         kwargs = dict(async_client_factory=async_client_factory, limits=request.limits, members=request.members,
                       clock=clock, monotonic=monotonic or time.monotonic)
@@ -93,7 +94,18 @@ class ManagementRun(HybridRun):
         group=next(g for g in self.access.groups if g.group_id==self.inputs.group_id)
         if 'current' not in group.capabilities:raise BotError('EVENT_NOTIFICATION_PERMISSION_REQUIRED')
         self._notice_recipient,self._notice_recipient_path=recipient,recipient_path
-        self._notice_summary=approval_summary(recipient)
+        self._notice_summary=approval_summary(recipient,self.device_event_device_id)
+
+    def enable_device_events(self,device_id):
+        """One explicit board binding for notices, never an AI/water device grant."""
+        from .contracts import identifier
+        from .event_notifications import approval_summary
+        if self.permit is not None:raise BotError('INVALID_RUN_APPROVAL')
+        identifier(device_id)
+        if device_id==self.device_id:raise BotError('DEVICE_EVENT_SOURCE_CONFLICT')
+        self.device_event_device_id=device_id
+        if self._notice_summary is not None:
+            self._notice_summary=approval_summary(self._notice_recipient,device_id)
 
     def report(self,code='RUN_SNAPSHOT'):
         return {**SessionRun.report(self,code),'event_notifications':self._notice_report}

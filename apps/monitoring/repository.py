@@ -184,6 +184,20 @@ class MonitoringRepository:
             db.execute("DELETE FROM alerts WHERE event_id NOT IN (SELECT id FROM events)")
         return {"status": "accepted" if updated else "out_of_order", "updated_channels": updated}
 
+    def device_report_cursor(self, device_id):
+        from .device_events import cursor
+        with self.connection() as db:
+            return cursor(db,device_id)
+
+    def import_device_report(self, report, *, received_at, inbox_cursor, now):
+        from .device_events import import_report
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            result=import_report(db,report,received_at=received_at,inbox_cursor=inbox_cursor,now=now)
+            sync_existing(db)
+            manual_end.sync_history(db)
+            return result
+
     @staticmethod
     def _contact(db, batch, received_at):
         for channel in ("water", "visual"):

@@ -43,6 +43,7 @@ def main(argv=None):
     p=argparse.ArgumentParser();p.add_argument('--role',choices=('web','simulator','bot'),required=True)
     p.add_argument('--run-directory',type=Path,required=True);p.add_argument('--job',required=True)
     p.add_argument('--request',type=Path);p.add_argument('--offline-demo',action='store_true')
+    p.add_argument('--device-report-device-id')
     p.add_argument('--seconds',type=int);p.add_argument('command',nargs=argparse.REMAINDER)
     args=p.parse_args(argv);directory=args.run_directory
     from scripts.dev.console_job import join
@@ -66,7 +67,8 @@ def main(argv=None):
                     if state:write_status(directory,'bot',state=state,code=c,exit_code=None)
                     emit(c,**fields)
                 code=run(args.request,directory/'bot-run',offline=args.offline_demo,seconds=args.seconds,
-                         stop_requested=lambda:stopped(directory,'bot'),emit_status=status)
+                         stop_requested=lambda:stopped(directory,'bot'),emit_status=status,
+                         device_report_device_id=args.device_report_device_id)
             else:
                 command=args.command[1:] if args.command[:1]==['--'] else args.command
                 expected=str(ROOT/'scripts/dev/local_session.py')

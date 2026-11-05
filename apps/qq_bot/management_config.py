@@ -104,7 +104,7 @@ def load_request(path):
     return ManagementRequest(path, inputs, limits, selected, _hash(scope), value['enabled'], _hash(value),recipient_path)
 
 
-def check_request(path, *, offline=False):
+def check_request(path, *, offline=False, device_report_device_id=None):
     request = load_request(path)
     if not offline:
         try:
@@ -122,13 +122,19 @@ def check_request(path, *, offline=False):
         max_model_requests=request.limits.max_turns*2, output_tokens_per_request=OUTPUT_TOKENS,
         seconds_per_turn=90, retries=0, offline=offline, credential_checked=False,
         database_opened=False, network_requests=0, risk=RISK,
-        event_notifications=check_event_recipient(request))
+        event_notifications=check_event_recipient(request,device_report_device_id))
 
 
-def check_event_recipient(request):
+def check_event_recipient(request,device_report_device_id=None):
     # Explicit request binding; other instances never inherit a global destination.
     path=request.event_recipient_file
     if path is None:return None
     from .event_recipients import load_recipient
     from .event_notifications import approval_summary
-    return approval_summary(load_recipient(path,inputs_snapshot(request.inputs)[0].app_id))
+    access=inputs_snapshot(request.inputs)[0]
+    if device_report_device_id is not None:
+        from .contracts import identifier
+        identifier(device_report_device_id)
+        water=next(g.device_id for g in access.groups if g.group_id==request.inputs.group_id)
+        if device_report_device_id==water:raise BotError('DEVICE_EVENT_SOURCE_CONFLICT')
+    return approval_summary(load_recipient(path,access.app_id),device_report_device_id)
