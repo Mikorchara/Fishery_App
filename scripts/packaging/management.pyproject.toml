@@ -25,6 +25,7 @@ exclude = ["*.tests", "*.tests.*", "apps.knowledge_data*", "apps.ai_service.deve
 "*" = ["*.sqlite3*", "*.env", "*.jsonl", "*.pyc"]
 
 [tool.setuptools.package-data]
+"apps.knowledge" = ["resources/*.json"]
 "apps.ai_service" = ["resources/*.json"]
 "apps.qq_bot" = ["examples/*.json"]
 "apps.ai_service.runtime" = ["resources/*.json"]

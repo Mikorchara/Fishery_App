@@ -9,9 +9,9 @@
 AI Knowledge Handler → apps.knowledge.retrieval → 本地 KnowledgeEvidence
 ```
 
-SQLite 是管理端唯一权威文本来源。`apps/knowledge/` 只放程序；运行数据、备份位于所选实例（旧apps/knowledge_data只是兼容路径），不进入 wheel。管理端正常启动、CRUD、检索均不加载旧 JSON 或 `fishery_ai.knowledge` / 旧 Evidence。旧 Prototype 原实现与资源完全不动。旧 JSON 转换只在显式迁移与历史资格的隔离固定夹具中使用；后者不读取用户知识。
+SQLite 是管理端运行时唯一权威文本来源。运行数据、备份位于所选实例（旧apps/knowledge_data只是兼容路径），不进入 wheel。`apps/knowledge/resources` 中的固定背景资料随包提供，仅在显式首次初始化时导入31条；管理端正常启动、CRUD、检索不加载该JSON或 `fishery_ai.knowledge` / 旧 Evidence。旧 Prototype 原实现与资源完全不动。
 
-**新电脑使用DEPLOYMENT中的显式新实例初始化，可建立空白统一知识库，不需要旧JSON或Prototype。下文旧资料迁移仅供已授权的已有数据维护，不是新部署必经步骤。已有库缺失或损坏仍须停下核查，不能用空库掩盖。**
+**新电脑按根目录“开始使用”运行 `Initialize-Management.ps1`，一次建立唯一日常实例并导入31条背景资料，不需要旧机器的数据库或Prototype。原 `--init-data` 仍可显式建立空库。下文迁移仅供已授权的旧数据维护，不是新部署必经步骤。已有库缺失或损坏须停下核查，不能用空库掩盖。**
 
 ## SQLite 格式与版本
 

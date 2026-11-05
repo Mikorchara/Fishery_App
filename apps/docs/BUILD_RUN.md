@@ -2,6 +2,8 @@
 
 在 **Fishery_Management 根目录**打开PowerShell。新电脑先完成根目录的 [开始使用](../../开始使用.md)，已有配置的机器直接选一个入口。启动前正常停止上一次演示。
 
+首次安装依赖后，只需执行一次 `.\scripts\dev\Initialize-Management.ps1`：自动创建 `outputs` 和唯一日常实例，带31条初始背景资料，不需要QQ或模型密钥。已有数据拒绝覆盖；之后需要QQ时用 `configure-existing` 添加配置，步骤见根目录指南。不删除 `outputs` 来“重置配置”。
+
 ## 四个入口
 
 ```powershell

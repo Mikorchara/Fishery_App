@@ -2,6 +2,7 @@
 
 ## 已完成
 
+- 首次下载交接：独立初始化唯一日常实例、31条随包背景资料、同库追加QQ配置；干净源码/新虚拟环境验证，Python856、Node139通过，不依赖旧outputs或密钥。
 - 独立Management：统一Monitoring、历史、风险周期、ACK、人工结束、可靠结束周期永久删除、Knowledge与设置。
 - Web Normal/Streaming复用同一Agent；当前/历史/知识只读Tool与独立可选评分，保留来源、权限与SDK资源门禁。
 - 深蓝/浅色UI、首页AI优先、中心本地视频与可收缩双侧数据、紧凑Tool授权。

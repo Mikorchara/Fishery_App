@@ -32,16 +32,11 @@ def emit(code, **fields):
     print(json.dumps({'code':code,**fields},ensure_ascii=False,default=str),flush=True)
 
 
-def initialize_demo(data_root, config_dir, *, app_id, group_id, members, enable=False):
-    from apps.management_paths import ManagementPaths
-    from apps.management_web.instance import initialize_instance
-    from apps.monitoring.repository import MonitoringRepository
-    from apps.monitoring.service import MonitoringService
-    from apps.simulator.generator import Simulator
+def _configuration_inputs(data_root, config_dir, *, app_id, group_id, members):
+    """Validate explicit paths and grants before creating any files."""
     from .ai_configuration import QQAIConfig, QQAIGrant
     from .contracts import BotConfig, GroupAccess
     from .configuration import app_identifier
-    from .conversations import ConversationOptions
     app_identifier(app_id)
     if not 1<=len(members)<=4:raise BotError('RUN_MEMBERS_NOT_APPROVED')
     root, cfg = local_path(data_root), local_path(config_dir)
@@ -49,18 +44,15 @@ def initialize_demo(data_root, config_dir, *, app_id, group_id, members, enable=
     if (not root.resolve().is_relative_to(ROOT/'outputs') or root == ROOT/'outputs/demo-instance'
             or not cfg.resolve().is_relative_to(ROOT/'outputs')):
         raise BotError('ISOLATED_OUTPUTS_DIRECTORY_REQUIRED')
-    if root.exists() or cfg.exists(): raise BotError('INITIALIZATION_TARGET_EXISTS')
-    if not root.parent.is_dir() or not cfg.parent.is_dir(): raise BotError('INITIALIZATION_PARENT_MISSING')
     access = BotConfig(app_id,(GroupAccess(group_id,'sim-pond-1',tuple(members),('current',)),))
     ai = QQAIConfig(True,budget=CHANNEL_BUDGET,grants=(QQAIGrant(group_id,tuple(members),'sim-pond-1'),))
-    paths = ManagementPaths.resolve(ROOT,data_root=root)
-    initialize_instance(paths); cfg.mkdir()
-    now=datetime.now(timezone.utc)
-    simulator=Simulator(start=now-timedelta(seconds=30),device_id='sim-pond-1',session_id='m3-initialization')
-    service=MonitoringService(MonitoringRepository(paths.monitoring),clock=lambda:now)
-    for _ in range(3): service.ingest(simulator.advance())
-    write_new(root/'qq-isolated-instance.json',dict(contract=MARKER,root=str(root.resolve()),
-        instance_id='management-isolated',device_id='sim-pond-1',source='SIMULATOR'))
+    return root, cfg, access, ai
+
+
+def _write_configuration(root, cfg, *, access, ai, members, enable):
+    """Only a NEW QQ config directory is written; never seed or edit its instance."""
+    from .conversations import ConversationOptions
+    app_id, group_id = access.app_id, access.groups[0].group_id
     for name,value in (('access.json',dict(schema_version=1,app_id=app_id,groups=[asdict(g) for g in access.groups])),
                        ('ai.json',dict(schema_version=1,**asdict(ai))),
                        ('monitoring.json',dict(schema_version=1,instance_id='management-isolated',data_root=str(root.resolve()),devices=['sim-pond-1']))):
@@ -74,6 +66,52 @@ def initialize_demo(data_root, config_dir, *, app_id, group_id, members, enable=
     write_new(cfg/'request.json',dict(schema_version=1,enabled=enable,inputs=inputs.dictionary(),
         limits=asdict(RunLimits(total_budget_cny=DEFAULT_RUN_BUDGET_CNY)),members=list(members),scope_sha256=_hash(scope)))
     return cfg/'request.json'
+
+
+def initialize_demo(data_root, config_dir, *, app_id, group_id, members, enable=False):
+    from apps.management_paths import ManagementPaths
+    from apps.management_web.instance import initialize_instance
+    from apps.monitoring.repository import MonitoringRepository
+    from apps.monitoring.service import MonitoringService
+    from apps.simulator.generator import Simulator
+    root, cfg, access, ai = _configuration_inputs(data_root, config_dir,
+        app_id=app_id, group_id=group_id, members=members)
+    if root.exists() or cfg.exists(): raise BotError('INITIALIZATION_TARGET_EXISTS')
+    if not root.parent.is_dir() or not cfg.parent.is_dir(): raise BotError('INITIALIZATION_PARENT_MISSING')
+    paths = ManagementPaths.resolve(ROOT,data_root=root)
+    initialize_instance(paths); cfg.mkdir()
+    now=datetime.now(timezone.utc)
+    simulator=Simulator(start=now-timedelta(seconds=30),device_id='sim-pond-1',session_id='m3-initialization')
+    service=MonitoringService(MonitoringRepository(paths.monitoring),clock=lambda:now)
+    for _ in range(3): service.ingest(simulator.advance())
+    write_new(root/'qq-isolated-instance.json',dict(contract=MARKER,root=str(root.resolve()),
+        instance_id='management-isolated',device_id='sim-pond-1',source='SIMULATOR'))
+    return _write_configuration(root,cfg,access=access,ai=ai,members=members,enable=enable)
+
+
+def configure_existing(data_root, config_dir, *, app_id, group_id, members, enable=False):
+    """Attach NEW QQ configuration to an explicitly initialized simulator instance.
+
+    This does not create the instance, grant real network approval, copy another
+    machine's configuration, or change Monitoring/Knowledge/Settings/Web Policy.
+    """
+    from apps.management_paths import ManagementPaths
+    from apps.management_web.instance import validate_instance
+    from .trial_configuration import read_json
+    root, cfg, access, ai = _configuration_inputs(data_root, config_dir,
+        app_id=app_id, group_id=group_id, members=members)
+    if cfg.exists():raise BotError('INITIALIZATION_TARGET_EXISTS')
+    if not cfg.parent.is_dir():raise BotError('INITIALIZATION_PARENT_MISSING')
+    if not root.is_dir():raise BotError('MANAGEMENT_INSTANCE_MISSING')
+    try:marker=read_json(root/'qq-isolated-instance.json')
+    except BotError:raise BotError('ISOLATED_INSTANCE_PROOF_REQUIRED') from None
+    if marker != dict(contract=MARKER,root=str(root.resolve()),
+                      instance_id='management-isolated',device_id='sim-pond-1',source='SIMULATOR'):
+        raise BotError('ISOLATED_INSTANCE_PROOF_REQUIRED')
+    # Read-only schema/integrity validation; no Repository constructor or repair.
+    validate_instance(ManagementPaths.resolve(ROOT,data_root=root))
+    cfg.mkdir()
+    return _write_configuration(root,cfg,access=access,ai=ai,members=members,enable=enable)
 
 
 def save_qq_secret(*, replace=False):
@@ -222,9 +260,12 @@ def main(argv=None):
         p=sub.add_parser(name);p.add_argument('--request',type=Path,required=True);p.add_argument('--offline-demo',action='store_true')
         p.add_argument('--device-report-device-id')
         if name=='run':p.add_argument('--run-directory',type=Path,required=True);p.add_argument('--seconds',type=int)
-    p=sub.add_parser('prepare-demo');p.add_argument('--data-root',type=Path,required=True);p.add_argument('--config-directory',type=Path,required=True)
-    p.add_argument('--app-id',default='123456789');p.add_argument('--group-id',default='fictional-group')
-    p.add_argument('--member',action='append',default=None);p.add_argument('--enable-ai',action='store_true')
+    for name in ('prepare-demo','configure-existing'):
+        existing=name=='configure-existing'
+        p=sub.add_parser(name);p.add_argument('--data-root',type=Path,required=True);p.add_argument('--config-directory',type=Path,required=True)
+        p.add_argument('--app-id',required=existing,default=None if existing else '123456789')
+        p.add_argument('--group-id',required=existing,default=None if existing else 'fictional-group')
+        p.add_argument('--member',action='append',required=existing,default=None);p.add_argument('--enable-ai',action='store_true')
     p=sub.add_parser('save-secret');p.add_argument('--replace',action='store_true')
     args=parser.parse_args(argv)
     try:
@@ -233,9 +274,10 @@ def main(argv=None):
         if args.command=='run':return run(args.request,args.run_directory,offline=args.offline_demo,seconds=args.seconds,
             device_report_device_id=args.device_report_device_id)
         if args.command=='save-secret':save_qq_secret(replace=args.replace);return 0
-        path=initialize_demo(args.data_root,args.config_directory,app_id=args.app_id,group_id=args.group_id,
+        prepare=configure_existing if args.command=='configure-existing' else initialize_demo
+        path=prepare(args.data_root,args.config_directory,app_id=args.app_id,group_id=args.group_id,
             members=tuple(args.member or ['fictional-member']),enable=args.enable_ai)
-        emit('MANAGEMENT_ISOLATED_DEMO_CREATED',request=str(path));return 0
+        emit('MANAGEMENT_EXISTING_INSTANCE_CONFIGURED' if args.command=='configure-existing' else 'MANAGEMENT_ISOLATED_DEMO_CREATED',request=str(path));return 0
     except Exception as error:emit(getattr(error,'code','MANAGEMENT_CONFIGURATION_FAILED'));return 1
 
 if __name__=='__main__':raise SystemExit(main())

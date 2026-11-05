@@ -22,4 +22,4 @@ MIG-2：业务数据位置统一由 `apps/management_paths.py` 装配。默认�
 - 行为变更补离线 Python / Node 测试和中文文档；UI 变更检查导航、空状态和响应式布局。相关 Runtime 桥接还须运行对应原型回归。真实请求须本轮明确授权，禁止测试自动调用 Provider / Ollama。
 - `apps/docs/` 描述管理平台及独立 Backend 当前状态；旧 AI Prototype 的文档留在独立来源仓库，不属于本项目运行依赖。两侧 Runtime 与领域实现独立演进，不要求自动同步；管理端水质阈值仅在 monitoring/diagnosis.py 定义，rules.py 负责证据门禁，不复制阈值。以源码、测试为事实，规划明确标为未实现。保护未提交改动，不修改 `D:\Fishery_Project` 或工作区外文件。
 
-- 管理知识文本仅由 `apps/knowledge_data/knowledge.sqlite3` 权威存储（Git忽略/不打包），`apps/knowledge/` 放程序。旧JSON只供显式备份迁移和隔离资格夹具，正常管理链不再导入旧Knowledge/Evidence；不将实际用户库迁移夹带进启动。知识写操作不是LLM Tool，原始来源与编辑版本分离。
+- 管理知识运行时仅由显式实例的 `knowledge.sqlite3` 权威存储（Git忽略/不打包），`apps/knowledge_data` 仅为旧路径兼容。`apps/knowledge/resources` 的31条固定项目背景资料只供显式首次初始化，正常启动和检索不读取JSON；不将实际用户库夹带进初始化。知识写操作不是LLM Tool，原始来源与编辑版本分离。

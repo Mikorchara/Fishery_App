@@ -186,7 +186,7 @@
       "apps/ai_service/channel_management_live.py": "848c09578c34345d9387aaa5f88002bb3ca37591fd7ad5fc42bd8df28292a97e",
       "apps/qq_bot/management_run.py": "8b47a5fc354e4bae74742f9da1a629f3012a2da649d08d6077536e487a2b7140",
       "apps/qq_bot/management_config.py": "7329d1b6842d4bd6e4b2c33770401f9f8d0dfeae73446af20f6fd0cff177a10d",
-      "apps/qq_bot/management_cli.py": "f32302cf4cf064ab33c29320d0b19f3b990bb5ca80cf8f7068d4727070a7314a",
+      "apps/qq_bot/management_cli.py": "f38a7616afeba30edadd8c94722611885f4d53f1e349a4633bac0b49b74c3145",
       "apps/qq_bot/live_transport.py": "2806805cb6838735644c2d241f7614e7aaa58b17121d34b1eb2b7c5ce3bdae1f",
       "apps/qq_bot/demo_runtime.py": "a64235054f8ee1f359fa27e0e8ce34d5175dacc5213e2ef4f97d823479089e0b",
       "apps/management_process.py": "9d2dd07caacb9a70e34093a617bcfd6615357f60c4bca396cb787c2fcd1ca915",
@@ -199,7 +199,7 @@
       "apps/monitoring/event_reset.py": "0e97bbfc12a44ffbd3619b562f9597a9e2c1dbf0861bbb27cbf27a79bae897d7"
     }
   },
-  "scope_sha256": "71eb09dce3023bb384b2acc8dfa1f8c3b483d33b7c889c5d76d0e577198d8ef3",
+  "scope_sha256": "58fed6d178a83301ff3c58ffebd937e8e213d21464ae01011dc086f38bf1d73a",
   "old_approvals_accepted": false,
   "real_execution_requires": "CURRENT_PROCESS_OPERATOR_RUNCONSENT"
 }

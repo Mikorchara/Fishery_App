@@ -55,4 +55,4 @@ Fishery_Management/
 | QQ配置和启动 | qq_bot/management_cli.py、management_config.py、management_run.py；scripts/dev/Start-*.ps1 |
 | 数据库升级 | monitoring/migrate.py；只显式维护，不在启动中调用 |
 
-数据根与源码目录分开，凭据又是独立私有Store。两终端与QQ三终端默认不同数据根，见 [部署指南](guides/DEPLOYMENT.md)。不要为了目录整齐挪动实际数据库。
+数据根与源码目录分开，凭据又是独立私有Store。四个日常cmd共用 `outputs/qq-m3-real-test`；`apps/management_setup.py` 和 `Initialize-Management.ps1` 负责首次显式初始化，`knowledge/resources` 提供31条初始背景资料。QQ后续通过 `configure-existing` 接入同库，见根目录[开始使用](../../开始使用.md)。不要为了目录整齐挪动实际数据库。

@@ -2,7 +2,7 @@
 
 # 管理知识业务包
 
-`apps/knowledge/` 只放程序。管理端文本的唯一权威存储是 `apps/knowledge_data/knowledge.sqlite3`；首次切换需显式迁移，不自动读取或修改用户旧库。
+运行时文本的唯一权威存储是显式实例的 `knowledge.sqlite3`，四个日常入口使用 `outputs/qq-m3-real-test/knowledge.sqlite3`。`resources/` 随源码和安装包提供31条初始背景资料，只由显式首次初始化导入，不覆盖已有库；平常启动和检索不读取该JSON。旧 `apps/knowledge_data` 仅为历史兼容路径。
 
 | 文件 | 职责 |
 |---|---|
@@ -12,6 +12,7 @@
 | evidence.py | 管理侧独立 KnowledgeEvidence；不依赖旧领域合同 |
 | legacy_import.py | 仅显式迁移/隔离资格夹具用的旧 JSON 分块转换 |
 | migration.py | 只读计划、备份、校验、幂等和不覆盖发布；SQLite 备份 |
+| initial.py / resources/ | 新实例的31条项目背景资料初始化；非专业养殖标准 |
 | __main__.py | 默认 dry-run 的维护者迁移/备份入口 |
 | tests/ | 隔离数据库、旧检索 parity、失败/并发、导出与持久化 |
 

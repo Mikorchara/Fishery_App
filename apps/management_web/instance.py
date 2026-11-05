@@ -98,8 +98,8 @@ def validate_instance(paths):
     check_database(paths.knowledge, 'KNOWLEDGE')
 
 
-def initialize_instance(paths):
-    """Publish a complete, empty instance. Never seed from another workspace."""
+def initialize_instance(paths, *, initial_knowledge=False):
+    """Publish a new instance; optional bundled references, never user data."""
     root = paths.data_root
     if root is None:
         raise InstanceError('EXPLICIT_DATA_ROOT_REQUIRED')
@@ -116,10 +116,18 @@ def initialize_instance(paths):
         candidate = ManagementPaths.resolve(root.parent, data_root=stage)
         from apps.monitoring.repository import MonitoringRepository
         MonitoringRepository(candidate.monitoring)
-        repository = KnowledgeRepository(candidate.knowledge)
+        if initial_knowledge:
+            from apps.knowledge.initial import initialize_initial_knowledge
+            initialize_initial_knowledge(candidate.knowledge)
+        repository = KnowledgeRepository(candidate.knowledge, require_existing=initial_knowledge)
         with repository.connection(write=True) as db:
-            db.execute('INSERT INTO knowledge_metadata VALUES (?,?)', ('migration_version','unified-knowledge@2'))
+            if not initial_knowledge:
+                db.execute('INSERT INTO knowledge_metadata VALUES (?,?)', ('migration_version','unified-knowledge@2'))
             db.execute('INSERT INTO knowledge_metadata VALUES (?,?)', ('initialization_version','management-instance@1'))
+            if initial_knowledge:
+                from apps.knowledge.initial import INITIAL_KNOWLEDGE_VERSION
+                db.execute('INSERT INTO knowledge_metadata VALUES (?,?)',
+                           ('initial_knowledge_version', INITIAL_KNOWLEDGE_VERSION))
         candidate.policy_directory.mkdir()
         candidate.traces.parent.mkdir()
         validate_instance(candidate)
