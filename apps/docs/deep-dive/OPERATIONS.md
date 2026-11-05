@@ -8,13 +8,15 @@
 
 | 用途 | 数据根 | 说明 |
 |---|---|---|
-| 正式 Web-only | `%LOCALAPPDATA%\FisheryManagement` | `--user-data`；不让Simulator误写 |
-| 原两终端演示 | `outputs/demo-instance` | 首次复制正式知识；后续编辑保留 |
-| QQ三终端演示 | `outputs/qq-m3-real-test` | 自己的新SIMULATOR实例；不与demo-instance同步 |
+| 本机唯一日常实例 | `outputs/qq-m3-real-test` | 四个cmd均使用当前QQ实例；未搬库、未合并历史 |
+| 旧正式 Web-only | `%LOCALAPPDATA%\FisheryManagement` | 原样保留；仅显式 `--user-data` 选择，日常cmd不使用 |
+| 原两终端演示 | `outputs/demo-instance` | 原样保留；仅显式 `-Demo` 选择，日常cmd不使用 |
 | 自建隔离演示 | 显式 `--data-root` | 新建一次；以后只复用 |
 | 凭据 | 当前用户私有Store、项目路径身份 | 不在业务数据根、不进Git、不自动随文件夹迁移 |
 
 每个数据根包含 Monitoring、Knowledge、Settings、Policy、Trace。Monitoring当前为Schema v2；Knowledge使用 `unified-knowledge@2` 标记，和Monitoring版本不是同一合同。新实例创建最新结构；已有v1不会在普通启动时静默升级。此前正式/演示库升级是历史维护结论，本轮没有再次打开它们，不据此保证任意电脑的版本。
+
+2026-11-05按操作者选择，以现有三终端实例作为日常主库，只调整原两终端cmd指向。未读取或迁移业务记录，未删除旧目录。直接Web/旧CLI不带路径仍有历史兼容默认位置；维护者应显式传入上述日常数据根，避免误开旧实例。私有凭据与QQ批准/运行日志继续按原安全边界独立存放，不迁入业务库。
 
 ## 停止、锁和日志
 
