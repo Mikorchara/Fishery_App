@@ -41,7 +41,7 @@ Fishery_Management/
 - Simulator只通过带本机令牌的HTTP批次上报，由Monitoring事务写入。
 - 设备报告走独立接收器与报告库，Web桥接到`monitoring/device_events.py`，复用事件管理和通知；不走Simulator ingestion，不新增数据库表。
 - QQ独立进程复用相同Service与Backend，通过只读Repository看一个批准实例。Bot退出或SDK隔离不会传播到Web进程。
-- device_reports只写独立报告库，Web以只读方式读取；不写Monitoring、不生成监测事件或AI来源。
+- device_reports接收器只写独立报告库；Web桥接负责Monitoring设备事件。设备视觉报告不进入当前水质AI来源。
 - 视频播放器独立于统计和事件，不推断画面内容。
 
 ## 需要改哪里

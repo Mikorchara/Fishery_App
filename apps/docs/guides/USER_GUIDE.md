@@ -25,7 +25,7 @@
 
 评分基于本窗口规则，缺测/无效/过期/离线不给总分。100分只代表已评估规则没有异常，不代表鱼群健康、无疾病、长期稳定或适养。[评分说明](../deep-dive/EXPERIMENTAL_WATER_SCORE.md)
 
-Stop会发起取消，不等于远端模型一定停止收费。失败、超时和断流不自动重试或切Provider；只有通过Source/Commit的完整答复进入成功历史。QQ有独立预算和权限，Web勾选Tool不会扩大QQ能力。
+Stop会发起取消，不等于远端模型一定停止收费。失败、超时和断流不自动重试或切Provider；只有通过Source/Commit的完整答复进入成功历史。QQ有独立权限，Web勾选Tool不会扩大QQ能力；QQ当前状态和待实施调整统一见[QQ说明](../deep-dive/QQ_BOT.md)。
 
 ## 视频监控
 

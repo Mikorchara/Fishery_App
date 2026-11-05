@@ -14,7 +14,7 @@
 
 ## 1. 先准备电脑
 
-电脑和开发板连接同一可信局域网。在 **Management 根目录**打开 PowerShell，先完成根目录 [开始使用](../../开始使用.md) 的环境安装和 `outputs/local-demo` 初始化。
+电脑和开发板连接同一可信局域网。在 **Management 根目录**打开 PowerShell，先完成根目录 [开始使用](../../开始使用.md) 的环境安装和 `outputs/qq-m3-real-test` 初始化。
 
 另建报告存储（只执行一次，不覆盖已有文件）：
 
@@ -35,7 +35,7 @@
 先正常关闭旧 Web / Simulator，再执行：
 
 ```powershell
-.\scripts\dev\run_local.ps1 -DataRoot "$PWD\outputs\local-demo" -NoAssistant -ShowTerminals -InteractiveScenario -OpenBrowser -SimulationMode water-only -DeviceReportDirectory "$PWD\outputs\device-reports" -DeviceReportDeviceId fish-monitor-orin-01
+.\scripts\dev\run_local.ps1 -DataRoot "$PWD\outputs\qq-m3-real-test" -NoAssistant -ShowTerminals -InteractiveScenario -OpenBrowser -SimulationMode water-only -DeviceReportDirectory "$PWD\outputs\device-reports" -DeviceReportDeviceId fish-monitor-orin-01
 ```
 
 在 Simulator 中选水质场景，推荐先选 `1` 正常。此模式不会生成模拟视觉；“疑似疾病、摄食减少”等视觉参数不生效。水质异常规则仍正常运行。

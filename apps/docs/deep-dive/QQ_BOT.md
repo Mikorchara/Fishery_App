@@ -1,104 +1,82 @@
-# QQ Hybrid Bot：当前合同与排错
+# QQ Bot：当前实现与调整方案
 
-首次部署看 [部署与配置](../guides/DEPLOYMENT.md)，日常只看 [启动指南](../BUILD_RUN.md)。本页合并原 M1/M2/M3、事件私聊和无回复修复中的当前有效约束，不保留阶段性重复命令。
+这是QQ功能唯一的详细机制与排错说明。人类配置命令只维护在根目录[开始使用](../../../开始使用.md#6-可选开启-qq-机器人)，日常入口见[BUILD_RUN](../BUILD_RUN.md)，停止和备份见[运行维护](OPERATIONS.md)。
 
-## 架构与权限
+**状态：当前源码仍是有界运行和General/Water结构化输出。持续运行、网页Token设置和Web式自然回答是已确定的调整方向，尚未实现。尚未配置QQ的用户暂不需要先建旧配置；两终端Web/Simulator可以继续使用。**
 
-QQ Bot 独立进程 → Gateway / 固定指令 Router → Coordinator / 有界 Scheduler → ManagementAssistantService → 原 AssistantService / ToolCallingService → SDK Adapter 或当前水质 Tool。工具通过 MonitoringService 与只读 Repository 读取明确绑定的实例。
+## 已有能力与复用边界
 
-- Web 和 Simulator 不导入或依赖 Bot 启动；Bot 的 SDK 隔离状态不跨进程传给 Web。
-- 只处理平台认证的群 @ 事件，固定指令优先。伪造 @ 文本、昵称或聊天内容不能取得权限。
-- 只开放当前水质；无 Knowledge、历史/事件 AI Tool、评分、ACK、删除、配置写入或设备控制。
-- 实例和设备由可信本机配置冻结。缺库、旧 Schema、损坏和查询超预算拒绝，不建库、不迁移、不回退到 Demo。
-- Repository 使用 SQLite mode=ro、query_only、写操作禁止、设备范围与查询预算；模型不直接接触 SQL。
+QQ是独立进程：官方Gateway → 固定指令/Hybrid路由 → Coordinator/Scheduler → ManagementAssistantService → 原AssistantService/ToolCallingService → Qwen或授权的当前水质Tool。Web与QQ复用同一套Agent实现，分别装配，不共享浏览器会话或运行中的Service对象。
 
-## General / Water 与记忆
+- 固定查询、帮助、常见问候和清空会话由程序处理；其他授权自然语言进入Agent。普通自然语言可能产生模型费用。
+- 只处理平台认证的群@事件，校验App、群、成员及冻结的实例/设备。昵称、伪造@文本和聊天内容不能改变授权。
+- 当前只开放指定实例、指定设备的当前水质只读Tool。QQ没有Knowledge、历史/事件AI Tool、评分、ACK、删除、配置写入或设备控制权限。
+- MonitoringService和只读Repository提供事实；使用`mode=ro`、`query_only`和查询预算。缺库、旧Schema或损坏时拒绝，不自动建库、迁移或切换实例。
+- Bot独立启动和停止；其SDK隔离状态不跨进程传播到Web。Bot故障不应终止Web或Simulator。
 
-General 通常1次请求、0 Tool，属于实验性普通聊天/概念解释，不是现场核验、项目知识库证据或专业保证。有限文本防护存在漏检和误拦风险。
+## 当前回答与记忆
 
-Water 最多2次请求、1 Tool；本轮当前事实必须来自实际 Tool Steps / Receipt / SourceSummary。继续使用封闭水质解释合同，保留 SIMULATOR、观测/评估时间、质量、新鲜度和连接状态。旧低氧读数不能据此生成当前 HIT；无 HIT 也不等于能排除风险。General 声明不能掩盖实际发生的 Tool 步骤。
+当前General通常为1次模型请求、0个Tool；Water最多2次请求、1个当前水质Tool。分支依据实际Tool步骤和Receipt确定，不依据模型自称。
 
-Chat 展示是同轮可信事实与经校验解释的投影，不重新查询/调用模型。普通 QQ CLI 默认禁用，真实入口只能经 Management 本进程批准。
+当前Prompt要求`qq-hybrid-reply@2` JSON。General还有长度和有限文字防护；Water返回封闭解释计划，由程序根据同轮SourceSummary渲染。它能限制现场事实来源，但也存在正常概念误拦、格式失败及固定模板答非所问的问题；合同通过不等于回答质量正确。
 
-内存 ConversationStore 按 App、群、成员、实例、设备、授权代次和 Scope 隔离，6个成功 Turn、15分钟空闲过期、64会话、每会话24KiB、全局1MiB、Agent 历史投影约4KiB。只在 Backend/Source/Commit、SDK关闭、QQ API明确接受且文本哈希与会话CAS均通过后提交实际发送的安全文本。未知交付、失败和撤权不写成功记忆；`/清空会话` 不恢复额度；退出清空 RAM。
+当前观测的来源、时间、质量、新鲜度和连接状态必须保留。过期、离线、缺测不能称为当前正常；历史低氧读数不能自动生成当前HIT，没有当前HIT也不能证明没有风险。查询不等于重新采样。
 
-## RunConsent、预算与生命周期
+ConversationStore保存在内存，按App、群、成员、实例、设备、授权代次和Scope隔离。历史只帮助理解主题；新的当前水质问题仍须取得本轮Tool来源。只有Backend/Source/Commit成功、SDK关闭、QQ API明确接受、发送文本哈希与会话revision一致后才提交成功历史。未知交付、失败、取消和撤权不提交；`/清空会话`仅清当前成员会话，退出清空RAM。
 
-合同为 `management-qq-hybrid-process-run@1`，准备资源仍为 candidate、qualification_id=null。不是 released，也不继承 Prototype 或旧实验批准。人工本次审批派生不可反序列化的内部许可与 TurnLease。
+## 已确定、待实现的调整
 
-当前固定 `dashscope-qwen38-flash-r1` / `qwen3.8-flash`；新配置默认1800秒、5 Turn、8.06元。Management独立额度合同`management-budget-bounded-run@1`支持显式轮数（1～1000）或`max_turns:null`预算模式；后者以`floor(总预算/1.611060)`计算有限容量，不再叠加5轮限制。运行期限上限28800秒、预算上限2000元，必须由本次启动摘要重新人工批准；不扩展旧FAST/双轮合同。
+本节是实施规格，不能据此认为当前命令已经支持新模式。
 
-每请求2048输出Token、90秒/Turn、最多2请求/Turn、零重试，1 worker、2等待位置。每轮保守预留1.611060元，100元可预留62轮；不是实际费用预测。准入成功后失败、取消、拒绝或未知送达不退款；BUSY与未授权不扣费。额度不是云端最终账单硬上限。原子账本、跨进程消费保护及最后一个已预留任务的完成规则不变。
+| 项目 | 新模式规格 |
+|---|---|
+| 持续运行 | 不设整次运行时长、累计AI轮数或累计费用耗尽停止；由操作者正常停止，严重故障仍停止新AI请求 |
+| 启动授权 | 启动时一次确认模型、群/成员、实例/设备和持续调用费用；新独立运行合同，不把旧有界批准改成无限许可 |
+| Token | 网页“系统设置 → QQ机器人”拟提供**每次模型请求最大输出Token**，默认2048，沿用Web已有1–4096范围；不是整Turn累计Token或输入Token上限 |
+| 设置生效 | 首版保存后重启Bot生效；设置独立于Web AI是否启用，不存密钥、AppID或OpenID |
+| 回答 | 保留Hybrid固定分支，复用Web式自然语言回答，不再强制普通回答JSON或将Tool后回答全部替换为固定水质模板 |
+| 来源展示 | 真实Tool步骤仍决定可用来源；必要的SIMULATOR、时间及数据不足说明由可信摘要提供，模型自然解释不宣称经过逐句事实认证 |
+| 单轮执行 | 保留当前水质只读工具、每Turn90秒、最多2次模型请求及零自动重试；这些处理单次执行故障，不是整次会话限时 |
+| 交付与记忆 | 保留去重、队列、单次被动回复Owner、未知送达不重试、API接受后提交历史 |
 
-批准绑定当前进程、源码 Scope、Prompt、Tool、预算、成员、实例和设备。独占锁与写前 fsync 账本防止批准被多个进程消费；复制文件或重启不能恢复旧额度。权限、Scope、绑定或所有权变化失效，严重 SDK/账本故障停止 AI。
+自然回答仍可能产生模型事实错误；来源Receipt证明本轮执行过哪些查询，不能证明自由文本逐句正确。新模式不得只修改`can_send`、`can_deliver`或候选标记来开放，须绑定实际Prompt、输出、Token和持续授权合同，先离线验证，再独立真实验收。
 
-**当前 Management 整个 Bot 仍按本次运行期限退出。** 不将 Prototype 的“QQ长期在线、AI许可单独到期”行为写成已在 Management 实现。Bot 到期不会自动终止 Web/Simulator；关闭整组由编排器处理。
+## 旧有界配置兼容
 
-## SDK 与单次交付
+当前合同为`management-qq-hybrid-process-run@1`，准备资源仍为candidate，`qualification_id=null`。现有`configure-existing`和旧`prepare-demo`生成的request仍采用旧有界合同；默认1800秒、5个AI Turn、8.06元保守预留，固定每请求2048输出Token。预算模式仍会由批准金额计算有限轮数，不能当作持续模式。
 
-沿用 RequestHandle、SDK资源租约、取消、Client/Stream关闭和线程退出确认；不使用已清理的子进程草稿。取消请求、本地 I/O 中断、线程退出和远端停止计费是不同状态。
+旧运行许可绑定本进程、Scope、Prompt、Tool、成员、实例、设备和预算；合法准入原子预留TurnLease，失败、取消和未知送达不退款。独占锁与写前账本避免重复消费；旧批准、used标记和历史报告不能复用或改写为新模式许可。当前Bot到期会退出，但不自动终止Web/Simulator。
 
-清理无法确认时隔离该 Bot 进程，不成功 Commit、不继续交付、不清零门禁重试。不合作线程仍可能无法强制终止；进程边界限制对 Web 的影响，但不保证远端计算或计费停止。
+旧模式参数仅为兼容说明，新用户无需为过渡重复配置。新模式实现后，首配和旧配置迁移方法只更新根目录[开始使用](../../../开始使用.md)。
 
-每个 QQ 原消息只有一个被动回复 Owner，发送前重查权限、Scope、期限和SDK状态。API超时或结果未知不重发、不重新推理。API接受不自动等于客户端实际显示；人工验收另记。没有额外“正在查询”消息抢占回复权。
+## SDK、故障与单次交付
 
-## 事件私聊通知
+沿用RequestHandle和SDK资源租约，确认Client/Stream关闭及请求线程退出。发出取消、本地I/O中断、线程退出和远端停止计算/计费是不同状态。不合作线程仍可能无法强制终止；独立进程限制对Web的影响，但不保证远端停止计费。
 
-默认关闭（新 request 不含 `event_recipient_file`）。启用时须绑定同 App 的受控好友接收人，并在本进程人工摘要中单独批准。只发指定设备 SIMULATOR 的新异常、等级升级、可靠消退，各一次；不重放启动前历史，连续同级HIT和ACK不刷屏。
+SDK清理无法确认时隔离该Bot进程，不成功Commit、不继续发送或清零门禁重试。每个原消息只有一个被动回复Owner；发送前复核身份权限、来源、SDK状态和QQ消息期限。超时或送达未知不重发、不重新推理，也不追加成功历史。QQ API接受与客户端实际显示分别记录，不额外发送“正在查询”抢占回复权。
 
-每5秒轮询，10秒最多1次、每日最多100次尝试，不调用Qwen、不扣AI Turn。写前记录 CLAIMED 并 fsync，再主动发送；失败、未知、重启不自动重发。通知日志不能删除来重置去重。
+## 事件通知与设备报告
 
-`event_recipients` 只会从已有、成功的受控主动私聊探测报告生成接收人：
+事件私聊通知默认关闭。启用时须同App的受控好友接收人及本次明确批准；只向指定接收人发送授权设备的事件，不由QQ号码或昵称推断身份。Management尚无独立的新接收人配对向导，首次绑定仍由维护者处理，不依赖Prototype启动。
 
-```powershell
-# 仅维护者使用；输入必须是已授权的成功报告，不是随意填写的QQ号码。
-.\.venv\Scripts\python.exe -X utf8 -I -B -m apps.qq_bot.event_recipients --probe-directory '<成功报告的本机绝对目录>' --output '<全新接收人JSON绝对路径>'
-```
+SIMULATOR新异常、升级和可靠消退各提醒一次；连续同级HIT和ACK不刷屏，不重放启动前历史。发送前持久化去重声明，失败、未知和重启不自动重发；通知记录不能删除以重置去重。QQ平台主动发送权限与群内被动问答是两回事，私聊成功不能推定群主动权限。
 
-该命令不联网、不批准发送；还需受控绑定 request 并重新 Check/审批。**Management 尚未提供独立的私聊探测入口与新接收人绑定向导**，新电脑应默认不启用通知，由维护者另行处理，不把 Prototype 作为运行依赖。群主动发送曾被平台拒绝；不能用好友通知成功推定群权限可用。
+设备联调显式绑定报告目录和设备ID后，Web桥接将新鲜设备异常接入Monitoring现有事件；Bot沿用已批准私聊通道。设备报告当前只提醒新异常，不自动判断恢复或伪造升级。新的异常证据可使人工结束的关注项重新打开；同代次重复报告不重复通知。设备不进入AI水质设备列表，不新增Tool；原Simulator路径保持不变。接线与报文操作只看[设备连接步骤](../DEVICE_INTERFACE_QUICK.md)。
 
-轮询可能遗漏两次快照之间已经结束的短周期，不宣称恰好一次送达。`QQ_EVENT_NOTICE_API_ACCEPTED` 只说明平台接受；“规则条件消退”不表示治愈或人工处理完成。
-
-## 设备报告事件接入
-
-显式以`water-only + DeviceReportDirectory + DeviceReportDeviceId`绑定时，Web启动独立本机桥接线程，从报告库按到达顺序读取，事务内将设备事件及处理游标写入原Monitoring v2的events/alerts/current；不新增表，不调用Simulator ingestion，不修改水质/模拟视觉阈值。每台设备汇总一个`DEVICE_REPORT_SIGNAL`，级别固定提醒；详情保留原始报文、报告ID及标签目标数，不把目标数当帧数。
-
-报文重复不重复入事件；乱序及超过120秒的缓存报告不产生当前新异常。无新鲜证据或未标异常的报告只使状态待核实，不自动CLEAR/恢复。ACK采用独立设备等级版本，既有Simulator确认指纹不变；沿用原人工结束与审计留存规则。新的报告会使既有人工结束不再覆盖新证据。
-
-统一启动器把明确的设备ID传给Bot，原一次启动审批中增加DEVICE REPORT通知披露，不修改旧批准、不新增逐条审批。沿用已有私聊通道、发送日志、频率和每日总限额；设备只提醒新异常，未知送达不重试。设备不进入AI水质设备列表，不增加模型Tool，原General/Water解释合同不变。未绑定设备时原Simulator路径保持原样。
-
-设备事件人工结束后，新的异常报告会重新打开关注项。通知按已有人工结束记录区分提醒代次：每次重新需要关注可提醒一次；同代次重复和送达未知不重发。风险周期ID不因此改变，原模拟器发送记录和去重键不变。
-
-2026-11-05离线验证：完整Python830/830、Node134/134通过（`outputs/test-tmp/device-event-full-final-20261105.log`）；最后补齐的重新提醒分支专项19/19、三终端联动1/1通过。链路覆盖接收HTTP、原报文落盘、设备事件同步、Web/ACK、Fake QQ私聊、重复/乱序/旧包、资源回收及原Simulator回归。Schema仍为v2，没有新表，未操作真实业务库或真实QQ/Qwen。
-
-## 安全状态与排错
+## 排错与验证
 
 | 状态 | 含义与操作 |
 |---|---|
-| AI_ADMITTED | 仅准入，不是执行/回复成功 |
-| AI_TASK_FINISHED | 查看 backend、交付与错误码；不自动再发相同问题补偿 |
-| INVALID_TOOL_ARGUMENTS | 参数不符合当前工具（仅{}），不绕过参数验证 |
-| RUN_TURN_LIMIT / RUN_BUDGET_EXHAUSTED | 本次批准轮数/预算已用完；给授权成员一次明确提示。有效运行期间仍可用`/当前水质`，不自动续额 |
-| ASSISTANT_RESPONSE_TRUNCATED | 输出截断；最多一次固定失败提示，不发布残缺正文、不成功提交历史 |
-| QQ_REPLY_API_ACCEPTED | QQ接受被动回复；客户端是否显示需人工确认 |
-| DELIVERY_UNKNOWN | 不重发、不追加成功历史；保守消耗本轮额度 |
-| SDK资源隔离/清理失败 | 停止新AI，保留报告，正常停Bot；不重置门禁 |
-| MANAGEMENT_SCOPE_REVIEW_REQUIRED | 源码与准备/本机配置不一致；维护者审查后更新准备与新配置，不改旧批准 |
-| INVALID_RUN_DURATION | 运行时长不符合本次批准。已修复“两小时request被Gateway旧一小时限制拒绝”的问题；Management显式传入已批准上限，普通Gateway默认仍限一小时 |
-| MANAGEMENT_BOT_REPORT_SAVED | 报告落盘；还须核对结果中的backend、SDK、交付、历史和额度 |
+| `AI_ADMITTED` | 仅准入；继续查看`AI_TASK_FINISHED`，不是成功回复 |
+| `INVALID_TOOL_ARGUMENTS` | 参数不符合当前工具（仅`{}`）；记录失败，不放宽设备绑定或自动补跑 |
+| `ASSISTANT_RESPONSE_TRUNCATED` | 输出截断，不把残缺正文记为成功历史 |
+| `RUN_TURN_LIMIT` / `RUN_BUDGET_EXHAUSTED` / `INVALID_RUN_DURATION` | 当前旧有界模式的轮数、预算或时长限制；新持续模式尚未实现 |
+| `QQ_REPLY_API_ACCEPTED` / `QQ_EVENT_NOTICE_API_ACCEPTED` | 平台接受；客户端是否显示仍需独立确认 |
+| `DELIVERY_UNKNOWN` | 不重发、不重新推理、不追加成功历史 |
+| SDK资源隔离或清理失败 | 停止新AI，保留报告并正常停止Bot；不清零门禁继续运行 |
+| `MANAGEMENT_SCOPE_REVIEW_REQUIRED` | 源码、准备资源和本机配置不一致；维护者审查，不修改旧批准绕过 |
+| `MANAGEMENT_BOT_REPORT_SAVED` | 最终报告落盘；同时核对Backend、SDK、交付和History结果 |
 
-原无回复问题曾由多余Tool参数与512输出Token截断引起；Management独立升至2048并有终态状态和一次性安全失败提示。Web输出预算没有因此改变。错误提示只在可安全发送时提交一次，不保证所有故障都能回群通知。
+`-Check`只验证离线配置，不读取密钥、打开数据库或联网，不能证明平台资格、密钥或实际可达性。详细配置命令统一见根目录[开始使用](../../../开始使用.md)。
 
-2026-11-04复核：用户提供的5轮中两次失败，脱敏Trace均为`definition / UNEXPECTED_ARGUMENTS`，分别19/14字节、各1个字段；没有记录字段名，不能推测具体参数。五轮SDK均CLOSED且线程已退出，未发现SDK卡死证据。Management Prompt更新为`QQ_MANAGEMENT_HYBRID_DIALOGUE@5`并增加空参数示例；仍拒绝任意多余字段，不保证仅靠Prompt消除模型错误。
-
-展示保障：精确的“查询水质”“查询当前水质”（允许末尾句读）作为固定命令别名，复用原权限/限流/只读查询与单次回复Owner，不调用模型、不提交AI历史。带额外设备或其他内容不匹配；显式`/问AI`仍走Agent。错误回复提供`/当前水质`替代入口，不自动重试。共享Web Prompt、Tool定义与执行循环不变。
-
-本次变更刷新Management候选Scope及实现摘要，资格仍为candidate。旧批准不可复用；本机request需备份后更新Scope和明确的limits，再Check/重新审批。离线回归不能证明真实模型成功率；本机有限批测见启动指南。
-
-验证：2026-11-04完整独立Python回归811/811、Node 130/130通过；新增额度/固定查询及本机批测专项通过。批测CLI以MockTransport完成两题、四次内存HTTP、零QQ发送；真实Qwen尚未复测，自动化进程的凭据接口返回`CREDENTIAL_FILE_ERROR`，未绕过保护读取密钥。完整日志为`outputs/test-tmp/qq-demo-regression-final-20261104.log`（本机输出、不随Git交付）。
-
-后续启动修复：上述回归的真实类型装配用例曾以`seconds=30`缩短运行，未覆盖两小时request的完整传递。现用本次7200秒配置经过审批、Gateway、Mock HTTP及成功历史提交后主动停止；同时覆盖普通Gateway一小时默认、已批准八小时边界及非法/超批准时长在审批前拒绝。用户失败运行的结果为`INVALID_RUN_DURATION`、0 Turn、0额度消费、RAM已清空；不据此推断发生模型扣费。
-
-本次修复验证：QQ全部专项162/162通过；另外以7200秒request、不加短时覆盖，完成三个独立终端（视频、评分Web、Simulator、Fake Bot）的启动、Mock回复/历史提交及独立停Bot测试。全部使用新建合成实例及内存HTTP，未连接真实QQ/Qwen。本机request仅备份后刷新Scope，原两小时/100元预算及成员、设备、通知绑定不变。
-
-停止与报告路径见 [维护与回滚](OPERATIONS.md)。官方平台权限、可达性和密钥是否有效不能由离线 Check 证明；实际联网只能由操作者另行批准。
+Fake/Mock回归证明程序执行与故障边界，不能替代真实Qwen的工具选择、正常语言误拦和回答质量测试。当前有限Provider检查脚本主要用于调用诊断，不是充分的多轮体验评估。新方案验收须覆盖一般概念、当前水质、季节问题、话题切换、连续追问、过期/缺测和无权限，分别统计回答相关性、误拦、实际Tool调用、Token、耗时、SDK和交付；QQ客户端人工确认单独记录。代码变更和历史阶段记录由Git保留，本页不重复维护旧阶段命令与累计测试数字。
