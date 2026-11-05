@@ -103,6 +103,16 @@ class QQAICoordinator:
     def classify(self, text, **kwargs):
         if self.hybrid:
             from .hybrid_intent import classify as hybrid_classify
+            if getattr(self.session_run, '_continuous', False):
+                import unicodedata
+                from .hybrid_intent import HybridHelp
+                normalized = unicodedata.normalize('NFKC', text).strip().lower().strip('！!。，.?？ ')
+                if normalized in ('工具', '/工具', '有什么工具', '可用工具', '你能做什么',
+                                  '有什么功能', '怎么用', '帮助', '/帮助', 'help', '/help'):
+                    return HybridHelp(text=('我是鳗鲡养殖智能体，可以交流养殖知识，并查询当前绑定设备的水质。'
+                        '本次AI可用工具：当前水质（只读）。/当前水质 可直接查询，不调用模型；'
+                        '/清空会话 只清除你的对话记忆。其余自然语言可能产生模型费用，直至操作者停止。'
+                        '未开放知识库检索、历史AI查询、事件修改或设备控制。'))
             return hybrid_classify(text, **kwargs)
         return classify(text, **kwargs)
 

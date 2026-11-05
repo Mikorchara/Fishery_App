@@ -1,7 +1,8 @@
 import {el,card,button,rows,empty} from './components.js';
+import {createQQSettingsPanel} from './qq-settings.js';
 
 const settingSections=[['general','常规设置'],['models','AI 模型管理'],['credentials','API 密钥'],
-  ['budgets','回答与执行预算'],['tools','Assistant Tool 授权'],['rag','RAG 检索设置']];
+  ['budgets','回答与执行预算'],['tools','Assistant Tool 授权'],['qq','QQ机器人'],['rag','RAG 检索设置']];
 const settingErrors={SETTINGS_CHANGED:'配置已被修改。请重新读取后再保存。',SETTINGS_BUSY:'其他窗口正在保存，请稍后重新读取。',SETTINGS_MODE_UNAVAILABLE:'该模型或响应模式当前不可用，请检查服务器试用开关和工具授权。',
   SETTINGS_DEVICE_UNAVAILABLE:'该监测设备已不可用。',INVALID_SETTINGS:'配置格式不正确。',ENV_REVISION_CONFLICT:'密钥配置已变化，请重新读取后再操作。',
   PROCESS_ENV_READ_ONLY:'此密钥由启动环境提供，网页不能修改。',CREDENTIAL_READ_ONLY:'密钥由启动环境提供或私有存储不可用，网页不能修改。',
@@ -16,6 +17,7 @@ export function createSettingsWorkspace(api,toolPolicy,options={}){
   const root=el('div',{class:'settings-center'}),notice=el('p',{role:'status','aria-live':'polite'});
   let config=null,loaded=false,selected='general',draft=null,busy=false;
   const panels=new Map(),tabs=new Map();
+  const qq=api.qq?createQQSettingsPanel(api.qq):null;
   const nav=el('nav',{class:'card settings-nav','aria-label':'设置分类'},settingSections.map(([id,name])=>{
     const tab=button(name,()=>show(id),'text');tabs.set(id,tab);return tab;
   }));
@@ -140,14 +142,16 @@ export function createSettingsWorkspace(api,toolPolicy,options={}){
     panels.set('rag',card('RAG 检索设置','只展示实际能力；知识内容请到“资料与知识库”管理。',[
       rows([['检索方式',config.rag.method],['Top-K',config.rag.top_k],['单 Evidence 文本上限',`${config.rag.max_evidence_chars} 字符`],['索引','启用内容的不可变快照，按内容版本更新']]),
       el('p',{class:'muted',text:'Embedding、向量/混合检索、Chunk 和索引策略尚未开放配置；本页不调用 LLM。'})]));
+    if(qq)panels.set('qq',qq.node);
     for(const panel of panels.values())body.append(panel);show(selected);
   }
   async function load(){
     if(busy)return;
+    if(qq)void qq.load();
     notice.textContent='正在读取设置…';
     try{config=await api.read();build();notice.textContent='本机设置 · 只有主动测试连接或发送消息才请求模型。';}
     catch(e){notice.textContent=error(e);panels.clear();body.replaceChildren();
-      for(const [id,name] of settingSections){const panel=card(name,'请确认服务器已启用 Assistant。',[
+      for(const [id,name] of settingSections){const panel=id==='qq'&&qq?qq.node:card(name,'请确认服务器已启用 Assistant。',[
         ...(id==='tools'?[toolPolicy.mount()]:[empty('设置暂不可用','请检查本机服务配置。'),button('重新读取',load)])]);
         panels.set(id,panel);body.append(panel);}
       show(selected);}

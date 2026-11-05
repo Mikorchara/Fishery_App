@@ -52,7 +52,7 @@ Fishery_Management/
 | 新业务Tool/Prompt | ai_service/business_tools、runtime；先读开发指南 |
 | Provider取消/清理 | ai_backend/openai_compatible_adapter.py、sdk_resources.py、execution.py |
 | 事件/ACK/周期删除 | monitoring/events.py、event_families.py、event_handling.py、event_cycle_deletion.py |
-| QQ配置和启动 | qq_bot/management_cli.py、management_config.py、management_run.py；scripts/dev/Start-*.ps1 |
+| QQ配置和启动 | ai_service/qq_settings.py、management_web/qq_settings_api.py、qq_bot/management_configuration_bridge.py、management_run.py；scripts/dev/Start-*.ps1 |
 | 数据库升级 | monitoring/migrate.py；只显式维护，不在启动中调用 |
 
-数据根与源码目录分开，凭据又是独立私有Store。四个日常cmd共用 `outputs/qq-m3-real-test`；`apps/management_setup.py` 和 `Initialize-Management.ps1` 负责首次显式初始化，`knowledge/resources` 提供31条初始背景资料。QQ后续通过 `configure-existing` 接入同库，见根目录[开始使用](../../开始使用.md)。不要为了目录整齐挪动实际数据库。
+数据根与源码目录分开，凭据又是独立私有Store。四个日常cmd共用 `outputs/qq-m3-real-test`；`apps/management_setup.py` 和 `Initialize-Management.ps1` 负责首次显式初始化，`knowledge/resources` 提供31条初始背景资料。QQ后续通过网页“QQ机器人”设置接入同库，见根目录[开始使用](../../开始使用.md)。不要为了目录整齐挪动实际数据库。

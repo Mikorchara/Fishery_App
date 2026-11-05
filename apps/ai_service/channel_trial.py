@@ -225,11 +225,14 @@ class QwenTrialSession:
                 trial.check();return sink.record_assistant(*args,**kwargs)
         return GuardedTraces()
 
+    def _reported_reservation(self):
+        return str(cost_reservation(output_tokens=self.output_token_limit))
+
     def report(self):
         with self._lock:
             actual=(self.input_tokens*PRICE_INPUT+self.output_tokens*PRICE_OUTPUT)/Decimal(1_000_000)
             return dict(model_requests=self.requests,usage={'input_tokens':self.input_tokens,
-                'output_tokens':self.output_tokens},reserved_cost_cny=str(cost_reservation(output_tokens=self.output_token_limit)),
+                'output_tokens':self.output_tokens},reserved_cost_cny=self._reported_reservation(),
                 observed_usage_cost_cny=str(actual),billing_confirmed=False,
                 usage_complete=self.requests>0 and self.responses_with_usage==self.requests,
                 sdk_resources=self.handle.resource_info() if self.handle else None,

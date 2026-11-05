@@ -101,6 +101,15 @@ class ManagementLiveTurn(HybridQwenTurn):
 
     def __init__(self, lease, *, permit, authority, conversation_epoch, options, snapshot,
                  validate, claim, async_client_factory=None, clock=None, monotonic=time.monotonic):
+        self._initialize_live(lease, permit=permit, authority=authority,
+            conversation_epoch=conversation_epoch, options=options, snapshot=snapshot,
+            validate=validate, claim=claim, async_client_factory=async_client_factory,
+            clock=clock, monotonic=monotonic)
+
+    def _initialize_live(self, lease, *, permit, authority, conversation_epoch, options, snapshot,
+                         validate, claim, async_client_factory=None, clock=None, monotonic=time.monotonic):
+        # Shared SDK ownership only. Public constructors select their own exact
+        # budget/Scope contract before entering this guarded initialization.
         if type(permit) is not LivePermit or type(lease) is not TurnLease:
             raise GatewayError('MANAGEMENT_RUN_PERMIT_REQUIRED')
         permit.check(); lease.authority.validate(lease)

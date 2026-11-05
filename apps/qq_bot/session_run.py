@@ -1,5 +1,6 @@
 """Offline bounded run host. Existing Gateway/Scheduler/Agent remain owners."""
 from dataclasses import asdict,replace
+from collections import deque
 from datetime import datetime,timezone
 import threading
 import time
@@ -60,7 +61,11 @@ class SessionRun:
         self.base_service=ManagementAssistantService.monitoring_only(self.monitoring,credentials=None,
             traces=JsonlTraceSink(self.directory/'unused-base.trace.jsonl'),policy_directory=inputs.policy_directory)
         self.factory=async_client_factory;self.offline_test=async_client_factory is not None;self._lock=threading.RLock()
-        self.coordinator=None;self.sessions=[];self.turns=[];self._active={};self._closed=False
+        self._continuous=bool(getattr(limits,'continuous',False))
+        self.coordinator=None;self.sessions=[];self.turns=deque(maxlen=32) if self._continuous else []
+        self._totals=dict(finished_turns=0,verified_turns=0,model_requests=0,model_http_requests=0,
+            input_tokens=0,output_tokens=0,observed_usage_cost_cny='0')
+        self._active={};self._closed=False
 
     def scope_for_options(self):return prepared_scope(self.options)
 
@@ -153,6 +158,9 @@ class SessionRun:
             record=self._active.pop(sequence,None)
             if record is None:return
             self.turns.append(dict(turn=sequence,verified=False,state='FAILED',code=code,model_requests=0))
+            if self._continuous:
+                self.sessions[:]=[s for s in self.sessions if s is not record['session']]
+                self.ledger.release_lease(record['lease'])
         self.ledger.halt('RUN_ADMISSION_FAILED')
 
     def finish(self,plan,outcome):
@@ -171,6 +179,16 @@ class SessionRun:
             entry=dict(turn=sequence,verified=verified,outcome=dict(outcome),
                 backend_completed=plan.handle.state=='COMPLETED',**report)
             self.turns.append(entry)
+            if self._continuous:
+                from decimal import Decimal
+                self._totals['finished_turns']+=1
+                self._totals['verified_turns']+=int(verified)
+                for key in ('model_requests','model_http_requests'):
+                    self._totals[key]+=report.get(key,0)
+                for key in ('input_tokens','output_tokens'):
+                    self._totals[key]+=report.get('usage',{}).get(key,0)
+                self._totals['observed_usage_cost_cny']=str(Decimal(self._totals['observed_usage_cost_cny'])+
+                    Decimal(report.get('observed_usage_cost_cny','0')))
         if not safe:self.ledger.halt('RUN_SDK_RESOURCE_UNSAFE')
         if outcome.get('report_error'):self.ledger.halt('RUN_CHECKPOINT_FAILED')
         code=outcome.get('code') or ''
@@ -180,6 +198,10 @@ class SessionRun:
             except BotError:pass
         try:write_new(self.directory/f'turn-{sequence}.result.json',entry)
         except Exception:self.ledger.halt('RUN_CHECKPOINT_FAILED')
+        finally:
+            if self._continuous:
+                with self._lock:self.sessions[:]=[s for s in self.sessions if s is not session]
+                self.ledger.release_lease(record['lease'])
 
     def checkpoint_for(self,plan,receipt):
         try:
@@ -225,8 +247,11 @@ class SessionRun:
         self._closed=True;self.store.close();self.ledger.close()
 
     def report(self,code='RUN_SNAPSHOT'):
-        return dict(contract=self.scope['contract'],code=code,scope_sha256=self.scope_sha256,
+        result=dict(contract=self.scope['contract'],code=code,scope_sha256=self.scope_sha256,
             quota=self.ledger.report(),turns=sorted(self.turns,key=lambda t:t['turn']),
             offline_test=self.offline_test,real_execution=not self.offline_test,ram_cleared=self._closed,
             client_display_confirmed=False,automatic_retry=False)
+        if self._continuous:result.update(turn_records='MOST_RECENT_32_PER_TURN_FILES_RETAINED',
+            totals=dict(self._totals),billing_confirmed=False)
+        return result
 

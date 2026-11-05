@@ -48,6 +48,13 @@ class LeaseAuthority:
             raise GatewayError('INVALID_RUN_TURN_LEASE')
         self._check(lease)
 
+    def release(self, lease):
+        """Drop a completed server lease; never turn it into a reusable approval."""
+        if type(lease) is not TurnLease or lease.authority is not self:
+            raise GatewayError('INVALID_RUN_TURN_LEASE')
+        if self._issued.get(lease.ticket) is lease:
+            del self._issued[lease.ticket]
+
 
 def memory_sdk_factory(factory):
     """Strict memory HTTP with an owned close path, also for typed live-path tests."""

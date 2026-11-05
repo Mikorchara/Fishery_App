@@ -75,13 +75,14 @@ class ManagementAssistantService:
         from .channel_session_run import SessionQwenTurn
         from .channel_hybrid import HybridQwenTurn
         from .channel_management_live import ManagementLiveTurn
-        if channel_trial is not None and (type(channel_trial) not in (HybridQwenTurn, ManagementLiveTurn) or offline_channel_provider is not None or knowledge is not None):
+        from .channel_management_continuous import ContinuousManagementTurn
+        if channel_trial is not None and (type(channel_trial) not in (HybridQwenTurn, ManagementLiveTurn, ContinuousManagementTurn) or offline_channel_provider is not None or knowledge is not None):
             raise GatewayError('INVALID_QWEN_TRIAL_COMPOSITION')
         self._channel_trial = channel_trial
         self._channel_history_authority = None
         if type(channel_trial) in (SessionQwenTurn,):
             self._channel_history_authority = channel_trial.authority
-        if type(channel_trial) in (HybridQwenTurn, ManagementLiveTurn):
+        if type(channel_trial) in (HybridQwenTurn, ManagementLiveTurn, ContinuousManagementTurn):
             self._channel_history_authority = channel_trial.authority
         self.knowledge = knowledge
         from apps.knowledge.service import KnowledgeContentService
@@ -340,7 +341,8 @@ class ManagementAssistantService:
                 elif decision.max_output_tokens is not None:
                     runtime = replace(runtime, transport_output_token_limit=decision.max_output_tokens)
                     from .channel_management_live import ManagementLiveTurn
-                    if authorization is not None and type(self._channel_trial) is ManagementLiveTurn:
+                    from .channel_management_continuous import ContinuousManagementTurn
+                    if authorization is not None and type(self._channel_trial) in (ManagementLiveTurn, ContinuousManagementTurn):
                         self._channel_trial.check()
                         if decision.max_output_tokens!=self._channel_trial.output_token_limit:
                             raise GatewayError('TRIAL_TRANSPORT_BUDGET_MISMATCH')
@@ -356,12 +358,18 @@ class ManagementAssistantService:
                     prompt = (PROMPT_ID, INSTRUCTION)
                     from .channel_management_live import ManagementLiveTurn, PROMPT_ID as LIVE_PROMPT, INSTRUCTION as LIVE_INSTRUCTION
                     if type(trial) is ManagementLiveTurn:prompt=(LIVE_PROMPT,LIVE_INSTRUCTION)
+                    from .channel_management_continuous import ContinuousManagementTurn, PROMPT_ID as NATURAL_PROMPT, INSTRUCTION as NATURAL_INSTRUCTION
+                    if type(trial) is ContinuousManagementTurn:prompt=(NATURAL_PROMPT,NATURAL_INSTRUCTION)
                 result = AssistantService(coordinator, execution_mode=mode, history_projection=DEFAULT_HISTORY_PROJECTION, single_round_prompt=prompt).send(turn, runtime)
                 if authorization is not None:
                     self._check_channel(authorization, prepared.policy_revision)
                     if self._hybrid_channel():
                         from .channel_hybrid import build_result
-                        converted = build_result(result, authorization, decision.profile.revision)
+                        if type(trial) is ContinuousManagementTurn:
+                            from .channel_natural_presentation import present as natural_present
+                            converted = build_result(result, authorization, decision.profile.revision, presenter=natural_present)
+                        else:
+                            converted = build_result(result, authorization, decision.profile.revision)
                         converted = replace(converted, release_status=trial.release_status, offline_only=trial.offline_test)
                         trial.source = converted.source
                         trial.hybrid_result = converted
@@ -397,7 +405,8 @@ class ManagementAssistantService:
     def _history_decision(self, profile, policy, registry, authorization, snapshot, policy_revision):
         from .channel_hybrid import HybridQwenTurn, HybridHistorySnapshot
         from .channel_management_live import ManagementLiveTurn
-        if type(self._channel_trial) in (HybridQwenTurn, ManagementLiveTurn):
+        from .channel_management_continuous import ContinuousManagementTurn
+        if type(self._channel_trial) in (HybridQwenTurn, ManagementLiveTurn, ContinuousManagementTurn):
             if type(snapshot) is not HybridHistorySnapshot:
                 raise GatewayError('INVALID_HYBRID_HISTORY')
             return self._channel_trial.history_decision(profile, policy, registry, authorization, snapshot, epoch=self.epoch, policy_revision=policy_revision)
@@ -413,7 +422,8 @@ class ManagementAssistantService:
     def _hybrid_channel(self):
         from .channel_hybrid import HybridQwenTurn
         from .channel_management_live import ManagementLiveTurn
-        return type(self._channel_trial) in (HybridQwenTurn, ManagementLiveTurn)
+        from .channel_management_continuous import ContinuousManagementTurn
+        return type(self._channel_trial) in (HybridQwenTurn, ManagementLiveTurn, ContinuousManagementTurn)
 
     def _channel_source_requirement(self):
         return SourceRequirement.AUTO if self._hybrid_channel() else SourceRequirement.CURRENT_OBSERVATION_QUERY

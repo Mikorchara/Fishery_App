@@ -41,7 +41,7 @@ class RunConsent:
     consent_id: str
     scope_sha256: str
     bindings_sha256: str
-    expires_at: datetime
+    expires_at: datetime | None
     limits: RunLimits
     process_nonce: object = field(repr=False)
     pid: int
@@ -115,8 +115,9 @@ class RunLedger:
 
     def __init__(self,directory,*,scope_sha256,bindings_sha256,limits=RunLimits(),clock=None,monotonic=time.monotonic):
         if type(limits) is not self.limits_type:raise BotError('INVALID_RUN_LIMITS')
-        self.reservation_per_turn=cost_reservation(output_tokens=self.output_token_limit)
-        if money(limits.total_budget_cny)<self.reservation_per_turn*limits.max_turns:
+        self.continuous=bool(getattr(limits,'continuous',False))
+        self.reservation_per_turn=(Decimal('0') if self.continuous else cost_reservation(output_tokens=self.output_token_limit))
+        if not self.continuous and money(limits.total_budget_cny)<self.reservation_per_turn*limits.max_turns:
             raise BotError('RUN_BUDGET_INSUFFICIENT')
         self.directory=local_path(directory)
         if not self.directory.is_dir():raise BotError('RUN_STATE_DIRECTORY_REQUIRED')
@@ -127,6 +128,7 @@ class RunLedger:
         self._lock=threading.RLock();self._io=threading.RLock()
         self._halted=None;self._closed=False;self._messages={};self._turns=0
         self._reserved=Decimal('0');self._bytes=b'';self._deadline=None
+        self._journal_hash=hashlib.sha256();self._journal_size=0
         self.authority=LeaseAuthority(self.check_lease)
         self._plan=dict(contract=CONTRACT,status='pending_operator_approval',consent_id=self._id,
             scope_sha256=scope_sha256,bindings_sha256=bindings_sha256,limits=asdict(limits),
@@ -146,11 +148,12 @@ class RunLedger:
             try:
                 self._owner=RunOwner(self.directory,self._id,_hash(self._plan))
                 self._journal_path=local_path(self.directory/('run-'+self._id+'.jsonl'))
-                self._journal=self._journal_path.open('x+b')
+                self._journal=(self._continuous_journal() if self.continuous else self._journal_path.open('x+b'))
                 self._append({'type':'approved','plan_sha256':_hash(self._plan)})
                 self._consent=RunConsent(self._id,self.scope_sha256,self.bindings_sha256,
-                    self.clock()+timedelta(seconds=self.limits.seconds),self.limits,self._run_nonce,self._pid)
-                self._deadline=self.now()+self.limits.seconds
+                    None if self.continuous else self.clock()+timedelta(seconds=self.limits.seconds),
+                    self.limits,self._run_nonce,self._pid)
+                self._deadline=None if self.continuous else self.now()+self.limits.seconds
             except Exception:
                 self.halt('RUN_LEDGER_FAILED');self.close();raise BotError('RUN_LEDGER_FAILED') from None
         return self._consent
@@ -167,21 +170,61 @@ class RunLedger:
         if self._consent is None:raise BotError('RUN_NOT_APPROVED')
         if (self._consent.process_nonce is not self._run_nonce or self._consent.pid!=self._pid):
             self.halt('RUN_PROCESS_MISMATCH');raise BotError(self._halted)
-        if self.clock()>=self._consent.expires_at or self.now()>=self._deadline:
+        if not self.continuous and (self.clock()>=self._consent.expires_at or self.now()>=self._deadline):
             self.halt('RUN_EXPIRED');raise BotError(self._halted)
 
     def _journal_intact(self):
         if self._journal is None:return False
         stat=self._journal_path.stat();current=os.fstat(self._journal.fileno())
+        if self.continuous:
+            return (stat.st_dev,stat.st_ino)==(current.st_dev,current.st_ino) and current.st_size==self._journal_size
         self._journal.seek(0);data=self._journal.read(len(self._bytes)+1)
         return (stat.st_dev,stat.st_ino)==(current.st_dev,current.st_ino) and data==self._bytes
 
     def _append(self,record):
-        value={**record,'previous_sha256':hashlib.sha256(self._bytes).hexdigest()}
+        value={**record,'previous_sha256':(self._journal_hash.hexdigest() if self.continuous else hashlib.sha256(self._bytes).hexdigest())}
         data=json.dumps(value,sort_keys=True,separators=(',',':')).encode()+b'\n'
         self._journal.seek(0,os.SEEK_END)
         if self._journal.write(data)!=len(data):raise OSError('short journal write')
-        self._journal.flush();os.fsync(self._journal.fileno());self._bytes+=data
+        self._journal.flush();os.fsync(self._journal.fileno())
+        if self.continuous:self._journal_hash.update(data);self._journal_size+=len(data)
+        else:self._bytes+=data
+
+    def _continuous_journal(self):
+        """A process-owned append log: Windows denies other writers/deleters.
+
+        Incremental hashing and identity/size checks keep watchdog work bounded.
+        Full historic journal bytes are not retained or reread in RAM.
+        """
+        if os.name!='nt':
+            import fcntl
+            fd=os.open(self._journal_path,os.O_CREAT|os.O_EXCL|os.O_RDWR,0o600)
+            fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        else:
+            import ctypes,msvcrt
+            from ctypes import wintypes
+            kernel=ctypes.WinDLL('kernel32',use_last_error=True)
+            create=kernel.CreateFileW
+            create.argtypes=(wintypes.LPCWSTR,wintypes.DWORD,wintypes.DWORD,wintypes.LPVOID,
+                             wintypes.DWORD,wintypes.DWORD,wintypes.HANDLE)
+            create.restype=wintypes.HANDLE
+            handle=create(str(self._journal_path),0xC0000000,1,None,1,0x80,None)
+            if handle==wintypes.HANDLE(-1).value:raise OSError('journal ownership unavailable')
+            try:fd=msvcrt.open_osfhandle(handle,os.O_BINARY|os.O_RDWR)
+            except Exception:kernel.CloseHandle(wintypes.HANDLE(handle));raise
+        return os.fdopen(fd,'r+b')
+
+    def _claim_continuous_message(self,message_key,fingerprint):
+        directory=self.directory/'messages';directory.mkdir(exist_ok=True)
+        path=local_path(directory/(_hash(message_key)+'.used'));value=_hash(fingerprint).encode('ascii')
+        try:
+            with path.open('xb') as stream:
+                if stream.write(value)!=len(value):raise OSError('short claim write')
+                stream.flush();os.fsync(stream.fileno())
+        except FileExistsError:
+            with path.open('rb') as stream:existing=stream.read(65)
+            if existing==value:raise BotError('RUN_MESSAGE_ALREADY_USED') from None
+            raise BotError('RUN_MESSAGE_CONFLICT') from None
 
     def check(self):
         with self._lock:self._check_fast()
@@ -195,12 +238,15 @@ class RunLedger:
 
     def can_admit(self):
         self.check()
+        if self.continuous:return
         with self._lock:
             if self._turns>=self.limits.max_turns:raise BotError(self.quota_limit_code())
             if self._reserved+self.reservation_per_turn>money(self.limits.total_budget_cny):raise BotError('RUN_BUDGET_EXHAUSTED')
 
     def remaining(self):
-        self.check();return max(0,min(self._deadline-self.now(),(self._consent.expires_at-self.clock()).total_seconds()))
+        self.check()
+        if self.continuous:return 90
+        return max(0,min(self._deadline-self.now(),(self._consent.expires_at-self.clock()).total_seconds()))
 
     def reserve(self,*,message_key,fingerprint,member_id,instance_id,device_id,app_id,group_id):
         # A watchdog/lease read briefly owns this same lock. Do not randomly
@@ -211,11 +257,18 @@ class RunLedger:
             self.check()
             with self._lock:
                 self._check_fast()
-                if message_key in self._messages:
+                if not self.continuous and message_key in self._messages:
                     raise BotError('RUN_MESSAGE_ALREADY_USED' if self._messages[message_key]==fingerprint else 'RUN_MESSAGE_CONFLICT')
-                if self._turns>=self.limits.max_turns:raise BotError(self.quota_limit_code())
-                if self._reserved+self.reservation_per_turn>money(self.limits.total_budget_cny):raise BotError('RUN_BUDGET_EXHAUSTED')
-                self._turns+=1;self._reserved+=self.reservation_per_turn;self._messages[message_key]=fingerprint
+                if not self.continuous and self._turns>=self.limits.max_turns:raise BotError(self.quota_limit_code())
+                if not self.continuous and self._reserved+self.reservation_per_turn>money(self.limits.total_budget_cny):raise BotError('RUN_BUDGET_EXHAUSTED')
+            if self.continuous:
+                try:self._claim_continuous_message(message_key,fingerprint)
+                except BotError:raise
+                except Exception:
+                    self.halt('RUN_LEDGER_FAILED');raise BotError('RUN_LEDGER_FAILED') from None
+            with self._lock:
+                self._turns+=1;self._reserved+=self.reservation_per_turn
+                if not self.continuous:self._messages[message_key]=fingerprint
                 sequence=self._turns
                 record=dict(type='reserved',sequence=sequence,message_key_sha256=_hash(message_key),
                     fingerprint_sha256=_hash(fingerprint),reserved_cost_cny=str(self._reserved),reserved_requests=sequence*2)
@@ -229,7 +282,8 @@ class RunLedger:
                 self._check_fast()
                 return self.authority._issue(approval_id=self._id+'-'+str(sequence),sequence=sequence,
                     scope_sha256=self.scope_sha256,bindings_sha256=self.bindings_sha256,
-                    expires_at=min(self._consent.expires_at,self.clock()+timedelta(seconds=90)),
+                    expires_at=(self.clock()+timedelta(seconds=90) if self.continuous else
+                                min(self._consent.expires_at,self.clock()+timedelta(seconds=90))),
                     instance_id=instance_id,device_id=device_id,app_id=app_id,group_id=group_id,
                     member_id=member_id,message_key=message_key)
         finally:self._io.release()
@@ -248,6 +302,11 @@ class RunLedger:
                 stop_code=self._halted,consumed_turns=self._turns,reserved_model_requests=self._turns*2,
                 reserved_cost_cny=str(self._reserved),total_budget_cny=self.limits.total_budget_cny,
                 max_turns=self.limits.max_turns,billing_confirmed=False,resume=False)
+
+    def release_lease(self,lease):
+        if not self.continuous:return
+        with self._lock:
+            self.authority.release(lease)
 
     def close(self):
         with self._lock:self._closed=True

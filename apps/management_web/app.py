@@ -16,7 +16,7 @@ def create_app(*, monitoring=None, ai=None, video=None, files=None, events=None,
                allowed_hosts=("127.0.0.1:8766", "localhost:8766", "localhost"),
                data_service=None, ingestion_token=None, knowledge_service=None, settings_service=None, demo_video=None,
                simulation_mode='full',device_report_store=None,device_report_device_id=None,
-               device_event_bridge=None):
+               device_event_bridge=None, qq_settings_service=None):
     if simulation_mode not in ('full','water-only'):raise ValueError('INVALID_SIMULATION_MODE')
     if device_report_store is not None:
         from apps.device_reports.storage import ReportStore
@@ -324,4 +324,6 @@ def create_app(*, monitoring=None, ai=None, video=None, files=None, events=None,
     register_knowledge_api(app,knowledge_service)
     from .settings_api import register_settings_api
     register_settings_api(app,settings_service,assistant,ai_gate)
+    from .qq_settings_api import register_qq_settings_api
+    register_qq_settings_api(app,qq_settings_service)
     return app

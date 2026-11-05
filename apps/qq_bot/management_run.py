@@ -22,8 +22,16 @@ class ManagementLedger(HybridLedger):
         return 'RUN_BUDGET_EXHAUSTED' if self.limits.budget_only else 'RUN_TURN_LIMIT'
 
     def __init__(self, *args, **kwargs):
+        self.output_token_limit=kwargs.pop('output_token_limit',OUTPUT_TOKENS)
+        contract=kwargs.pop('contract',CONTRACT)
         super().__init__(*args, **kwargs)
-        self._plan.update(contract=CONTRACT, environment='MANAGEMENT_PROCESS_RUNCONSENT')
+        self._plan.update(contract=contract, environment='MANAGEMENT_PROCESS_RUNCONSENT')
+        if self.continuous:self._plan.update(reservation_per_turn_cny=None,cumulative_limits=False)
+
+    def report(self):
+        result=super().report()
+        if self.continuous:result.update(contract=self._plan['contract'],mode='continuous',cumulative_limits=False)
+        return result
 
 
 class ManagementRun(HybridRun):
@@ -33,6 +41,9 @@ class ManagementRun(HybridRun):
     def __init__(self, request, directory, *, async_client_factory=None, clock=None, monotonic=None):
         import time
         self.request, self.permit = request, None
+        if request.continuous:
+            from apps.ai_service.channel_management_continuous import ContinuousChannelBudget
+            self.channel_budget=ContinuousChannelBudget(max_output_tokens=request.output_tokens)
         self._notice_recipient = self._notice_recipient_path = None
         self._notice_summary = None
         self._notice_report = {'enabled':False}
@@ -44,16 +55,29 @@ class ManagementRun(HybridRun):
         from apps.ai_service.channel_validation import ValidationBoundary
         self.boundary = ValidationBoundary(); self._issuer.boundary = self.boundary
         SessionRun._initialize(self, request.inputs, directory, **kwargs)
+        if request.continuous:
+            from dataclasses import replace
+            self.config=replace(self.config,enabled=request.ai_enabled)
 
-    def scope_for_options(self): return prepared_scope(self.options)
+    def _inputs_snapshot(self,inputs,monitoring=None):
+        from .management_config import inputs_snapshot
+        return inputs_snapshot(inputs,monitoring,budget=self.channel_budget)
+
+    def scope_for_options(self):
+        if self.request.continuous:
+            from apps.ai_service.channel_management_continuous import prepared_scope as continuous_scope
+            return continuous_scope(self.options,output_tokens=self.request.output_tokens)
+        return prepared_scope(self.options)
 
     def _new_ledger(self, limits):
         return ManagementLedger(self.directory, scope_sha256=self.scope_sha256,
-            bindings_sha256=self._binding_digest, limits=limits, clock=self.clock, monotonic=self.now)
+            bindings_sha256=self._binding_digest, limits=limits, clock=self.clock, monotonic=self.now,
+            output_token_limit=self.request.output_tokens,contract=self.scope['contract'])
 
     def plan(self):
-        return {**SessionRun.plan(self), 'contract': CONTRACT, 'offline': self.offline_test,
-                'request_sha256': self.request.digest, 'risk': RISK,
+        from .management_config import CONTINUOUS_RISK
+        return {**SessionRun.plan(self), 'contract': self.scope['contract'], 'offline': self.offline_test,
+                'request_sha256': self.request.digest, 'risk': CONTINUOUS_RISK if self.request.continuous else RISK,
                 **({'event_notifications':self._notice_summary} if self._notice_summary else {})}
 
     def approve(self, plan, *, confirmed=False):
@@ -69,7 +93,11 @@ class ManagementRun(HybridRun):
             current = load_request(self.request.path)
             if current.digest != self.request.digest: raise BotError('MANAGEMENT_REQUEST_CHANGED')
             SessionRun._check_configuration(self)
-            if read_json(PREPARATION) != preparation_record(self.scope):
+            if self.request.continuous:
+                from apps.ai_service.channel_management_continuous import preparation_record as continuous_record
+                record_path=self.request.path.parent/'scope.json';record=continuous_record(self.scope)
+            else:record_path=PREPARATION;record=preparation_record(self.scope)
+            if read_json(record_path) != record:
                 raise BotError('MANAGEMENT_SCOPE_REVIEW_REQUIRED')
         return validation_once(('management-live-config', id(self)), verify)
 
@@ -81,10 +109,14 @@ class ManagementRun(HybridRun):
 
     def _create_turn(self, lease, snapshot, validate):
         if self.permit is None: raise BotError('MANAGEMENT_RUN_PERMIT_REQUIRED')
-        return ManagementLiveTurn(lease, permit=self.permit, authority=self.store.authority,
+        turn=ManagementLiveTurn;extra={}
+        if self.request.continuous:
+            from apps.ai_service.channel_management_continuous import ContinuousManagementTurn
+            turn=ContinuousManagementTurn;extra['output_tokens']=self.request.output_tokens
+        return turn(lease, permit=self.permit, authority=self.store.authority,
             conversation_epoch=self.base_service.epoch, options=self.options, snapshot=snapshot,
             validate=validate, claim=lambda: self.ledger.check_lease(lease),
-            async_client_factory=self.factory, clock=self.clock, monotonic=self.now)
+            async_client_factory=self.factory, clock=self.clock, monotonic=self.now,**extra)
 
     def enable_event_notifications(self, recipient_path):
         from .event_recipients import load_recipient

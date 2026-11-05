@@ -194,7 +194,7 @@ class QQGateway:
     def _pump(self, ws, guard=None):
         def arm(deadline, code):
             if guard is not None:
-                if self._deadline < deadline:
+                if self._deadline is not None and self._deadline < deadline:
                     deadline, code = self._deadline, 'QQ_RUN_DURATION_REACHED'
                 guard.arm(deadline, code)
         arm(self.now()+10, 'GATEWAY_HELLO_TIMEOUT')
@@ -222,7 +222,7 @@ class QQGateway:
             identify = {'op': 2, 'd': {'token': token, 'intents': INTENTS, 'shard': [0, 1]}}
         self.emit('QQ_GATEWAY_RESUMING' if resuming else 'QQ_GATEWAY_IDENTIFYING')
         ws.send(json.dumps(identify))
-        while not self.stop.is_set() and self.now() < self._deadline:
+        while not self.stop.is_set() and not self._duration_reached():
             if self.trial_router is not None:self.trial_router.check_liveness()
             if not ready and self.now()-started > 15:
                 raise BotError('GATEWAY_AUTH_TIMEOUT')
@@ -285,14 +285,24 @@ class QQGateway:
 
     def run(self, seconds=600, *, max_seconds=3600):
         validate_run_duration(seconds, max_seconds=max_seconds)
-        self._deadline = self.now()+seconds
+        return self._run(seconds)
+
+    def run_until_stopped(self):
+        """Explicit continuous transport; heartbeats and reconnect bounds remain."""
+        return self._run(None)
+
+    def _duration_reached(self):
+        return self._deadline is not None and self.now()>=self._deadline
+
+    def _run(self,seconds):
+        self._deadline=None if seconds is None else self.now()+seconds
         try:
             if self.adapter:
                 self._worker = threading.Thread(target=self._work, name='qq-readonly-worker')
                 self._worker.start()
             for attempt in range(4):
                 if self.trial_router is not None:self.trial_router.check_liveness()
-                if self.stop.is_set() or self.now() >= self._deadline:
+                if self.stop.is_set() or self._duration_reached():
                     if not self.stop.is_set():
                         self.emit('QQ_RUN_DURATION_REACHED')
                     break
@@ -313,7 +323,7 @@ class QQGateway:
                                 guard.arm(self.now()+GATEWAY_CLOSE_SECONDS, 'GATEWAY_CLOSE_TIMEOUT')
                         if guard.expired:
                             raise BotError(guard.expired)
-                    if self.now() >= self._deadline:
+                    if self._duration_reached():
                         self.emit('QQ_RUN_DURATION_REACHED')
                     return
                 except KeyboardInterrupt:
@@ -341,7 +351,7 @@ class QQGateway:
                     if attempt == 3:
                         raise BotError('QQ_RECONNECT_LIMIT') from None
                     self.emit('QQ_GATEWAY_RETRY_WAIT', attempt=attempt+1, retry_delay_seconds=2**attempt)
-                    self.stop.wait(min(2**attempt, max(0, self._deadline-self.now())))
+                    self.stop.wait(2**attempt if self._deadline is None else min(2**attempt, max(0, self._deadline-self.now())))
         finally:
             self.stop.set();self.ready.clear()
             try:

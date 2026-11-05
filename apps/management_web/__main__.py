@@ -143,6 +143,12 @@ def main(argv=None):
     if args.enable_assistant:
         from apps.ai_service.settings import ManagementSettingsService
         settings = ManagementSettingsService(ai_options['ai'].backend, paths.settings)
+    if paths.data_root is not None:
+        from apps.ai_service.qq_settings import QQSettingsService
+        from apps.qq_bot.management_configuration_bridge import QQConfigurationBridge
+        qq_directory = root / 'outputs' / 'qq-m3-real-config'
+        ai_options['qq_settings_service'] = QQSettingsService(root, paths.data_root, qq_directory,
+            configuration_bridge=lambda: QQConfigurationBridge(root, paths.data_root, qq_directory))
     bridge=None
     if report_store is not None:
         if data_service is None:parser.error('DEVICE_EVENTS_REQUIRE_MONITORING')

@@ -32,7 +32,7 @@ def emit(code, **fields):
     print(json.dumps({'code':code,**fields},ensure_ascii=False,default=str),flush=True)
 
 
-def _configuration_inputs(data_root, config_dir, *, app_id, group_id, members):
+def _configuration_inputs(data_root, config_dir, *, app_id, group_id, members,continuous=False,output_tokens=2048,ai_enabled=True):
     """Validate explicit paths and grants before creating any files."""
     from .ai_configuration import QQAIConfig, QQAIGrant
     from .contracts import BotConfig, GroupAccess
@@ -45,16 +45,20 @@ def _configuration_inputs(data_root, config_dir, *, app_id, group_id, members):
             or not cfg.resolve().is_relative_to(ROOT/'outputs')):
         raise BotError('ISOLATED_OUTPUTS_DIRECTORY_REQUIRED')
     access = BotConfig(app_id,(GroupAccess(group_id,'sim-pond-1',tuple(members),('current',)),))
-    ai = QQAIConfig(True,budget=CHANNEL_BUDGET,grants=(QQAIGrant(group_id,tuple(members),'sim-pond-1'),))
+    budget=CHANNEL_BUDGET
+    if continuous:
+        from apps.ai_service.channel_management_continuous import ContinuousChannelBudget
+        budget=ContinuousChannelBudget(output_tokens)
+    ai = QQAIConfig(ai_enabled,budget=budget,grants=(QQAIGrant(group_id,tuple(members),'sim-pond-1'),))
     return root, cfg, access, ai
 
 
-def _write_configuration(root, cfg, *, access, ai, members, enable):
+def _write_configuration(root, cfg, *, access, ai, members, enable,continuous=False):
     """Only a NEW QQ config directory is written; never seed or edit its instance."""
     from .conversations import ConversationOptions
     app_id, group_id = access.app_id, access.groups[0].group_id
     for name,value in (('access.json',dict(schema_version=1,app_id=app_id,groups=[asdict(g) for g in access.groups])),
-                       ('ai.json',dict(schema_version=1,**asdict(ai))),
+                       ('ai.json',dict(schema_version=2 if continuous else 1,**asdict(ai))),
                        ('monitoring.json',dict(schema_version=1,instance_id='management-isolated',data_root=str(root.resolve()),devices=['sim-pond-1']))):
         write_new(cfg/name,value)
     (cfg/'policy').mkdir()
@@ -62,9 +66,18 @@ def _write_configuration(root, cfg, *, access, ai, members, enable):
     inputs=TrialInputs.parse(dict(access_file=str(cfg/'access.json'),ai_config=str(cfg/'ai.json'),
         monitoring_config=str(cfg/'monitoring.json'),policy_directory=str(cfg/'policy'),group_id=group_id,member_id=members[0]))
     inputs_snapshot(inputs)  # Initializes only this new, isolated Bot policy; no global policy writes.
-    scope=prepared_scope(ConversationOptions(trigger_mode='mention_ai',memory_enabled=True))
-    write_new(cfg/'request.json',dict(schema_version=1,enabled=enable,inputs=inputs.dictionary(),
-        limits=asdict(RunLimits(total_budget_cny=DEFAULT_RUN_BUDGET_CNY)),members=list(members),scope_sha256=_hash(scope)))
+    options=ConversationOptions(trigger_mode='mention_ai',memory_enabled=True)
+    if continuous:
+        from apps.ai_service.channel_management_continuous import prepared_scope as continuous_scope,preparation_record
+        from .management_limits import ManagementRunLimits
+        scope=continuous_scope(options,output_tokens=ai.budget.max_output_tokens)
+        limits=ManagementRunLimits.continuous_run()
+        write_new(cfg/'scope.json',preparation_record(scope))
+    else:scope=prepared_scope(options);limits=RunLimits(total_budget_cny=DEFAULT_RUN_BUDGET_CNY)
+    request=dict(schema_version=2 if continuous else 1,enabled=enable,inputs=inputs.dictionary(),
+        limits=asdict(limits),members=list(members),scope_sha256=_hash(scope))
+    if continuous:request['ai_enabled']=ai.enabled
+    write_new(cfg/'request.json',request)
     return cfg/'request.json'
 
 
@@ -89,7 +102,7 @@ def initialize_demo(data_root, config_dir, *, app_id, group_id, members, enable=
     return _write_configuration(root,cfg,access=access,ai=ai,members=members,enable=enable)
 
 
-def configure_existing(data_root, config_dir, *, app_id, group_id, members, enable=False):
+def configure_existing(data_root, config_dir, *, app_id, group_id, members, enable=False,continuous=True,output_tokens=2048):
     """Attach NEW QQ configuration to an explicitly initialized simulator instance.
 
     This does not create the instance, grant real network approval, copy another
@@ -99,7 +112,8 @@ def configure_existing(data_root, config_dir, *, app_id, group_id, members, enab
     from apps.management_web.instance import validate_instance
     from .trial_configuration import read_json
     root, cfg, access, ai = _configuration_inputs(data_root, config_dir,
-        app_id=app_id, group_id=group_id, members=members)
+        app_id=app_id, group_id=group_id, members=members,continuous=continuous,output_tokens=output_tokens,
+        ai_enabled=enable if continuous else True)
     if cfg.exists():raise BotError('INITIALIZATION_TARGET_EXISTS')
     if not cfg.parent.is_dir():raise BotError('INITIALIZATION_PARENT_MISSING')
     if not root.is_dir():raise BotError('MANAGEMENT_INSTANCE_MISSING')
@@ -111,7 +125,7 @@ def configure_existing(data_root, config_dir, *, app_id, group_id, members, enab
     # Read-only schema/integrity validation; no Repository constructor or repair.
     validate_instance(ManagementPaths.resolve(ROOT,data_root=root))
     cfg.mkdir()
-    return _write_configuration(root,cfg,access=access,ai=ai,members=members,enable=enable)
+    return _write_configuration(root,cfg,access=access,ai=ai,members=members,enable=enable,continuous=continuous)
 
 
 def save_qq_secret(*, replace=False):
@@ -135,7 +149,7 @@ def run(request_path, directory, *, offline=False, seconds=None, stop_requested=
     from .gateway import validate_run_duration
     duration=request.limits.seconds if seconds is None else seconds
     # Fail before approval/credentials if an override exceeds this run's consent.
-    validate_run_duration(duration,max_seconds=request.limits.seconds)
+    if duration is not None:validate_run_duration(duration,max_seconds=request.limits.seconds or 28800)
     import logging
     for name in ('openai','httpx','httpcore','websockets'):
         logging.getLogger(name).disabled=True  # Dedicated Bot process only; no wire/body logging.
@@ -206,7 +220,9 @@ def run(request_path, directory, *, offline=False, seconds=None, stop_requested=
                 except Exception:journal.close();raise
                 notifier.start()
             def drive():
-                try: gateway.run(duration,max_seconds=request.limits.seconds)
+                try:
+                    if duration is None:gateway.run_until_stopped()
+                    else:gateway.run(duration,max_seconds=request.limits.seconds or 28800)
                 except Exception as error: failures.append(getattr(error,'code','MANAGEMENT_GATEWAY_FAILED'))
             worker=threading.Thread(target=drive,name='management-qq-gateway',daemon=False)
             worker.start()
@@ -266,6 +282,7 @@ def main(argv=None):
         p.add_argument('--app-id',required=existing,default=None if existing else '123456789')
         p.add_argument('--group-id',required=existing,default=None if existing else 'fictional-group')
         p.add_argument('--member',action='append',required=existing,default=None);p.add_argument('--enable-ai',action='store_true')
+        if existing:p.add_argument('--max-output-tokens',type=int,default=2048);p.add_argument('--bounded',action='store_true')
     p=sub.add_parser('save-secret');p.add_argument('--replace',action='store_true')
     args=parser.parse_args(argv)
     try:
@@ -276,7 +293,8 @@ def main(argv=None):
         if args.command=='save-secret':save_qq_secret(replace=args.replace);return 0
         prepare=configure_existing if args.command=='configure-existing' else initialize_demo
         path=prepare(args.data_root,args.config_directory,app_id=args.app_id,group_id=args.group_id,
-            members=tuple(args.member or ['fictional-member']),enable=args.enable_ai)
+            members=tuple(args.member or ['fictional-member']),enable=args.enable_ai,
+            **(dict(continuous=not args.bounded,output_tokens=args.max_output_tokens) if args.command=='configure-existing' else {}))
         emit('MANAGEMENT_EXISTING_INSTANCE_CONFIGURED' if args.command=='configure-existing' else 'MANAGEMENT_ISOLATED_DEMO_CREATED',request=str(path));return 0
     except Exception as error:emit(getattr(error,'code','MANAGEMENT_CONFIGURATION_FAILED'));return 1
 

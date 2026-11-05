@@ -35,8 +35,9 @@ class QQAIConfig:
     grants: tuple[QQAIGrant,...] = field(default=(),repr=False)
 
     def __post_init__(self):
+        from apps.ai_service.channel_management_continuous import ContinuousChannelBudget
         if (type(self.enabled) is not bool or self.preset_id!=PRESET
-                or type(self.budget) is not ChannelBudget or type(self.grants) is not tuple
+                or type(self.budget) not in (ChannelBudget, ContinuousChannelBudget) or type(self.grants) is not tuple
                 or len(self.grants)>16 or any(type(g) is not QQAIGrant for g in self.grants)
                 or len({g.group_id for g in self.grants})!=len(self.grants)):
             raise BotError('INVALID_QQ_AI_CONFIG')
@@ -49,7 +50,7 @@ class QQAIConfig:
     def from_dict(cls,value):
         try:
             if (set(value)!={'schema_version','enabled','preset_id','budget','grants'}
-                    or type(value['schema_version']) is not int or value['schema_version']!=1
+                    or type(value['schema_version']) is not int or value['schema_version'] not in (1,2)
                     or set(value['budget'])!={'max_output_tokens','turn_timeout_s'}
                     or type(value['grants']) is not list):
                 raise ValueError()
@@ -59,7 +60,9 @@ class QQAIConfig:
                         or type(record['members']) is not list or type(record['tools']) is not list):
                     raise ValueError()
                 grants.append(QQAIGrant(record['group_id'],tuple(record['members']),record['device_id'],tuple(record['tools'])))
-            return cls(value['enabled'],value['preset_id'],ChannelBudget(**value['budget']),tuple(grants))
+            from apps.ai_service.channel_management_continuous import ContinuousChannelBudget
+            budget_type = ChannelBudget if value['schema_version']==1 else ContinuousChannelBudget
+            return cls(value['enabled'],value['preset_id'],budget_type(**value['budget']),tuple(grants))
         except Exception:
             raise BotError('INVALID_QQ_AI_CONFIG') from None
 

@@ -74,7 +74,10 @@ class ConfigureExistingTests(unittest.TestCase):
         self.assertTrue(value['enabled'])
         self.assertNotIn('event_recipient_file',value)
         self.assertEqual(value['members'],['fixture-member'])
-        self.assertEqual(value['limits']['max_turns'],5)
+        self.assertEqual(value['schema_version'],2)
+        self.assertEqual(value['limits']['mode'],'continuous')
+        for name in ('max_turns','seconds','total_budget_cny'):
+            self.assertIsNone(value['limits'][name])
         access=json.loads((self.config/'access.json').read_text(encoding='utf8'))
         self.assertEqual(access['groups'][0]['capabilities'],['current'])
         monitoring=json.loads((self.config/'monitoring.json').read_text(encoding='utf8'))
@@ -93,6 +96,18 @@ class ConfigureExistingTests(unittest.TestCase):
         self.assertFalse(summary['credential_checked'])
         self.assertEqual(summary['network_requests'],0)
         self.assertEqual(self.before,self.hashes(self.instance))
+
+    def test_explicit_bounded_configuration_retains_legacy_five_turn_contract(self):
+        request=self.configure(continuous=False)
+        value=json.loads(request.read_text(encoding='utf8'))
+        self.assertEqual(value['schema_version'],1)
+        self.assertEqual(value['limits']['max_turns'],5)
+        self.assertEqual(value['limits']['seconds'],1800)
+        self.assertEqual(value['limits']['total_budget_cny'],'8.06')
+        self.assertEqual(self.before,self.hashes(self.instance))
+        _,summary=check_request(request,offline=True)
+        self.assertEqual(summary['contract'],'management-qq-hybrid-process-run@1')
+        self.assertFalse(summary['database_opened'])
 
     def test_default_request_remains_disabled_and_repeat_does_not_overwrite(self):
         request=self.configure(enable=False)

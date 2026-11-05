@@ -16,7 +16,7 @@
 
 每个数据根包含 Monitoring、Knowledge、Settings、Policy、Trace。Monitoring当前为Schema v2；Knowledge使用 `unified-knowledge@2` 标记，和Monitoring版本不是同一合同。新实例创建最新结构；已有v1不会在普通启动时静默升级。此前正式/演示库升级是历史维护结论，本轮没有再次打开它们，不据此保证任意电脑的版本。
 
-首配入口 `Initialize-Management.ps1` 显式新建完整日常实例：31条随包背景资料、空监测数据、原只读Web工具授权和合成实例标记。原 `--init-data` 的默认空库合同保持不变；旧 `prepare-demo` 仍只新建独立实例，日常接手改用 `configure-existing`，仅生成QQ配置并只读验证原库，不复制或重置知识和历史。
+首配入口 `Initialize-Management.ps1` 显式新建完整日常实例：31条随包背景资料、空监测数据、原只读Web工具授权和合成实例标记。原 `--init-data` 的默认空库合同保持不变；旧 `prepare-demo` 仍只新建独立实例，日常接手改用网页“QQ机器人”设置，只生成独立QQ配置，不改变原库，不复制或重置知识和历史。
 
 交接验证：从无outputs/无venv/无密钥的源码副本新建虚拟环境并安装依赖，初始化、31条检索、重复初始化拒绝、同库追加QQ配置、两进程视频与Fake三进程运行/退出均通过；Wheel也能脱离tests夹具初始化31条。完整回归Python856、Node139通过。验证仅用本机模拟数据及Fake QQ/Provider，没有真实联网调用；现有实例未清空。维护报告在本机`outputs/first-run-validation-…/clean-acceptance.json`。
 

@@ -5,7 +5,9 @@ export const services={
   settings:{read:()=>read('/api/settings'),save:(value,config)=>aiWrite('/api/settings',value,config),
     credential:(value,config)=>aiWrite('/api/settings/credentials',value,config),
     testCredential:(value,config)=>aiWrite('/api/settings/credentials/test',value,config),
-    budget:(value,config)=>aiWrite('/api/settings/budgets',value,config)},
+    budget:(value,config)=>aiWrite('/api/settings/budgets',value,config),
+    qq:{read:()=>qqRead(),save:(value,config)=>qqWrite('/api/settings/qq',value,config),
+      secret:(value,config)=>qqWrite('/api/settings/qq/secret',value,config)}},
   knowledge:{
     exportUrl:(format,status)=>'/api/knowledge/export?'+new URLSearchParams({format,status}),
     list:filters=>read('/api/knowledge?'+new URLSearchParams(filters)),
@@ -63,4 +65,16 @@ async function aiWrite(path,value,config){
   if(data.result)return data; // Preserve safe failed/cancelled Activity; never commit it as a success.
   if(!response.ok)throw new Error(data.error_code||'AI_SERVICE_UNAVAILABLE');
   return data;
+}
+
+async function qqWrite(path,value,config){
+  const response=await fetch(path,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',
+    'X-Management-QQ':config.browser_token},body:JSON.stringify(value)});
+  const data=await response.json();if(!response.ok)throw new Error(data.error_code||'QQ_SETTINGS_UNAVAILABLE');
+  return data;
+}
+
+async function qqRead(){
+  const response=await fetch('/api/settings/qq',{credentials:'same-origin'}),data=await response.json();
+  if(!response.ok)throw new Error(data.error_code||'QQ_SETTINGS_UNAVAILABLE');return data;
 }
