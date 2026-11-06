@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 import uuid
 
 ROOT=Path(__file__).resolve().parents[2]
@@ -21,7 +22,20 @@ def write_status(directory,role,**fields):
     temp=directory/('.'+role+'-'+uuid.uuid4().hex+'.tmp')
     with temp.open('x',encoding='utf8') as stream:
         json.dump(value,stream,ensure_ascii=False);stream.flush();os.fsync(stream.fileno())
-    os.replace(temp,target)
+    # Windows readers can briefly hold the old status file without delete
+    # sharing. Retry only this atomic status replacement; never restart a
+    # service or repeat file creation/fsync/business work on its behalf.
+    deadline=time.monotonic()+.5
+    while True:
+        try:
+            os.replace(temp,target)
+            break
+        except OSError as error:
+            remaining=deadline-time.monotonic()
+            if (os.name!='nt' or getattr(error,'winerror',None) not in (5,32,33)
+                    or remaining<=0):
+                raise
+            time.sleep(min(.01,remaining))
 
 def stopped(directory,role):
     manifest=json.loads((directory/'stack.json').read_text(encoding='utf8'))

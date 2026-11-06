@@ -108,6 +108,7 @@ class RunLedger:
     permanently poisons this Run; reserved capacity is never refunded.
     """
     output_token_limit=512
+    requests_per_turn=2
     limits_type=RunLimits
 
     def quota_limit_code(self):
@@ -132,7 +133,7 @@ class RunLedger:
         self.authority=LeaseAuthority(self.check_lease)
         self._plan=dict(contract=CONTRACT,status='pending_operator_approval',consent_id=self._id,
             scope_sha256=scope_sha256,bindings_sha256=bindings_sha256,limits=asdict(limits),
-            requests_per_turn=2,output_tokens_per_request=self.output_token_limit,seconds_per_turn=90,retries=0,
+            requests_per_turn=self.requests_per_turn,output_tokens_per_request=self.output_token_limit,seconds_per_turn=90,retries=0,
             reservation_per_turn_cny=str(self.reservation_per_turn),resume=False,environment='OFFLINE_FAKE_ONLY',
             process_nonce_sha256=_hash([self._id,uuid.uuid4().hex,self._pid]))
 
@@ -271,7 +272,7 @@ class RunLedger:
                 if not self.continuous:self._messages[message_key]=fingerprint
                 sequence=self._turns
                 record=dict(type='reserved',sequence=sequence,message_key_sha256=_hash(message_key),
-                    fingerprint_sha256=_hash(fingerprint),reserved_cost_cny=str(self._reserved),reserved_requests=sequence*2)
+                    fingerprint_sha256=_hash(fingerprint),reserved_cost_cny=str(self._reserved),reserved_requests=sequence*self.requests_per_turn)
             # No quota lock during any file I/O, flush/fsync or service creation.
             try:
                 self._append(record);self._owner.check()
@@ -299,7 +300,7 @@ class RunLedger:
         with self._lock:
             return dict(contract=CONTRACT,consent_ref=_hash(self._id)[:12],
                 state='HALTED' if self._halted else 'CLOSED' if self._closed else 'APPROVED' if self._consent else 'UNAPPROVED',
-                stop_code=self._halted,consumed_turns=self._turns,reserved_model_requests=self._turns*2,
+                stop_code=self._halted,consumed_turns=self._turns,reserved_model_requests=self._turns*self.requests_per_turn,
                 reserved_cost_cny=str(self._reserved),total_budget_cny=self.limits.total_budget_cny,
                 max_turns=self.limits.max_turns,billing_confirmed=False,resume=False)
 

@@ -137,11 +137,11 @@ class ManagementLiveTurn(HybridQwenTurn):
                 self.check(); self.handle.check()
                 if (attempts or request.method != 'POST'
                         or str(request.url) != runtime.base_url.rstrip('/')+'/chat/completions'
-                        or len(request.content) > MAX_REQUEST_BYTES):
+                        or len(request.content) > self.request_byte_limit):
                     raise GatewayError('MANAGEMENT_PROVIDER_REQUEST_REJECTED')
                 attempts += 1
                 with self._lock:
-                    if self.http_requests >= 2:
+                    if self.http_requests >= self.max_model_requests:
                         raise GatewayError('TRIAL_MODEL_REQUEST_LIMIT')
                     self.http_requests += 1
 

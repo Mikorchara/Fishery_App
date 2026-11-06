@@ -41,7 +41,11 @@ class ChannelAuthorization:
     check: Callable[[], None] = field(repr=False,compare=False)
 
     def __post_init__(self):
-        if (self.tools != (CURRENT_WATER_QUALITY,) or not isinstance(self.budget,ChannelBudget)
+        from .channel_management_agent import AgentChannelBudget
+        from .score_execution import SCORE_TOOL_NAMES
+        permitted=(type(self.tools) is tuple and bool(self.tools) and len(set(self.tools))==len(self.tools)
+                   and all(name in SCORE_TOOL_NAMES for name in self.tools)) if type(self.budget) is AgentChannelBudget else self.tools == (CURRENT_WATER_QUALITY,)
+        if (not permitted or not isinstance(self.budget,ChannelBudget)
                 or not callable(self.check) or not all(isinstance(v,str) and v for v in (
                     self.instance_id,self.device_id,self.binding_revision,self.permission_revision,self.preset_id))):
             raise GatewayError('INVALID_CHANNEL_AUTHORIZATION')

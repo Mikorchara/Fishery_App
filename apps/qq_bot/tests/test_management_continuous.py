@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from apps.qq_bot.management_config import ROOT,load_request,check_request
-from apps.qq_bot.management_cli import initialize_demo
+from apps.qq_bot.management_cli import initialize_demo,configure_existing
 from apps.qq_bot.management_configuration_bridge import QQConfigurationBridge
 from apps.qq_bot.management_limits import ManagementRunLimits
 from apps.qq_bot.management_run import ManagementLedger,ManagementRun
@@ -92,10 +92,30 @@ class ConfigurationBridgeTests(unittest.TestCase):
             result=self.apply();request,summary=check_request(self.cfg/'request.json',offline=True)
         self.assertEqual(result['settings']['max_output_tokens'],4096)
         self.assertTrue(request.continuous);self.assertIsNone(summary['limits']['seconds'])
-        self.assertEqual(summary['contract'],'management-qq-continuous-run@1')
+        self.assertEqual(read_json(self.cfg/'request.json')['schema_version'],3)
+        self.assertTrue(request.web_agent);self.assertEqual(summary['agent_mode'],'web')
+        self.assertEqual(summary['contract'],'management-qq-web-agent-run@1')
+        self.assertCountEqual(summary['tools'],['get_current_water_quality','search_fishery_knowledge',
+            'get_water_quality_history','score_current_water_quality'])
+        self.assertEqual(summary['max_model_requests_per_turn'],3)
         self.assertEqual(summary['output_tokens_per_request'],4096)
         self.assertTrue(list(self.root.glob('.qq-config-previous-*')))
         self.assertEqual(before,{name:(self.data/name).read_bytes() for name in before})
+
+    def test_explicit_legacy_schema2_continuous_contract_remains_current_only(self):
+        legacy=self.root/'legacy-continuous'
+        path=configure_existing(self.data,legacy,app_id='123456789',group_id='group-a',members=('member-a',),
+            enable=True,continuous=True,output_tokens=4096)
+        with patch('sqlite3.connect',side_effect=AssertionError('no SQL')),\
+                patch('socket.socket.connect',side_effect=AssertionError('no network')):
+            request,summary=check_request(path,offline=True)
+        self.assertEqual(read_json(path)['schema_version'],2)
+        self.assertTrue(request.continuous);self.assertFalse(request.web_agent)
+        self.assertEqual(summary['contract'],'management-qq-continuous-run@1')
+        self.assertEqual(summary['agent_mode'],'current')
+        self.assertEqual(summary['tools'],['get_current_water_quality'])
+        self.assertEqual(summary['max_model_requests_per_turn'],2)
+        self.assertEqual(summary['output_tokens_per_request'],4096)
 
     def test_ai_disabled_separate_from_bot_and_runtime_does_not_enable(self):
         self.settings['ai_enabled']=False;self.apply()

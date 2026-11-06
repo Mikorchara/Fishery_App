@@ -119,10 +119,10 @@ class TrialQwenAdapter(OpenAICompatibleAdapter):
         if (kwargs.get('max_tokens')!=self.trial.output_token_limit or kwargs.get('extra_body',{}).get('enable_thinking') is not False
                 or kwargs.get('model')!=assistant_profile(PRESET).model):
             raise GatewayError('TRIAL_TRANSPORT_BUDGET_MISMATCH')
-        if len(json.dumps(kwargs,ensure_ascii=False,allow_nan=False).encode('utf-8'))>MAX_REQUEST_BYTES:
+        if len(json.dumps(kwargs,ensure_ascii=False,allow_nan=False).encode('utf-8'))>self.trial.request_byte_limit:
             raise GatewayError('TRIAL_INPUT_TOO_LARGE')
         with self.trial._lock:
-            if self.trial.requests>=2:raise GatewayError('TRIAL_MODEL_REQUEST_LIMIT')
+            if self.trial.requests>=self.trial.max_model_requests:raise GatewayError('TRIAL_MODEL_REQUEST_LIMIT')
             self.trial.requests+=1  # Reserve before I/O. Unknown/failure is never refunded/retried.
         return kwargs
 
@@ -145,6 +145,8 @@ class QwenTrialSession:
     release_status='candidate'
     output_token_limit=512
     channel_budget=ChannelBudget()
+    max_model_requests=2
+    request_byte_limit=MAX_REQUEST_BYTES
 
     def __init__(self,approval,*,validate,claim,async_client_factory=None,clock=None,monotonic=time.monotonic):
         if type(approval) is not QwenTrialApproval or not callable(validate) or not callable(claim):

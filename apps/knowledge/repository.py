@@ -25,9 +25,16 @@ def identifier(value):
 
 
 class KnowledgeRepository:
-    def __init__(self, path, *, require_existing=False):
+    def __init__(self, path, *, require_existing=False, read_only=False):
+        if type(read_only) is not bool:
+            raise KnowledgeError('INVALID_KNOWLEDGE_REPOSITORY_MODE')
         self.path = Path(path)
-        self.require_existing = require_existing
+        self.read_only = read_only
+        self.require_existing = require_existing or read_only
+        require_existing = self.require_existing
+        self._identity = None
+        if read_only:
+            self._identity = self._read_identity()
         if require_existing and not self.path.is_file():
             raise KnowledgeError('KNOWLEDGE_MIGRATION_REQUIRED')
         if require_existing:
@@ -36,12 +43,16 @@ class KnowledgeRepository:
             # publishes the unified-format marker.
             try:
                 with closing(sqlite3.connect(self.path.resolve().as_uri()+'?mode=ro',uri=True)) as db:
+                    if read_only:
+                        db.execute('PRAGMA query_only=ON')
                     schema=db.execute('PRAGMA user_version').fetchone()[0]
                     marker=db.execute("SELECT value FROM knowledge_metadata WHERE key='migration_version'").fetchone()
                     if schema!=SCHEMA_VERSION or not marker or marker[0]!='unified-knowledge@2':
                         raise KnowledgeError('KNOWLEDGE_MIGRATION_REQUIRED')
             except sqlite3.Error:
                 raise KnowledgeError('KNOWLEDGE_MIGRATION_REQUIRED') from None
+            if read_only:
+                self._check_read_identity()
             return
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -66,13 +77,39 @@ class KnowledgeRepository:
         except OSError:
             raise KnowledgeError('KNOWLEDGE_STORAGE_ERROR') from None
 
+    def _read_identity(self):
+        """A read-only consumer never follows a newly substituted database."""
+        from apps.ai_backend.secure_files import guard_path
+        try:
+            guard_path(self.path, regular=True)
+            for suffix in ('-wal', '-shm', '-journal'):
+                guard_path(Path(str(self.path) + suffix), regular=True)
+            if not self.path.is_file() or self.path.stat().st_size == 0:
+                raise KnowledgeError('KNOWLEDGE_DATABASE_MISSING')
+            info = self.path.stat()
+            return info.st_dev, info.st_ino
+        except KnowledgeError:
+            raise
+        except Exception:
+            raise KnowledgeError('KNOWLEDGE_STORAGE_ERROR') from None
+
+    def _check_read_identity(self):
+        if self.read_only and self._read_identity() != self._identity:
+            raise KnowledgeError('KNOWLEDGE_DATABASE_REPLACED')
+
     @contextmanager
     def connection(self, *, write=False):
+        if self.read_only and write:
+            raise KnowledgeError('KNOWLEDGE_READ_ONLY')
+        self._check_read_identity()
         db = None
         try:
-            db = (sqlite3.connect(self.path.resolve().as_uri()+'?mode=rw', uri=True, timeout=2, isolation_level=None)
+            db = (sqlite3.connect(self.path.resolve().as_uri()+('?mode=ro' if self.read_only else '?mode=rw'), uri=True, timeout=2, isolation_level=None)
                   if self.require_existing else sqlite3.connect(self.path, timeout=2, isolation_level=None))
             db.row_factory = sqlite3.Row
+            if self.read_only:
+                db.execute('PRAGMA query_only=ON')
+                self._check_read_identity()
             db.execute('BEGIN IMMEDIATE' if write else 'BEGIN')
             yield db
             if db.in_transaction: db.commit()

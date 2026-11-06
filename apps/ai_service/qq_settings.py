@@ -111,13 +111,16 @@ class QQSettingsStore:
 
 
 class QQSettingsService:
-    def __init__(self, project_root, data_root, config_directory, *, configuration_bridge, secret_writer_factory=None):
+    def __init__(self, project_root, data_root, config_directory, *, configuration_bridge, secret_writer_factory=None,
+                 pairing_factory=None):
         self.project_root = Path(project_root).absolute()
         self.data_root = Path(data_root).absolute()
         self.config_directory = Path(config_directory).absolute()
         self.store = QQSettingsStore(self.data_root / 'qq-bot-settings.json')
         self._configuration_bridge = configuration_bridge
         self.secret_writer_factory = secret_writer_factory
+        self.pairing_factory, self._pairing = pairing_factory, None
+        self._pairing_lock = threading.RLock()
         self.browser_token = secrets.token_urlsafe(32)
 
     @property
@@ -141,12 +144,74 @@ class QQSettingsService:
     def public(self):
         stored, bridge, revision, settings = self._state()
         return dict(revision=revision, settings=settings, configured=bridge['configured'],
+                    agent_mode=bridge.get('agent_mode', 'current'), tools=bridge.get('tools', []),
                     provider=bridge.get('provider'), model=bridge.get('model'), preset=bridge.get('preset'),
                     binding=dict(data_root=str(self.data_root), instance_id=bridge.get('instance_id'), device_id=bridge.get('device_id')),
                     recipient_available=bool(bridge.get('recipient_available')), recipient_ref=bridge.get('recipient_ref'),
                     runtime_status=bridge.get('runtime_status', 'NOT_CHECKED'), restart_required=True,
                     secret_status='SAVED_FOR_THIS_APP' if settings['app_id'] and stored['secret_saved_for_app'] == settings['app_id'] else 'NOT_CHECKED',
                     max_allowed_output_tokens=4096, token_unit='PER_MODEL_HTTP_REQUEST', network_requests=0, database_opened=False)
+
+    def _pairing_manager(self):
+        if self._pairing is None:
+            def supplier():
+                # Called only after start's explicit network confirmation and process ownership.
+                return self._writer().credentials.resolve('FISHERY_QQ_APP_SECRET')
+            if self.pairing_factory is not None:
+                self._pairing = self.pairing_factory()
+            else:
+                from apps.qq_bot.private_pairing import PairingManager
+                self._pairing = PairingManager(self.project_root, self.config_directory, secret_supplier=supplier)
+        return self._pairing
+
+    def pairing_status(self):
+        with self._pairing_lock:
+            return self._pairing.status() if self._pairing is not None else dict(phase='IDLE', code='PRIVATE_PAIRING_IDLE')
+
+    def pairing_start(self, value):
+        with self._pairing_lock:
+            stored, bridge, revision, settings = self._check_revision(value, {'revision', 'confirm_network'})
+            if value['confirm_network'] is not True:
+                raise QQSettingsError('PRIVATE_PAIRING_NETWORK_APPROVAL_REQUIRED')
+            if not bridge['configured']:
+                raise QQSettingsError('PRIVATE_PAIRING_SAVE_IDENTITY_FIRST')
+            def validate():
+                if self._state()[2] != revision:
+                    raise QQSettingsError('QQ_SETTINGS_STALE')
+            def bind(path):
+                with self.store.writing():
+                    validate()
+                    self.bridge.bind_verified_recipient(path, expected_revision=bridge['revision'])
+            try:
+                return self._pairing_manager().start(settings['app_id'], settings['group_id'], validate=validate, bind=bind)
+            except Exception as error:
+                raise QQSettingsError(self._pairing_error(error)) from None
+
+    @staticmethod
+    def _pairing_error(error):
+        code = getattr(error, 'code', '')
+        return code if isinstance(code, str) and re.fullmatch(r'[A-Z][A-Z0-9_]{0,80}', code) else 'PRIVATE_PAIRING_FAILED'
+
+    def pairing_action(self, value, *, confirm=False):
+        keys = {'pairing_id', 'user_ref', 'confirm_active_test'} if confirm else {'pairing_id'}
+        if type(value) is not dict or set(value) != keys:
+            raise QQSettingsError('QQ_SETTINGS_INVALID')
+        if confirm and value['confirm_active_test'] is not True:
+            raise QQSettingsError('PRIVATE_PAIRING_ACTIVE_APPROVAL_REQUIRED')
+        with self._pairing_lock:
+            manager = self._pairing
+        if manager is None:
+            raise QQSettingsError('PRIVATE_PAIRING_NOT_FOUND')
+        try:
+            return manager.confirm(value['pairing_id'], value['user_ref']) if confirm else manager.cancel(value['pairing_id'])
+        except Exception as error:
+            raise QQSettingsError(self._pairing_error(error)) from None
+
+    def close(self):
+        with self._pairing_lock:
+            manager = self._pairing
+        if manager is not None:
+            manager.close()
 
     def _check_revision(self, value, keys):
         if not isinstance(value, dict) or set(value) != keys or not isinstance(value.get('revision'), str):

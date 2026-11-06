@@ -18,6 +18,7 @@ from .transport import QQAPI
 FAILURE_MESSAGES={
     'INVALID_TOOL_ARGUMENTS':'AI 本次未能正确发起查询，没有自动重试。请发送 /当前水质，直接获取系统读数，不调用模型。',
     'ASSISTANT_RESPONSE_TRUNCATED':'本次查询未完成：AI回答达到输出上限而被截断，未发送不完整的水质结论。没有自动重试。',
+    'MODEL_RESPONSE_TRUNCATED':'本轮回答达到输出Token上限，未发送不完整正文。可以缩小问题范围，或在网页QQ设置中调整上限后重启Bot。没有自动重试。',
 }
 
 @dataclass(frozen=True)

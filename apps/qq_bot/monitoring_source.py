@@ -112,6 +112,12 @@ class InstanceMonitoring:
     def capture_water(self, device_id):
         return self._read(self._service.capture_water, device_id)
 
+    def query_water_history(self, device_id, *, lookback_minutes, metrics=None):
+        """Reuse the original bounded statistics query for an approved device."""
+        return self._read(self._service.query_water_history, device_id,
+            lookback_minutes=lookback_minutes,
+            metrics=tuple(METRICS) if metrics is None else metrics)
+
     def devices(self):
         return [d for d in self._service.devices() if d['id'] in self.config.devices]
 

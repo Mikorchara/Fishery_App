@@ -24,6 +24,7 @@ class ManagementLedger(HybridLedger):
     def __init__(self, *args, **kwargs):
         self.output_token_limit=kwargs.pop('output_token_limit',OUTPUT_TOKENS)
         contract=kwargs.pop('contract',CONTRACT)
+        self.requests_per_turn=kwargs.pop('requests_per_turn',2)
         super().__init__(*args, **kwargs)
         self._plan.update(contract=contract, environment='MANAGEMENT_PROCESS_RUNCONSENT')
         if self.continuous:self._plan.update(reservation_per_turn_cny=None,cumulative_limits=False)
@@ -41,9 +42,12 @@ class ManagementRun(HybridRun):
     def __init__(self, request, directory, *, async_client_factory=None, clock=None, monotonic=None):
         import time
         self.request, self.permit = request, None
+        self.web_agent = request.web_agent
         if request.continuous:
             from apps.ai_service.channel_management_continuous import ContinuousChannelBudget
-            self.channel_budget=ContinuousChannelBudget(max_output_tokens=request.output_tokens)
+            from apps.ai_service.channel_management_agent import AgentChannelBudget
+            budget_type=AgentChannelBudget if self.web_agent else ContinuousChannelBudget
+            self.channel_budget=budget_type(max_output_tokens=request.output_tokens)
         self._notice_recipient = self._notice_recipient_path = None
         self._notice_summary = None
         self._notice_report = {'enabled':False}
@@ -64,20 +68,56 @@ class ManagementRun(HybridRun):
         return inputs_snapshot(inputs,monitoring,budget=self.channel_budget)
 
     def scope_for_options(self):
+        if self.web_agent:
+            from apps.ai_service.channel_management_agent import prepared_scope as agent_scope
+            return agent_scope(self.options,output_tokens=self.request.output_tokens)
         if self.request.continuous:
             from apps.ai_service.channel_management_continuous import prepared_scope as continuous_scope
             return continuous_scope(self.options,output_tokens=self.request.output_tokens)
         return prepared_scope(self.options)
 
+    def _prepare_sources(self, source):
+        self.knowledge=None
+        if self.web_agent:
+            from .knowledge_source import open_readonly_knowledge
+            self.knowledge=open_readonly_knowledge(source)
+
+    def _make_service(self, **kwargs):
+        if self.web_agent:
+            from apps.ai_service.service import ManagementAssistantService
+            return ManagementAssistantService.channel_agent(self.monitoring,self.knowledge,**kwargs)
+        return super()._make_service(**kwargs)
+
+    def _new_store(self, monotonic):
+        if self.web_agent:
+            from .agent_conversations import AgentConversationStore
+            return AgentConversationStore(self.options,monotonic=monotonic)
+        return super()._new_store(monotonic)
+
+    def _verified_execution(self, session, report):
+        if self.web_agent:
+            from apps.ai_service.channel_management_agent import AgentChannelResult
+            result=getattr(session,'hybrid_result',None)
+            return (type(result) is AgentChannelResult and result.completed
+                and result.publication is not None and result.publication.allowed
+                and report['model_requests']==result.model_requests
+                and result.model_requests==result.tool_executions+1
+                and 0<=result.tool_executions<=2)
+        return super()._verified_execution(session,report)
+
     def _new_ledger(self, limits):
         return ManagementLedger(self.directory, scope_sha256=self.scope_sha256,
             bindings_sha256=self._binding_digest, limits=limits, clock=self.clock, monotonic=self.now,
-            output_token_limit=self.request.output_tokens,contract=self.scope['contract'])
+            output_token_limit=self.request.output_tokens,contract=self.scope['contract'],
+            requests_per_turn=3 if self.web_agent else 2)
 
     def plan(self):
         from .management_config import CONTINUOUS_RISK
         return {**SessionRun.plan(self), 'contract': self.scope['contract'], 'offline': self.offline_test,
                 'request_sha256': self.request.digest, 'risk': CONTINUOUS_RISK if self.request.continuous else RISK,
+                **({'tools':list(self.config.grants[0].tools),
+                    'disclosure':'SIMULATOR_CURRENT_HISTORY_PROJECT_KNOWLEDGE_AND_NECESSARY_CONTEXT',
+                    'notice':'普通自然语言可能持续收费；最多2次只读Tool及3次模型请求。'} if self.web_agent else {}),
                 **({'event_notifications':self._notice_summary} if self._notice_summary else {})}
 
     def approve(self, plan, *, confirmed=False):
@@ -94,7 +134,10 @@ class ManagementRun(HybridRun):
             if current.digest != self.request.digest: raise BotError('MANAGEMENT_REQUEST_CHANGED')
             SessionRun._check_configuration(self)
             if self.request.continuous:
-                from apps.ai_service.channel_management_continuous import preparation_record as continuous_record
+                if self.web_agent:
+                    from apps.ai_service.channel_management_agent import preparation_record as continuous_record
+                else:
+                    from apps.ai_service.channel_management_continuous import preparation_record as continuous_record
                 record_path=self.request.path.parent/'scope.json';record=continuous_record(self.scope)
             else:record_path=PREPARATION;record=preparation_record(self.scope)
             if read_json(record_path) != record:
@@ -112,7 +155,9 @@ class ManagementRun(HybridRun):
         turn=ManagementLiveTurn;extra={}
         if self.request.continuous:
             from apps.ai_service.channel_management_continuous import ContinuousManagementTurn
-            turn=ContinuousManagementTurn;extra['output_tokens']=self.request.output_tokens
+            from apps.ai_service.channel_management_agent import AgentManagementTurn
+            turn=AgentManagementTurn if self.web_agent else ContinuousManagementTurn
+            extra['output_tokens']=self.request.output_tokens
         return turn(lease, permit=self.permit, authority=self.store.authority,
             conversation_epoch=self.base_service.epoch, options=self.options, snapshot=snapshot,
             validate=validate, claim=lambda: self.ledger.check_lease(lease),

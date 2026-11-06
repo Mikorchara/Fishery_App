@@ -32,7 +32,7 @@ def emit(code, **fields):
     print(json.dumps({'code':code,**fields},ensure_ascii=False,default=str),flush=True)
 
 
-def _configuration_inputs(data_root, config_dir, *, app_id, group_id, members,continuous=False,output_tokens=2048,ai_enabled=True):
+def _configuration_inputs(data_root, config_dir, *, app_id, group_id, members,continuous=False,output_tokens=2048,ai_enabled=True,agent_mode='current'):
     """Validate explicit paths and grants before creating any files."""
     from .ai_configuration import QQAIConfig, QQAIGrant
     from .contracts import BotConfig, GroupAccess
@@ -48,17 +48,21 @@ def _configuration_inputs(data_root, config_dir, *, app_id, group_id, members,co
     budget=CHANNEL_BUDGET
     if continuous:
         from apps.ai_service.channel_management_continuous import ContinuousChannelBudget
-        budget=ContinuousChannelBudget(output_tokens)
-    ai = QQAIConfig(ai_enabled,budget=budget,grants=(QQAIGrant(group_id,tuple(members),'sim-pond-1'),))
+        from apps.ai_service.channel_management_agent import AgentChannelBudget
+        if agent_mode not in ('current','web'):raise BotError('INVALID_MANAGEMENT_AGENT_MODE')
+        budget=(AgentChannelBudget if agent_mode=='web' else ContinuousChannelBudget)(output_tokens)
+    from apps.ai_service.score_execution import SCORE_TOOL_NAMES
+    tools=SCORE_TOOL_NAMES if agent_mode=='web' and continuous else ('get_current_water_quality',)
+    ai = QQAIConfig(ai_enabled,budget=budget,grants=(QQAIGrant(group_id,tuple(members),'sim-pond-1',tools),))
     return root, cfg, access, ai
 
 
-def _write_configuration(root, cfg, *, access, ai, members, enable,continuous=False):
+def _write_configuration(root, cfg, *, access, ai, members, enable,continuous=False,agent_mode='current'):
     """Only a NEW QQ config directory is written; never seed or edit its instance."""
     from .conversations import ConversationOptions
     app_id, group_id = access.app_id, access.groups[0].group_id
     for name,value in (('access.json',dict(schema_version=1,app_id=app_id,groups=[asdict(g) for g in access.groups])),
-                       ('ai.json',dict(schema_version=2 if continuous else 1,**asdict(ai))),
+                       ('ai.json',dict(schema_version=3 if agent_mode=='web' else 2 if continuous else 1,**asdict(ai))),
                        ('monitoring.json',dict(schema_version=1,instance_id='management-isolated',data_root=str(root.resolve()),devices=['sim-pond-1']))):
         write_new(cfg/name,value)
     (cfg/'policy').mkdir()
@@ -66,17 +70,28 @@ def _write_configuration(root, cfg, *, access, ai, members, enable,continuous=Fa
     inputs=TrialInputs.parse(dict(access_file=str(cfg/'access.json'),ai_config=str(cfg/'ai.json'),
         monitoring_config=str(cfg/'monitoring.json'),policy_directory=str(cfg/'policy'),group_id=group_id,member_id=members[0]))
     inputs_snapshot(inputs)  # Initializes only this new, isolated Bot policy; no global policy writes.
+    if agent_mode=='web':
+        from apps.ai_service.business_tools.registry import bind_tools
+        from apps.ai_service.runtime.policy import UserToolPolicyStore
+        from apps.ai_service.management_policy import ManagementToolPolicyStore
+        registry=bind_tools(None,'sim-pond-1',None,include_history=True,include_score=True)
+        policy=ManagementToolPolicyStore(inputs.policy_directory,UserToolPolicyStore(inputs.policy_directory,registry))
+        policy.save(ai.grants[0].tools,expected_revision=policy.snapshot().revision)
     options=ConversationOptions(trigger_mode='mention_ai',memory_enabled=True)
     if continuous:
-        from apps.ai_service.channel_management_continuous import prepared_scope as continuous_scope,preparation_record
+        if agent_mode=='web':
+            from apps.ai_service.channel_management_agent import prepared_scope as continuous_scope,preparation_record
+        else:
+            from apps.ai_service.channel_management_continuous import prepared_scope as continuous_scope,preparation_record
         from .management_limits import ManagementRunLimits
         scope=continuous_scope(options,output_tokens=ai.budget.max_output_tokens)
         limits=ManagementRunLimits.continuous_run()
         write_new(cfg/'scope.json',preparation_record(scope))
     else:scope=prepared_scope(options);limits=RunLimits(total_budget_cny=DEFAULT_RUN_BUDGET_CNY)
-    request=dict(schema_version=2 if continuous else 1,enabled=enable,inputs=inputs.dictionary(),
+    request=dict(schema_version=3 if agent_mode=='web' else 2 if continuous else 1,enabled=enable,inputs=inputs.dictionary(),
         limits=asdict(limits),members=list(members),scope_sha256=_hash(scope))
     if continuous:request['ai_enabled']=ai.enabled
+    if agent_mode=='web':request['agent_mode']='web'
     write_new(cfg/'request.json',request)
     return cfg/'request.json'
 

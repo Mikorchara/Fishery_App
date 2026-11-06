@@ -165,8 +165,105 @@ class QQSettingsTests(unittest.TestCase):
         path.write_text('{"schema_version":1,"schema_version":1}')
         self.assertEqual(self.client.get('/api/settings/qq').get_json()['error_code'], 'QQ_SETTINGS_STORAGE_ERROR')
 
+    def test_pairing_get_and_unapproved_start_never_create_worker_or_read_secret(self):
+        factory = Mock()
+        self.service.pairing_factory = factory
+        self.assertEqual(self.client.get('/api/settings/qq/pairing').get_json()['pairing']['phase'], 'IDLE')
+        self.post(self.identity())
+        headers = {'X-Management-QQ':self.service.browser_token}
+        body = dict(revision=self.get()['revision'], confirm_network=False)
+        self.assertEqual(self.client.post('/api/settings/qq/pairing/start', json=body, headers=headers).get_json()['error_code'],
+                         'PRIVATE_PAIRING_NETWORK_APPROVAL_REQUIRED')
+        body['confirm_network'] = True
+        self.assertEqual(self.client.post('/api/settings/qq/pairing/start', json=body).status_code, 403)
+        factory.assert_not_called()
+        self.factory.assert_not_called()
+
+    def test_pairing_requires_separate_confirmation_and_closes_on_service_stop(self):
+        self.post(self.identity())
+        manager = Mock()
+        manager.start.return_value = dict(pairing_id='synthetic-pair', phase='WAITING_PRIVATE_MESSAGE',
+                                         challenge_command='/绑定提醒 synthetic-once')
+        manager.confirm.return_value = dict(phase='BOUND', api_accepted=True, client_display_confirmed=False)
+        manager.cancel.return_value = dict(phase='CANCELLED')
+        self.service.pairing_factory = lambda:manager
+        headers = {'X-Management-QQ':self.service.browser_token}
+        started = self.client.post('/api/settings/qq/pairing/start', json=dict(revision=self.get()['revision'],
+            confirm_network=True), headers=headers)
+        self.assertEqual(started.status_code, 200)
+        self.assertEqual(manager.start.call_args.args, ('123456', 'synthetic-group'))
+        invalid = self.client.post('/api/settings/qq/pairing/confirm', json=dict(pairing_id='synthetic-pair',
+            user_ref='synthetic-ref', confirm_active_test=False), headers=headers)
+        self.assertEqual(invalid.get_json()['error_code'], 'PRIVATE_PAIRING_ACTIVE_APPROVAL_REQUIRED')
+        manager.confirm.assert_not_called()
+        result = self.client.post('/api/settings/qq/pairing/confirm', json=dict(pairing_id='synthetic-pair',
+            user_ref='synthetic-ref', confirm_active_test=True), headers=headers)
+        self.assertFalse(result.get_json()['pairing']['client_display_confirmed'])
+        self.client.post('/api/settings/qq/pairing/cancel', json=dict(pairing_id='synthetic-pair'), headers=headers)
+        manager.cancel.assert_called_once_with('synthetic-pair')
+        self.service.close()
+        manager.close.assert_called_once()
+        self.factory.assert_not_called()
+
 
 class QQSettingsBridgeTests(unittest.TestCase):
+    def test_web_pairing_with_real_bridge_binds_only_verified_pointer_without_changing_scope_policy_or_database(self):
+        from apps.qq_bot.management_configuration_bridge import QQConfigurationBridge
+        from apps.qq_bot.management_config import ROOT, MARKER
+        from apps.management_paths import ManagementPaths
+        from apps.management_web.instance import initialize_instance
+        from apps.qq_bot.private_pairing import PairingManager
+        from apps.qq_bot.tests.test_private_pairing import Socket, packet, APP, GROUP
+        from apps.ai_backend.credentials import CredentialSnapshot, CredentialStatus
+        import httpx
+        import time
+        import threading
+        temporary_root = ROOT/'outputs'/'test-tmp'
+        temporary_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=temporary_root) as name:
+            test_root = Path(name)
+            data_root, config_root = test_root/'data', test_root/'config'
+            initialize_instance(ManagementPaths.resolve(ROOT, data_root=data_root))
+            (data_root/'qq-isolated-instance.json').write_text(json.dumps(dict(contract=MARKER, root=str(data_root),
+                instance_id='management-isolated', device_id='sim-pond-1', source='SIMULATOR')))
+            service = QQSettingsService(ROOT, data_root, config_root,
+                configuration_bridge=QQConfigurationBridge(ROOT, data_root, config_root))
+            saved = service.save(dict(revision=service.public()['revision'], settings=dict(default_settings(),
+                app_id=APP, group_id=GROUP, members=['synthetic-member'], enabled=True, ai_enabled=True)))
+            files = [config_root/'scope.json', *list((config_root/'policy').glob('*.json')), *list(data_root.glob('*.sqlite3'))]
+            before = {p:p.read_bytes() for p in files}
+            socket, messages = Socket(), []
+            def http(request):
+                if request.url.path.endswith('getAppAccessToken'):return httpx.Response(200, json=dict(access_token='synthetic', expires_in=3600))
+                if request.url.path == '/gateway':return httpx.Response(200, json=dict(url='wss://api.bot.qq.com/websocket/'))
+                messages.append(request)
+                return httpx.Response(200, json=dict(id='accepted'))
+            with httpx.Client(transport=httpx.MockTransport(http)) as client:
+                manager = PairingManager(test_root, config_root, client=client, connector=lambda _:socket,
+                    secret_supplier=lambda:CredentialSnapshot('synthetic-secret', CredentialStatus('PRESENT','TEST',False)))
+                service.pairing_factory = lambda:manager
+                try:
+                    with patch('sqlite3.connect', side_effect=AssertionError('DB forbidden')), \
+                            patch('apps.ai_backend.credentials.CredentialStore.resolve', side_effect=AssertionError('real secret forbidden')):
+                        started = service.pairing_start(dict(revision=saved['revision'], confirm_network=True))
+                        deadline = time.monotonic()+3
+                        while not manager._run.gateway.ready.is_set() and time.monotonic()<deadline:threading.Event().wait(.01)
+                        socket.frames.put(packet(started['challenge_command']))
+                        while manager.status()['phase'] != 'AWAITING_CONFIRMATION' and time.monotonic()<deadline:threading.Event().wait(.01)
+                        self.assertEqual(manager.status()['phase'], 'AWAITING_CONFIRMATION')
+                        status = service.pairing_action(dict(pairing_id=started['pairing_id'], user_ref=manager.status()['user_ref'],
+                            confirm_active_test=True), confirm=True)
+                        self.assertEqual(status['phase'], 'BOUND')
+                        public = service.public()
+                        self.assertTrue(public['recipient_available'])
+                        self.assertFalse(public['settings']['event_notifications_enabled'])
+                        request = json.loads((config_root/'request.json').read_text())
+                        self.assertIn('verified_recipient_file', request)
+                        self.assertNotIn('event_recipient_file', request)
+                    self.assertEqual(len(messages), 1)
+                    self.assertEqual(before, {p:p.read_bytes() for p in before})
+                finally:service.close()
+
     def test_real_bridge_generates_independent_configuration_without_database_or_secret_reads(self):
         from apps.qq_bot.management_configuration_bridge import QQConfigurationBridge
         from apps.qq_bot.management_config import ROOT, MARKER, check_request
@@ -194,7 +291,9 @@ class QQSettingsBridgeTests(unittest.TestCase):
                     app_id='123456', group_id='synthetic-group', members=['synthetic-member'], enabled=True, ai_enabled=True)))
                 self.assertTrue(saved['configured'])
                 self.assertEqual(saved['settings']['max_output_tokens'], 2048)
-                self.assertEqual(json.loads((config_root/'request.json').read_text())['schema_version'], 2)
+                self.assertEqual(json.loads((config_root/'request.json').read_text())['schema_version'], 3)
+                self.assertEqual(saved['agent_mode'], 'web')
+                self.assertEqual(len(saved['tools']), 4)
                 saved = service.save(dict(revision=saved['revision'], settings=dict(saved['settings'], max_output_tokens=1024)))
                 request, summary = check_request(config_root/'request.json')
                 self.assertTrue(request.continuous)

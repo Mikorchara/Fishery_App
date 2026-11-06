@@ -47,6 +47,27 @@ def register_qq_settings_api(app, service):
             return failure
         return jsonify(**service.save_secret(body()), browser_token=service.browser_token)
 
+    @app.get('/api/settings/qq/pairing')
+    def qq_pairing_status():
+        failure = checked()
+        if failure is not None:
+            return failure
+        return jsonify(pairing=service.pairing_status())
+
+    @app.post('/api/settings/qq/pairing/start')
+    @app.post('/api/settings/qq/pairing/confirm')
+    @app.post('/api/settings/qq/pairing/cancel')
+    def qq_pairing_action():
+        failure = checked()
+        if failure is not None:
+            return failure
+        value = body()
+        if request.path.endswith('/start'):
+            result = service.pairing_start(value)
+        else:
+            result = service.pairing_action(value, confirm=request.path.endswith('/confirm'))
+        return jsonify(pairing=result)
+
     @app.errorhandler(QQSettingsError)
     def qq_settings_error(error):
         return jsonify(error_code=error.code), 409

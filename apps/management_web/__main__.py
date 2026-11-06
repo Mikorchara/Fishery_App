@@ -173,7 +173,10 @@ def main(argv=None):
                 if bridge is not None:bridge.start()
                 app.run(host="127.0.0.1", port=args.port, debug=False, load_dotenv=False)
             finally:
-                if bridge is not None:bridge.close()
+                try:
+                    if bridge is not None:bridge.close()
+                finally:
+                    if ai_options.get('qq_settings_service') is not None:ai_options['qq_settings_service'].close()
     except InstanceWriterBusy as error:
         parser.error(error.code)
 

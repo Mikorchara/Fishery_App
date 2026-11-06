@@ -55,7 +55,9 @@ class OfflineQQAIRouter:
         ai=head=='/问AI'
         if store is not None:
             fixed=self.coordinator.classify(message.content).kind=='fixed' and not ai
-            unknown_slash=message.content.startswith('/') and head not in ('/问AI','/清空会话') and not fixed
+            free_intent=self.coordinator.classify(message.content)
+            unknown_slash=(message.content.startswith('/') and head not in ('/问AI','/清空会话')
+                           and not fixed and free_intent.kind=='unsupported')
             if not fixed and not unknown_slash and (ai or head=='/清空会话' or store.options.trigger_mode=='mention_ai'):
                 try:
                     if not ai and head!='/清空会话':self.coordinator.validate_mention(raw,message,mention,transport_app_id)

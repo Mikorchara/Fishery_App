@@ -28,8 +28,9 @@ def inputs_snapshot(inputs,monitoring=None,*,budget=None):
         from .ai_configuration import load_ai_config
         budget=load_ai_config(inputs.ai_config).budget
     from apps.ai_service.channel_management_continuous import ContinuousChannelBudget
+    from apps.ai_service.channel_management_agent import AgentChannelBudget
     return trial_inputs_snapshot(inputs,monitoring,expected_budget=budget,
-        allow_disabled=type(budget) is ContinuousChannelBudget)
+        allow_disabled=type(budget) in (ContinuousChannelBudget,AgentChannelBudget))
 
 
 def ensure_private_directory(path):
@@ -61,9 +62,13 @@ class ManagementRequest:
     event_recipient_file: Path | None = None
     output_tokens: int = OUTPUT_TOKENS
     ai_enabled: bool = True
+    agent_mode: str = 'current'
 
     @property
     def continuous(self):return self.limits.continuous
+
+    @property
+    def web_agent(self):return self.agent_mode=='web'
 
     def check(self):
         if _hash(read_json(self.path)) != self.digest:
@@ -74,10 +79,11 @@ def load_request(path):
     path = local_path(path)
     value = read_json(path)
     required = {'schema_version', 'enabled', 'inputs', 'limits', 'members', 'scope_sha256'}
-    if value.get('schema_version')==2:required.add('ai_enabled')
-    optional={'event_recipient_file'}|({'verified_recipient_file'} if value.get('schema_version')==2 else set())
+    if value.get('schema_version') in (2,3):required.add('ai_enabled')
+    if value.get('schema_version')==3:required.add('agent_mode')
+    optional={'event_recipient_file'}|({'verified_recipient_file'} if value.get('schema_version') in (2,3) else set())
     if (not required<=set(value) or set(value)-required-optional
-            or type(value['schema_version']) is not int or value['schema_version'] not in (1,2)
+            or type(value['schema_version']) is not int or value['schema_version'] not in (1,2,3)
             or type(value['enabled']) is not bool or type(value.get('ai_enabled',True)) is not bool or type(value['members']) is not list
             or not 1 <= len(value['members']) <= 4):
         raise BotError('INVALID_MANAGEMENT_REQUEST')
@@ -87,7 +93,9 @@ def load_request(path):
     limits = RunLimits(**raw_limits)
     if reported_budget_only is not None and reported_budget_only is not limits.budget_only:
         raise BotError('INVALID_MANAGEMENT_REQUEST')
-    if limits.continuous!=(value['schema_version']==2):raise BotError('INVALID_MANAGEMENT_REQUEST')
+    web_agent=value['schema_version']==3
+    if web_agent and value['agent_mode']!='web':raise BotError('INVALID_MANAGEMENT_REQUEST')
+    if limits.continuous!=(value['schema_version'] in (2,3)):raise BotError('INVALID_MANAGEMENT_REQUEST')
     from .gateway import validate_run_duration
     if not limits.continuous:validate_run_duration(limits.seconds,max_seconds=limits.seconds)
     if not limits.continuous and Decimal(limits.total_budget_cny)<reservation_per_turn()*limits.max_turns:
@@ -95,7 +103,9 @@ def load_request(path):
     access, ai, source, grant, _ = inputs_snapshot(inputs)
     if limits.continuous:
         from apps.ai_service.channel_management_continuous import ContinuousChannelBudget
-        if type(ai.budget) is not ContinuousChannelBudget:raise BotError('INVALID_CONTINUOUS_CHANNEL_BUDGET')
+        from apps.ai_service.channel_management_agent import AgentChannelBudget
+        expected_type=AgentChannelBudget if web_agent else ContinuousChannelBudget
+        if type(ai.budget) is not expected_type:raise BotError('INVALID_CONTINUOUS_CHANNEL_BUDGET')
     elif ai.budget!=CHANNEL_BUDGET or type(ai.budget) is not type(CHANNEL_BUDGET):
         raise BotError('INVALID_MANAGEMENT_CHANNEL_BUDGET')
     selected = tuple(value['members'])
@@ -118,7 +128,10 @@ def load_request(path):
             raise BotError('MANAGEMENT_INSTANCE_MISSING')
     options=ConversationOptions(trigger_mode='mention_ai', memory_enabled=True)
     if limits.continuous:
-        from apps.ai_service.channel_management_continuous import prepared_scope as continuous_scope,preparation_record as continuous_record
+        if web_agent:
+            from apps.ai_service.channel_management_agent import prepared_scope as continuous_scope,preparation_record as continuous_record
+        else:
+            from apps.ai_service.channel_management_continuous import prepared_scope as continuous_scope,preparation_record as continuous_record
         scope=continuous_scope(options,output_tokens=ai.budget.max_output_tokens)
         record=continuous_record(scope);record_path=path.parent/'scope.json'
     else:scope=prepared_scope(options);record=preparation_record(scope);record_path=PREPARATION
@@ -133,7 +146,7 @@ def load_request(path):
         load_recipient(recipient_path,access.app_id)
     if limits.continuous and value['ai_enabled'] is not ai.enabled:raise BotError('MANAGEMENT_AI_SWITCH_MISMATCH')
     return ManagementRequest(path, inputs, limits, selected, _hash(scope), value['enabled'], _hash(value),recipient_path,
-        ai.budget.max_output_tokens,value.get('ai_enabled',value['enabled']))
+        ai.budget.max_output_tokens,value.get('ai_enabled',value['enabled']),'web' if web_agent else 'current')
 
 
 def check_request(path, *, offline=False, device_report_device_id=None):
@@ -146,15 +159,21 @@ def check_request(path, *, offline=False, device_report_device_id=None):
     profile = assistant_profile(PRESET)
     source = read_json(request.inputs.monitoring_config)
     from apps.ai_service.channel_management_continuous import CONTRACT as CONTINUOUS_CONTRACT
-    return request, dict(code='MANAGEMENT_QQ_CHECKED_APPROVAL_REQUIRED', contract=CONTINUOUS_CONTRACT if request.continuous else CONTRACT,
+    from apps.ai_service.channel_management_agent import CONTRACT as AGENT_CONTRACT
+    selected_access,selected_ai,*_=inputs_snapshot(request.inputs)
+    tools=next(g.tools for g in selected_ai.grants if g.group_id==request.inputs.group_id)
+    return request, dict(code='MANAGEMENT_QQ_CHECKED_APPROVAL_REQUIRED', contract=AGENT_CONTRACT if request.web_agent else CONTINUOUS_CONTRACT if request.continuous else CONTRACT,
         enabled=request.enabled, ai_enabled=request.ai_enabled, provider=profile.service_id, model=profile.model, preset=PRESET,
+        agent_mode=request.agent_mode,tools=list(tools),max_model_requests_per_turn=3 if request.web_agent else 2,
         scope_sha256=request.scope_sha256, data_root=source['data_root'], instance_id=source['instance_id'],
         device_id=next(g.device_id for g in inputs_snapshot(request.inputs)[0].groups if g.group_id == request.inputs.group_id),
         group_ref=_hash(request.inputs.group_id)[:12], member_refs=[_hash(m)[:12] for m in request.members],
         limits=asdict(request.limits), reservation_per_turn_cny=None if request.continuous else str(reservation_per_turn()),
         max_model_requests=None if request.continuous else request.limits.max_turns*2, output_tokens_per_request=request.output_tokens,
         seconds_per_turn=90, retries=0, offline=offline, credential_checked=False,
-        database_opened=False, network_requests=0, risk=(CONTINUOUS_RISK if request.continuous else RISK),
+        database_opened=False, network_requests=0,
+        risk=(CONTINUOUS_RISK+('本轮选用的项目知识、历史统计及必要上下文可能披露给Qwen和QQ；'
+              '最多2次只读工具、3次模型请求，不是专业保证。' if request.web_agent else '') if request.continuous else RISK),
         event_notifications=check_event_recipient(request,device_report_device_id))
 
 

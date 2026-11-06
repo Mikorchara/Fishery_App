@@ -47,7 +47,11 @@ PRESETS = ("dashscope-qwen38-flash-r1", "ollama-qwen35-4b-r1")
 class ManagementAssistantService:
     """One epoch and frozen device/policy/mode per turn; single-round by default."""
 
-    def __init__(self, monitoring, *, credentials, traces, policy_directory, gateway_factory=OpenAICompatibleAdapter, execution_config=None, streaming_config=None, history_config=None, unified_config=None, knowledge=None, offline_channel_provider=None, channel_trial=None, _monitoring_only=False, scoring_config=None):
+    def __init__(self, monitoring, *, credentials, traces, policy_directory, gateway_factory=OpenAICompatibleAdapter, execution_config=None, streaming_config=None, history_config=None, unified_config=None, knowledge=None, offline_channel_provider=None, channel_trial=None, _monitoring_only=False, scoring_config=None, _channel_agent=False):
+        self._channel_agent = _channel_agent
+        if type(_channel_agent) is not bool:raise GatewayError('INVALID_CHANNEL_AGENT_COMPOSITION')
+        if _channel_agent and (knowledge is None or getattr(getattr(knowledge,'repository',None),'read_only',False) is not True):
+            raise GatewayError('CHANNEL_KNOWLEDGE_READ_ONLY_REQUIRED')
         if knowledge is None and (not _monitoring_only):
             raise ValueError('KNOWLEDGE_SERVICE_REQUIRED')
         self.monitoring, self.credentials, self.traces = (monitoring, credentials, traces)
@@ -76,17 +80,22 @@ class ManagementAssistantService:
         from .channel_hybrid import HybridQwenTurn
         from .channel_management_live import ManagementLiveTurn
         from .channel_management_continuous import ContinuousManagementTurn
-        if channel_trial is not None and (type(channel_trial) not in (HybridQwenTurn, ManagementLiveTurn, ContinuousManagementTurn) or offline_channel_provider is not None or knowledge is not None):
+        from .channel_management_agent import AgentManagementTurn
+        if _channel_agent and channel_trial is not None and type(channel_trial) is not AgentManagementTurn:
+            raise GatewayError('INVALID_CHANNEL_AGENT_COMPOSITION')
+        if type(channel_trial) is AgentManagementTurn and not _channel_agent:
+            raise GatewayError('INVALID_CHANNEL_AGENT_COMPOSITION')
+        if channel_trial is not None and (type(channel_trial) not in (HybridQwenTurn, ManagementLiveTurn, ContinuousManagementTurn, AgentManagementTurn) or offline_channel_provider is not None or (knowledge is not None and not _channel_agent)):
             raise GatewayError('INVALID_QWEN_TRIAL_COMPOSITION')
         self._channel_trial = channel_trial
         self._channel_history_authority = None
         if type(channel_trial) in (SessionQwenTurn,):
             self._channel_history_authority = channel_trial.authority
-        if type(channel_trial) in (HybridQwenTurn, ManagementLiveTurn, ContinuousManagementTurn):
+        if type(channel_trial) in (HybridQwenTurn, ManagementLiveTurn, ContinuousManagementTurn, AgentManagementTurn):
             self._channel_history_authority = channel_trial.authority
         self.knowledge = knowledge
         from apps.knowledge.service import KnowledgeContentService
-        if isinstance(self.knowledge, KnowledgeContentService):
+        if isinstance(self.knowledge, KnowledgeContentService) and not _channel_agent:
             from .content_binding import content_scope_configs
             self._execution_config, self._streaming_config, self._unified_config = content_scope_configs(self._execution_config, self._streaming_config, self._unified_config)
         self.history_registry = bind_tools(monitoring, devices[0]['id'], self.knowledge, include_history=self.knowledge is not None, include_knowledge=self.knowledge is not None)
@@ -291,7 +300,7 @@ class ManagementAssistantService:
             raise GatewayError('ASSISTANT_SESSION_EXPIRED')
         if prepared.channel_authorization is not None:
             self.validate_channel_turn(prepared)
-            if self._channel_trial is None and type(self._offline_channel_provider) is not OfflineChannelProvider or prepared.execution.profile.release_status != (self._channel_trial.release_status if self._channel_trial else 'candidate') or prepared.execution.profile.mode != ToolExecutionMode.SINGLE_ROUND or (prepared.request.history and prepared.channel_history is None) or (prepared.policy.exposed_tools != (CURRENT_WATER_QUALITY,)):
+            if self._channel_trial is None and type(self._offline_channel_provider) is not OfflineChannelProvider or prepared.execution.profile.release_status != (self._channel_trial.release_status if self._channel_trial else 'candidate') or prepared.execution.profile.mode != (ToolExecutionMode.BOUNDED_MULTI_ROUND if self._channel_agent else ToolExecutionMode.SINGLE_ROUND) or (prepared.request.history and prepared.channel_history is None) or (not self._channel_agent and prepared.policy.exposed_tools != (CURRENT_WATER_QUALITY,)):
                 raise GatewayError('INVALID_CHANNEL_CANDIDATE')
         current = self.management_policy.snapshot()
         if (current.source == 'MANAGEMENT_OVERRIDE' or prepared.policy_source == 'MANAGEMENT_OVERRIDE') and current.revision != prepared.policy_revision:
@@ -342,7 +351,8 @@ class ManagementAssistantService:
                     runtime = replace(runtime, transport_output_token_limit=decision.max_output_tokens)
                     from .channel_management_live import ManagementLiveTurn
                     from .channel_management_continuous import ContinuousManagementTurn
-                    if authorization is not None and type(self._channel_trial) in (ManagementLiveTurn, ContinuousManagementTurn):
+                    from .channel_management_agent import AgentManagementTurn
+                    if authorization is not None and type(self._channel_trial) in (ManagementLiveTurn, ContinuousManagementTurn, AgentManagementTurn):
                         self._channel_trial.check()
                         if decision.max_output_tokens!=self._channel_trial.output_token_limit:
                             raise GatewayError('TRIAL_TRANSPORT_BUDGET_MISMATCH')
@@ -360,9 +370,21 @@ class ManagementAssistantService:
                     if type(trial) is ManagementLiveTurn:prompt=(LIVE_PROMPT,LIVE_INSTRUCTION)
                     from .channel_management_continuous import ContinuousManagementTurn, PROMPT_ID as NATURAL_PROMPT, INSTRUCTION as NATURAL_INSTRUCTION
                     if type(trial) is ContinuousManagementTurn:prompt=(NATURAL_PROMPT,NATURAL_INSTRUCTION)
-                result = AssistantService(coordinator, execution_mode=mode, history_projection=DEFAULT_HISTORY_PROJECTION, single_round_prompt=prompt).send(turn, runtime)
+                if self._channel_agent:
+                    from .channel_management_agent import PROMPT_ID as AGENT_PROMPT, INSTRUCTION as AGENT_INSTRUCTION
+                    assistant = AssistantService(coordinator, execution_mode=mode, history_projection=DEFAULT_HISTORY_PROJECTION,
+                        turn_timeout_s=90, multi_round_prompt=(AGENT_PROMPT,AGENT_INSTRUCTION))
+                else:
+                    assistant = AssistantService(coordinator, execution_mode=mode, history_projection=DEFAULT_HISTORY_PROJECTION, single_round_prompt=prompt)
+                result = assistant.send(turn, runtime)
                 if authorization is not None:
                     self._check_channel(authorization, prepared.policy_revision)
+                    if self._channel_agent:
+                        from .channel_management_agent import build_result as build_agent_result
+                        converted=build_agent_result(result,authorization,decision.profile.revision)
+                        converted=replace(converted,release_status=trial.release_status,offline_only=trial.offline_test)
+                        trial.hybrid_result=converted
+                        return converted
                     if self._hybrid_channel():
                         from .channel_hybrid import build_result
                         if type(trial) is ContinuousManagementTurn:
@@ -406,7 +428,8 @@ class ManagementAssistantService:
         from .channel_hybrid import HybridQwenTurn, HybridHistorySnapshot
         from .channel_management_live import ManagementLiveTurn
         from .channel_management_continuous import ContinuousManagementTurn
-        if type(self._channel_trial) in (HybridQwenTurn, ManagementLiveTurn, ContinuousManagementTurn):
+        from .channel_management_agent import AgentManagementTurn
+        if type(self._channel_trial) in (HybridQwenTurn, ManagementLiveTurn, ContinuousManagementTurn, AgentManagementTurn):
             if type(snapshot) is not HybridHistorySnapshot:
                 raise GatewayError('INVALID_HYBRID_HISTORY')
             return self._channel_trial.history_decision(profile, policy, registry, authorization, snapshot, epoch=self.epoch, policy_revision=policy_revision)
@@ -426,7 +449,7 @@ class ManagementAssistantService:
         return type(self._channel_trial) in (HybridQwenTurn, ManagementLiveTurn, ContinuousManagementTurn)
 
     def _channel_source_requirement(self):
-        return SourceRequirement.AUTO if self._hybrid_channel() else SourceRequirement.CURRENT_OBSERVATION_QUERY
+        return SourceRequirement.AUTO if self._channel_agent or self._hybrid_channel() else SourceRequirement.CURRENT_OBSERVATION_QUERY
 
     def prepare_channel_turn(self, question, authorization, *, history_snapshot=None):
         """Server API: exact Fake provider or separately approved one-turn Qwen trial."""
@@ -439,26 +462,41 @@ class ManagementAssistantService:
         snapshot = self.management_policy.snapshot()
         self._check_channel(authorization, snapshot.revision)
         self.monitoring.bind(authorization.device_id)
-        registry = bind_tools(self.monitoring, authorization.device_id, None, include_knowledge=False)
-        tools = tuple((name for name in authorization.tools if name in snapshot.selected_tools and name in registry.registered_names() and (name == CURRENT_WATER_QUALITY)))
-        if tools != (CURRENT_WATER_QUALITY,):
-            raise GatewayError('CHANNEL_TOOL_NOT_AUTHORIZED')
+        registry = self._channel_registry(authorization,snapshot)
+        tools = registry.registered_names()
         policy = ToolPolicy('assistant', True, tools)
-        entry = registry.lookup(CURRENT_WATER_QUALITY)
-
-        def guarded_water():
-            self._check_channel(authorization, snapshot.revision)
-            result = entry.handler()
-            if self._channel_trial is not None:
-                self._channel_trial.validate_tool_result(result)
-            return result
-        registry = ToolRegistry((ToolDefinition(entry.model_definition, guarded_water),))
         profile = assistant_profile(authorization.preset_id)
         decision = self._history_decision(profile, policy, registry, authorization, history_snapshot, snapshot.revision) if history_snapshot is not None else self._channel_trial.decision(profile, policy, registry, authorization, epoch=self.epoch, policy_revision=snapshot.revision) if self._channel_trial is not None else candidate_decision(profile, policy, registry, device_id=authorization.device_id, epoch=self.epoch, policy_revision=snapshot.revision, authorization=authorization)
         if history_snapshot is not None and question != history_snapshot.question:
             raise GatewayError('INVALID_CHANNEL_HISTORY')
         request = AssistantRequest(authorization.preset_id, question, history_snapshot.history if history_snapshot else (), source_requirement=self._channel_source_requirement())
         return PreparedAssistantTurn(request, authorization.device_id, self.epoch, profile, policy, registry, decision, snapshot.revision, snapshot.source, authorization, history_snapshot)
+
+    def _channel_registry(self, authorization, snapshot):
+        if self._channel_agent:
+            from .channel_management_agent import TOOLS
+            registry=bind_tools(self.monitoring,authorization.device_id,self.knowledge,
+                include_history=True,include_knowledge=True,include_score=True)
+            names=tuple(name for name in TOOLS if name in authorization.tools and name in snapshot.selected_tools)
+        else:
+            registry=bind_tools(self.monitoring,authorization.device_id,None,include_knowledge=False)
+            names=tuple(name for name in authorization.tools if name==CURRENT_WATER_QUALITY and name in snapshot.selected_tools)
+            if names!=(CURRENT_WATER_QUALITY,):raise GatewayError('CHANNEL_TOOL_NOT_AUTHORIZED')
+        entries=[]
+        for name in names:
+            entry=registry.lookup(name)
+            def guarded(*args,_entry=entry):
+                self._check_channel(authorization,snapshot.revision)
+                result=_entry.handler(*args)
+                if self._channel_trial is not None:self._channel_trial.validate_tool_result(result)
+                return result
+            entries.append(ToolDefinition(entry.model_definition,guarded,entry.validate_arguments))
+        return ToolRegistry(entries)
+
+    @classmethod
+    def channel_agent(cls, monitoring, knowledge, **kwargs):
+        """Trusted QQ composition; ordinary Web initialization remains unchanged."""
+        return cls(monitoring,knowledge=knowledge,_channel_agent=True,**kwargs)
 
     def execute_channel_turn(self, prepared, handle):
         if not isinstance(prepared, PreparedAssistantTurn) or prepared.channel_authorization is None:
@@ -472,7 +510,7 @@ class ManagementAssistantService:
         self._check_channel(authorization, prepared.policy_revision)
         history = prepared.channel_history
         expected = self._history_decision(prepared.profile, prepared.policy, prepared.registry, authorization, history, prepared.policy_revision) if history is not None else self._channel_trial.decision(prepared.profile, prepared.policy, prepared.registry, authorization, epoch=self.epoch, policy_revision=prepared.policy_revision) if self._channel_trial is not None else candidate_decision(prepared.profile, prepared.policy, prepared.registry, device_id=prepared.device_id, epoch=self.epoch, policy_revision=prepared.policy_revision, authorization=authorization)
-        if prepared.execution != expected or prepared.profile != assistant_profile(authorization.preset_id) or prepared.device_id != authorization.device_id or (prepared.request.preset_id != authorization.preset_id) or (prepared.request.history if history is None else prepared.request.history != history.history or prepared.request.question != history.question) or (prepared.request.source_requirement != self._channel_source_requirement()) or (prepared.registry.registered_names() != (CURRENT_WATER_QUALITY,)) or (prepared.policy.exposed_tools != (CURRENT_WATER_QUALITY,)):
+        if prepared.execution != expected or prepared.profile != assistant_profile(authorization.preset_id) or prepared.device_id != authorization.device_id or (prepared.request.preset_id != authorization.preset_id) or (prepared.request.history if history is None else prepared.request.history != history.history or prepared.request.question != history.question) or (prepared.request.source_requirement != self._channel_source_requirement()) or (not self._channel_agent and prepared.registry.registered_names() != (CURRENT_WATER_QUALITY,)) or (prepared.policy.exposed_tools != prepared.registry.registered_names()):
             raise GatewayError('INVALID_CHANNEL_CANDIDATE')
 
     @classmethod

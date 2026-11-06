@@ -109,11 +109,22 @@ class QQAICoordinator:
                 normalized = unicodedata.normalize('NFKC', text).strip().lower().strip('！!。，.?？ ')
                 if normalized in ('工具', '/工具', '有什么工具', '可用工具', '你能做什么',
                                   '有什么功能', '怎么用', '帮助', '/帮助', 'help', '/help'):
+                    if getattr(self.session_run,'web_agent',False):
+                        return HybridHelp(text=('我是鳗鲡养殖智能体。可以交流一般养殖知识，并按问题查询当前水质、'
+                            '历史水质、项目知识库和实验水质评分（均只读）。工具由Agent选择，范围由本机授权固定。'
+                            '/当前水质 直接查询，不调用模型；/清空会话 只清除你的记忆。'
+                            '其他自然语言可能产生模型费用。不能确认事件、删除数据、修改规则或控制设备。'))
                     return HybridHelp(text=('我是鳗鲡养殖智能体，可以交流养殖知识，并查询当前绑定设备的水质。'
                         '本次AI可用工具：当前水质（只读）。/当前水质 可直接查询，不调用模型；'
                         '/清空会话 只清除你的对话记忆。其余自然语言可能产生模型费用，直至操作者停止。'
                         '未开放知识库检索、历史AI查询、事件修改或设备控制。'))
-            return hybrid_classify(text, **kwargs)
+            intent=hybrid_classify(text, **kwargs)
+            if getattr(self.session_run,'web_agent',False) and intent.kind=='identity':
+                from .hybrid_intent import HybridIdentity
+                return HybridIdentity(text=('我是鳗鲡养殖智能体，可以交流一般养殖知识，并使用授权的当前水质、'
+                    '历史水质、项目知识和实验评分工具。只读取指定设备，不执行事件修改或设备控制。'
+                    '现场结论以本轮监测来源为准，模拟数据会明确标记；模型解释不是专业保证。'))
+            return intent
         return classify(text, **kwargs)
 
     def is_agent_intent(self, intent):
@@ -167,7 +178,10 @@ class QQAICoordinator:
             self.conversations.invalidate()
         self._conversation_state = state
         allowed_output=self.session_run.channel_budget.max_output_tokens if self.session_run is not None else 512
-        if 'get_current_water_quality' not in policy.selected_tools or self.config.budget.max_output_tokens > allowed_output:
+        permitted=(bool(set(policy.selected_tools)&set(self.config.grants[0].tools))
+                   if getattr(self.session_run,'web_agent',False)
+                   else 'get_current_water_quality' in policy.selected_tools)
+        if not permitted or self.config.budget.max_output_tokens > allowed_output:
             raise BotError('AI_NOT_AUTHORIZED')
         return state
 
@@ -311,7 +325,7 @@ class QQAICoordinator:
     @_validation_only
     def validate_failure_notice(self,plan,code):
         """An error is not an AI success or a substitute Source/Commit result."""
-        if code not in ('INVALID_TOOL_ARGUMENTS','ASSISTANT_RESPONSE_TRUNCATED'):
+        if code not in ('INVALID_TOOL_ARGUMENTS','ASSISTANT_RESPONSE_TRUNCATED','MODEL_RESPONSE_TRUNCATED'):
             raise BotError('AI_FAILURE_NOTICE_NOT_ALLOWED')
         with self._lock:
             task=self._tasks.get(plan.id)
@@ -375,7 +389,15 @@ class QQAICoordinator:
         expected_offline = trial is None or trial.offline_test
         if self.hybrid:
             from apps.ai_service.channel_hybrid import HybridResult
-            if type(result) is not HybridResult or result.offline_only != expected_offline or result.publication is None or (result.publication.branch != result.branch) or (result.branch == 'general' and (result.source is not None or result.model_requests != 1 or result.tool_executions != 0)) or (result.branch == 'water' and (result.source is None or result.model_requests != 2 or result.tool_executions != 1)) or (result.branch not in ('general', 'water')):
+            from apps.ai_service.channel_management_agent import AgentChannelResult
+            if getattr(self.session_run,'web_agent',False):
+                if (type(result) is not AgentChannelResult or result.publication is None
+                        or result.publication.branch!=result.branch or result.branch not in ('general','tools')
+                        or result.model_requests!=result.tool_executions+1 or not 0<=result.tool_executions<=2
+                        or len(result.receipts)!=result.tool_executions or result.source is not None
+                        or (result.branch=='general')!=(result.tool_executions==0)):
+                    raise BotError('INVALID_AGENT_RESULT')
+            elif type(result) is not HybridResult or result.offline_only != expected_offline or result.publication is None or (result.publication.branch != result.branch) or (result.branch == 'general' and (result.source is not None or result.model_requests != 1 or result.tool_executions != 0)) or (result.branch == 'water' and (result.source is None or result.model_requests != 2 or result.tool_executions != 1)) or (result.branch not in ('general', 'water')):
                 raise BotError('INVALID_HYBRID_RESULT')
         if not result.completed or (result.source is None and (not self.hybrid)) or result.offline_only != expected_offline or (result.release_status != expected_status) or (result.can_deliver is not False) or (result.scope_revision != plan.prepared.execution.profile.revision):
             raise BotError('INVALID_AI_DELIVERY')

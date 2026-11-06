@@ -7,7 +7,11 @@ export const services={
     testCredential:(value,config)=>aiWrite('/api/settings/credentials/test',value,config),
     budget:(value,config)=>aiWrite('/api/settings/budgets',value,config),
     qq:{read:()=>qqRead(),save:(value,config)=>qqWrite('/api/settings/qq',value,config),
-      secret:(value,config)=>qqWrite('/api/settings/qq/secret',value,config)}},
+      secret:(value,config)=>qqWrite('/api/settings/qq/secret',value,config),
+      pairingStatus:()=>qqRead('/api/settings/qq/pairing'),
+      pairingStart:(value,config)=>qqWrite('/api/settings/qq/pairing/start',value,config),
+      pairingConfirm:(value,config)=>qqWrite('/api/settings/qq/pairing/confirm',value,config),
+      pairingCancel:(value,config)=>qqWrite('/api/settings/qq/pairing/cancel',value,config)}},
   knowledge:{
     exportUrl:(format,status)=>'/api/knowledge/export?'+new URLSearchParams({format,status}),
     list:filters=>read('/api/knowledge?'+new URLSearchParams(filters)),
@@ -74,7 +78,7 @@ async function qqWrite(path,value,config){
   return data;
 }
 
-async function qqRead(){
-  const response=await fetch('/api/settings/qq',{credentials:'same-origin'}),data=await response.json();
+async function qqRead(path='/api/settings/qq'){
+  const response=await fetch(path,{credentials:'same-origin'}),data=await response.json();
   if(!response.ok)throw new Error(data.error_code||'QQ_SETTINGS_UNAVAILABLE');return data;
 }

@@ -4,7 +4,7 @@
 
 ## 1. 当前执行链
 
-Simulator → 带本机接入令牌的HTTP批次 → MonitoringService → DomainAnalysis/EventService → 单事务Repository。Web和AI Tool使用同一Service读取；QQ是独立进程的显式只读Repository，不复制SQL或规则。Monitoring当前观测源仍为SIMULATOR。独立 `apps.device_reports` 已支持开发板报告HTTP接收及专用存储，Web只读展示；不接入Monitoring事件/Tool，真实视频/NPU尚未合入。设备联调启动见 [连接步骤](../DEVICE_INTERFACE_QUICK.md)。
+Simulator → 带本机接入令牌的HTTP批次 → MonitoringService → DomainAnalysis/EventService → 单事务Repository。Web和AI Tool使用同一Service读取；QQ是独立进程的显式只读Repository，不复制SQL或规则。Monitoring当前观测源仍为SIMULATOR。独立 `apps.device_reports` 已支持开发板报告HTTP接收及专用存储，Web展示并桥接新鲜异常到原Monitoring事件/QQ通知，设备报告尚不作为水质AI Tool事实来源；真实视频/NPU尚未合入。设备联调启动见 [连接步骤](../DEVICE_INTERFACE_QUICK.md)。
 
 后端apps.ai_backend只处理通用模型协议、执行、工具循环、取消和资源；业务Prompt/Registry/Policy/Source/Commit在apps.ai_service。程序不得导入旧fishery_ai或运行时依赖Prototype路径。
 

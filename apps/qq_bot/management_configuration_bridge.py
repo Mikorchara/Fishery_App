@@ -58,6 +58,8 @@ class QQConfigurationBridge:
             from .event_recipients import load_recipient
             recipient=load_recipient(local_path(recipient_file),access.app_id)
         result.update(configured=True,runtime_status='CONFIGURED_RESTART_REQUIRED',
+            agent_mode=request.get('agent_mode','current'),
+            tools=list(next(g.tools for g in ai.grants if g.group_id==group.group_id)),
             settings=dict(enabled=request['enabled'],ai_enabled=request.get('ai_enabled',request['enabled']),
                 app_id=access.app_id,group_id=group.group_id,members=list(request['members']),
                 max_output_tokens=ai.budget.max_output_tokens,event_notifications_enabled=bool(request.get('event_recipient_file'))),
@@ -76,7 +78,7 @@ class QQConfigurationBridge:
                 return current
             root,cfg,access,ai=_configuration_inputs(self.data_root,self.directory,
                 app_id=settings['app_id'],group_id=settings['group_id'],members=tuple(settings['members']),
-                continuous=True,output_tokens=settings['max_output_tokens'],ai_enabled=settings['ai_enabled'])
+                continuous=True,output_tokens=settings['max_output_tokens'],ai_enabled=settings['ai_enabled'],agent_mode='web')
             marker=read_json(root/'qq-isolated-instance.json')
             if marker!=dict(contract=MARKER,root=str(root),instance_id='management-isolated',
                             device_id='sim-pond-1',source='SIMULATOR'):
@@ -93,7 +95,7 @@ class QQConfigurationBridge:
                     raise BotError('EVENT_RECIPIENT_BINDING_REQUIRED')
             stage=cfg.parent/('.qq-config-stage-'+uuid.uuid4().hex);stage.mkdir()
             _write_configuration(root,stage,access=access,ai=ai,members=tuple(settings['members']),
-                enable=settings['enabled'],continuous=True)
+                enable=settings['enabled'],continuous=True,agent_mode='web')
             request=read_json(stage/'request.json')
             for field,name in (('access_file','access.json'),('ai_config','ai.json'),
                                ('monitoring_config','monitoring.json'),('policy_directory','policy')):
@@ -120,3 +122,33 @@ class QQConfigurationBridge:
                 if backup is not None and not cfg.exists():backup.rename(cfg)
                 raise BotError('QQ_CONFIGURATION_PUBLISH_FAILED') from None
             return self.read_nonsecret()
+
+    def bind_verified_recipient(self,path,*,expected_revision):
+        """Called only with a new proof from the bounded Web pairing owner.
+
+        Pairing holds the Bot OS lock. This lock/CAS serializes configuration
+        publication without trying to acquire that same Bot lock recursively.
+        """
+        from .configuration import load_access
+        from .event_recipients import load_recipient
+        from apps.ai_backend.secure_files import write_private,atomic_replace
+        target=local_path(path).resolve()
+        if target.parent!=self.directory or not target.name.startswith('event-recipient-'):
+            raise BotError('PRIVATE_PAIRING_BINDING_INVALID')
+        with exclusive_lock(self.directory.parent/'.qq-configuration.lock'):
+            if self._revision()!=expected_revision:raise BotError('QQ_SETTINGS_CONFLICT')
+            request_path=self.directory/'request.json'
+            request=read_json(request_path)
+            if request.get('schema_version') not in (2,3):raise BotError('PRIVATE_PAIRING_SAVE_IDENTITY_FIRST')
+            access=load_access(self.directory/'access.json')
+            load_recipient(target,access.app_id)
+            original=request_path.read_bytes()
+            backup=self.directory/('request.before-pairing-'+uuid.uuid4().hex+'.json')
+            write_private(backup,original)
+            request.pop('event_recipient_file',None)
+            request['verified_recipient_file']=str(target)
+            temporary=self.directory/('request.pairing-'+uuid.uuid4().hex+'.json')
+            write_private(temporary,(json.dumps(request,ensure_ascii=False,indent=2)+'\n').encode())
+            if self._revision()!=expected_revision:raise BotError('QQ_SETTINGS_CONFLICT')
+            atomic_replace(temporary,request_path)
+        return self.read_nonsecret()

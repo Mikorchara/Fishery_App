@@ -50,15 +50,16 @@ class SessionRun:
             raise BotError('RUN_MEMBERS_NOT_APPROVED')
         self.members=selected;self.device_id=grant.device_id
         self.monitoring=InstanceMonitoring(source,clock=self.clock)
+        self._prepare_sources(source)
         self.bindings=self._inputs_snapshot(inputs,self.monitoring)[-1]
         self.access=replace(access,groups=(replace(group,members=selected),))
-        self.config=QQAIConfig(True,PRESET,self.channel_budget,(QQAIGrant(inputs.group_id,selected,grant.device_id),))
+        self.config=QQAIConfig(True,PRESET,self.channel_budget,(QQAIGrant(inputs.group_id,selected,grant.device_id,grant.tools),))
         self.options=ConversationOptions(trigger_mode='mention_ai',memory_enabled=True)
         self.store=self._new_store(monotonic)
         self.scope=self.scope_for_options();self.scope_sha256=_hash(self.scope)
         self._binding_digest=_hash([self.bindings,selected,asdict(limits)])
         self.ledger=self._new_ledger(limits)
-        self.base_service=ManagementAssistantService.monitoring_only(self.monitoring,credentials=None,
+        self.base_service=self._make_service(credentials=None,
             traces=JsonlTraceSink(self.directory/'unused-base.trace.jsonl'),policy_directory=inputs.policy_directory)
         self.factory=async_client_factory;self.offline_test=async_client_factory is not None;self._lock=threading.RLock()
         self._continuous=bool(getattr(limits,'continuous',False))
@@ -68,6 +69,12 @@ class SessionRun:
         self._active={};self._closed=False
 
     def scope_for_options(self):return prepared_scope(self.options)
+
+    def _prepare_sources(self,source):
+        """Channel subclasses may bind additional explicitly approved readers."""
+
+    def _make_service(self,**kwargs):
+        return ManagementAssistantService.monitoring_only(self.monitoring,**kwargs)
 
     def _new_store(self,monotonic):return ConversationStore(self.options,monotonic=monotonic)
 
@@ -146,8 +153,8 @@ class SessionRun:
             session=self._create_turn(lease,snapshot,validate)
             with self._lock:
                 self._active[lease.sequence]['session']=session;self.sessions.append(session)
-            return ManagementAssistantService.monitoring_only(self.monitoring,credentials=self._turn_credentials(),
-                traces=JsonlTraceSink(self.directory/f'turn-{lease.sequence}.trace.jsonl',tool_names=('get_current_water_quality',)),
+            return self._make_service(credentials=self._turn_credentials(),
+                traces=JsonlTraceSink(self.directory/f'turn-{lease.sequence}.trace.jsonl',tool_names=self.config.grants[0].tools),
                 policy_directory=self.inputs.policy_directory,channel_trial=session)
         except Exception as error:
             self.admission_failed(None,getattr(error,'code','RUN_ADMISSION_FAILED'),sequence=lease.sequence);raise

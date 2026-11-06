@@ -20,9 +20,12 @@ class QQAIGrant:
     tools: tuple[str,...] = (CURRENT_WATER_QUALITY,)
 
     def __post_init__(self):
+        from apps.ai_service.score_execution import SCORE_TOOL_NAMES
         identifier(self.group_id);identifier(self.device_id)
         if (type(self.members) is not tuple or not 1<=len(self.members)<=64
-                or len(set(self.members))!=len(self.members) or self.tools!=(CURRENT_WATER_QUALITY,)):
+                or len(set(self.members))!=len(self.members) or type(self.tools) is not tuple
+                or not self.tools or len(set(self.tools))!=len(self.tools)
+                or any(name not in SCORE_TOOL_NAMES for name in self.tools)):
             raise BotError('INVALID_QQ_AI_CONFIG')
         for member in self.members:identifier(member)
 
@@ -36,10 +39,13 @@ class QQAIConfig:
 
     def __post_init__(self):
         from apps.ai_service.channel_management_continuous import ContinuousChannelBudget
+        from apps.ai_service.channel_management_agent import AgentChannelBudget
         if (type(self.enabled) is not bool or self.preset_id!=PRESET
-                or type(self.budget) not in (ChannelBudget, ContinuousChannelBudget) or type(self.grants) is not tuple
+                or type(self.budget) not in (ChannelBudget, ContinuousChannelBudget, AgentChannelBudget) or type(self.grants) is not tuple
                 or len(self.grants)>16 or any(type(g) is not QQAIGrant for g in self.grants)
                 or len({g.group_id for g in self.grants})!=len(self.grants)):
+            raise BotError('INVALID_QQ_AI_CONFIG')
+        if type(self.budget) is not AgentChannelBudget and any(g.tools!=(CURRENT_WATER_QUALITY,) for g in self.grants):
             raise BotError('INVALID_QQ_AI_CONFIG')
 
     @property
@@ -50,7 +56,7 @@ class QQAIConfig:
     def from_dict(cls,value):
         try:
             if (set(value)!={'schema_version','enabled','preset_id','budget','grants'}
-                    or type(value['schema_version']) is not int or value['schema_version'] not in (1,2)
+                    or type(value['schema_version']) is not int or value['schema_version'] not in (1,2,3)
                     or set(value['budget'])!={'max_output_tokens','turn_timeout_s'}
                     or type(value['grants']) is not list):
                 raise ValueError()
@@ -61,7 +67,8 @@ class QQAIConfig:
                     raise ValueError()
                 grants.append(QQAIGrant(record['group_id'],tuple(record['members']),record['device_id'],tuple(record['tools'])))
             from apps.ai_service.channel_management_continuous import ContinuousChannelBudget
-            budget_type = ChannelBudget if value['schema_version']==1 else ContinuousChannelBudget
+            from apps.ai_service.channel_management_agent import AgentChannelBudget
+            budget_type = {1:ChannelBudget,2:ContinuousChannelBudget,3:AgentChannelBudget}[value['schema_version']]
             return cls(value['enabled'],value['preset_id'],budget_type(**value['budget']),tuple(grants))
         except Exception:
             raise BotError('INVALID_QQ_AI_CONFIG') from None
