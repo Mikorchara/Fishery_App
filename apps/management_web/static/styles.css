@@ -300,3 +300,10 @@ body:has(.video-workspace) main{padding-top:20px}
 }
 
 .device-report{margin-top:12px;border-top:1px solid var(--border);padding-top:12px}.device-report-text{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}.device-report summary{cursor:pointer}
+.device-task{margin-top:16px;padding-top:12px;border-top:1px solid var(--line);min-width:0}
+.device-task h4{font-size:13px;margin:0 0 10px;color:var(--ink)}
+.device-task .table-scroll{max-height:280px;overflow:auto;margin-top:10px}
+.device-task table{min-width:0;width:100%}.device-task th,.device-task td{padding:9px 6px;overflow-wrap:anywhere;font-size:11px}
+.device-task .details-grid{grid-template-columns:minmax(75px,.85fr) minmax(0,1.15fr)}
+.device-task dd{overflow-wrap:anywhere}.device-task p,.device-assembly{font-size:12px;line-height:1.8;overflow-wrap:anywhere}
+.device-report>.data-details{margin-top:14px}.device-report-text{max-height:320px;overflow:auto;font-size:11px}

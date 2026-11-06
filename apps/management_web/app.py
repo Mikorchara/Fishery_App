@@ -97,8 +97,9 @@ def create_app(*, monitoring=None, ai=None, video=None, files=None, events=None,
         device_reports=None
         if device_report_store is not None:
             from apps.device_reports.contracts import ReportError
+            from apps.device_reports.presentation import recent_view
             from datetime import datetime,timezone
-            try:device_reports=device_report_store.recent(device_report_device_id,now=datetime.now(timezone.utc))
+            try:device_reports=recent_view(device_report_store,device_report_device_id,now=datetime.now(timezone.utc))
             except ReportError:device_reports=dict(device_id=device_report_device_id,items=[],error_code='DEVICE_REPORT_READ_UNAVAILABLE')
         from apps.monitoring.event_cycles import summarize_cycles
         return jsonify(**({'video_preview':demo_video.metadata()} if demo_video is not None else {}),

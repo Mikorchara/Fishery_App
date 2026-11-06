@@ -875,3 +875,68 @@ test('device report card distinguishes disabled event sync and bounded sync fail
   assert.match(p.node('content').textContent,/设备异常信号进入事件列表，但不自动判定恢复/);
   assert.doesNotMatch(p.node('content').textContent,/事件同步暂不可用/);
 });
+
+function logicalDeviceFixture(){
+  const data=fixture(),time=data.monitoring.observed_at;
+  const report={device_id:'test-board',report_id:'logical-report',window:{...data.monitoring.window,frames_processed:2},
+    detection:{unique_tracks:12},behavior:{delivery:'full_result_in_report_text'},measurement:{delivery:'full_result_in_report_text'},
+    has_abnormality:true,abnormalities:[],report_text:'完整原文 <script>untrusted</script>'};
+  const item={report,received_at:time,warnings:[],freshness:'stale',assembly:{status:'complete',received_parts:4,total_parts:4,issue_codes:[]},
+    presentation:{detection:{...report.detection,frames_processed:2,window:report.window,avg_per_frame:6,max_per_frame:12,avg_confidence:0,
+      abnormalities:[{label:'ascites',name:'疑似腹水',targets:2,count:2}]},
+    measurement:{status:'available',source_kind:'video_replay',captured_at:time,counts:{fish_detected:19,fish_measured:10,fish_uncertain:6},
+      calibration_status:'uncalibrated',measurement_note:'设备未核实尺度',total_fishes:19,display_truncated:true,fishes:[
+        {id:'F01',length_mm:123.4,physical_length_mm:null,status_text:'未标定估计',quality_warnings:['unverified_scale'],association_status:'single_frame_only'},
+        {id:'F02',length_mm:null,length_px:null,physical_length_mm:null,status_text:'画面截断',quality_warnings:[]},
+        {id:'F03',length_mm:null,length_px:88,status_text:'需复核',physical_length_mm:null,quality_warnings:[]}]},
+    behavior:{status:'available',source_kind:'video_replay',captured_at:time,model:'synthetic-behavior',clip_count:2,anomalous_clips:1,
+      anomalous_reported:1,unknown_clips:0,clips:[{start_s:0,end_s:1.2,score:4.8,anomaly:true},{start_s:.6,end_s:1.8,score:0,anomaly:false}]}},
+    raw_parts:Array.from({length:4},(_,i)=>({report_id:`raw-${i+1}`,report_text:`分片 ${i+1} <script>raw</script>`,received_at:time}))};
+  data.integration={simulation_mode:'water-only',device_reports:{device_id:'test-board',items:item.raw_parts.map(part=>({report:{...report,...part}})),logical_items:[item]}};
+  return {data,item};
+}
+
+test('logical multipart report renders once with detection, uncalibrated length and overlapping behavior clips',async()=>{
+  const {data}=logicalDeviceFixture(),p=page(data);await p.ready();p.run("location.hash='#video';render()");
+  const walk=n=>[n,...n.children.flatMap(walk)],nodes=walk(p.node('content')),text=p.node('content').textContent;
+  assert.equal(nodes.filter(n=>n.tagName==='details'&&n.className==='device-report').length,1);
+  for(const value of ['最近 1 份留存报告','分包已合并 4/4','检测结果','体长测量','行为分析','录像回放推理（非实时摄像头）','疑似腹水','非确诊',
+    '123.4 mm（估计）','画面截断','未取得长度','88 px（像素）','未核实物理标定','不能相加为鱼数','分数不是概率','原始报告与分包','raw-4'])assert.ok(text.includes(value),value);
+  assert.doesNotMatch(text,/已提供原始对象，尚未解释|123.4 cm|实时摄像头已连接/);
+  assert.equal(nodes.filter(n=>n.tagName==='script').length,0);
+  const detection=nodes.find(n=>n.className==='device-task'&&n.textContent.startsWith('检测结果'));
+  assert.ok(detection.textContent.includes('设备上报平均置信度0'));
+  const labels=['测量依据与限制','查看行为片段','原始报告与分包（留存证据）','raw-1'];
+  for(const label of labels){
+    const detail=nodes.find(n=>n.tagName==='details'&&n.children[0]?.textContent===label);
+    detail.open=true;detail.events.toggle({target:detail});
+  }
+  await p.run('refresh()');
+  const refreshed=walk(p.node('content'));
+  for(const label of labels)assert.equal(refreshed.find(n=>n.tagName==='details'&&n.children[0]?.textContent===label).getAttribute('open'),'');
+});
+
+test('incomplete and invalid groups retain evidence but do not render stale task interpretations',async()=>{
+  const {data,item}=logicalDeviceFixture();item.report.report_text='';item.raw_parts=item.raw_parts.slice(0,2);
+  item.assembly={status:'incomplete',received_parts:2,total_parts:4,issue_codes:[]};
+  item.presentation.measurement={status:'pending'};item.presentation.behavior={status:'pending'};
+  const p=page(data);await p.ready();p.run("location.hash='#video';render()");
+  let text=p.node('content').textContent;assert.match(text,/分包收集中 2\/4/);assert.match(text,/分包尚未完整核验/);
+  assert.doesNotMatch(text,/123.4|模型估长|synthetic-behavior/);assert.match(text,/raw-1/);
+  item.assembly.status='invalid';item.assembly.issue_codes=['CONTENT_HASH_MISMATCH'];p.setData(data);await p.run('refresh()');
+  text=p.node('content').textContent;assert.match(text,/分包无法合并/);assert.match(text,/CONTENT_HASH_MISMATCH/);
+  assert.doesNotMatch(text,/内容摘要核验通过/);
+});
+
+test('missing or unknown task objects remain unknown while known unflagged behavior is not called healthy',async()=>{
+  const {data,item}=logicalDeviceFixture();item.presentation.measurement={status:'unrecognized'};item.presentation.behavior={status:'missing'};
+  const p=page(data);await p.ready();p.run("location.hash='#video';render()");
+  let text=p.node('content').textContent;assert.match(text,/当前格式尚不能解释/);assert.match(text,/本轮未提供结果，不代表正常/);
+  item.presentation.behavior={status:'available',source_kind:null,captured_at:null,clip_count:1,anomalous_clips:0,unknown_clips:0,
+    anomalous_reported:0,clips:[{start_s:0,end_s:1,score:0,anomaly:false}]};
+  p.setData(data);await p.run('refresh()');text=p.node('content').textContent;
+  assert.match(text,/来源未提供/);assert.match(text,/未标异常/);
+  const walk=n=>[n,...n.children.flatMap(walk)];
+  const behavior=walk(p.node('content')).find(n=>n.className==='device-task'&&n.textContent.startsWith('行为分析'));
+  assert.doesNotMatch(behavior.textContent,/全部正常|疾病已经治愈/);
+});
