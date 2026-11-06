@@ -5,5 +5,5 @@ if not exist "%~dp0..\..\sample.mp4" (
     pause
     exit /b 1
 )
-powershell.exe -NoLogo -NoProfile -File "%~dp0Start-ManagementStack.ps1" -Request "%~dp0..\..\outputs\qq-m3-real-config\request.json" -WithBot -InteractiveMode -InteractiveScenario -OpenBrowser -ScoreTrial -DemoVideo "%~dp0..\..\sample.mp4"
+powershell.exe -NoLogo -NoProfile -File "%~dp0Start-ManagementStack.ps1" -Request "%~dp0..\..\outputs\qq-m3-real-config\request.json" -WithBot -InteractiveMode -AutoDeviceReports -InteractiveScenario -OpenBrowser -ScoreTrial -DemoVideo "%~dp0..\..\sample.mp4"
 if errorlevel 1 pause

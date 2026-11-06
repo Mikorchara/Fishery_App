@@ -211,6 +211,7 @@ def main(argv=None):
     p.add_argument('--demo-video',type=Path);p.add_argument('--score-trial',action='store_true')
     p.add_argument('--simulation-mode',choices=('full','water-only'),default='full')
     p.add_argument('--interactive-mode',action='store_true')
+    p.add_argument('--auto-device-reports',action='store_true')
     p.add_argument('--device-report-directory',type=Path)
     p.add_argument('--device-report-device-id')
     p.add_argument('--stop-directory',type=Path);p.add_argument('--stop-role',choices=('bot','all'),default='all')

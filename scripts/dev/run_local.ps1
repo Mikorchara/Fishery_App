@@ -1,5 +1,5 @@
 ﻿param([ValidateSet('full','water-only')][string]$SimulationMode='full', [switch]$InteractiveMode,
- [string]$DeviceReportDirectory, [string]$DeviceReportDeviceId,
+ [string]$DeviceReportDirectory, [string]$DeviceReportDeviceId, [switch]$AutoDeviceReports,
     [ValidateSet('normal','low_oxygen','oxygen_drop_recovery','suspected_disease','reduced_feeding','combined_anomaly','device_offline')]
     [string]$Scenario = 'normal',
     [ValidateRange(1,65535)][int]$Port = 8766,
@@ -31,7 +31,7 @@ if ($Detach) {
     # Keep only the two service consoles visible. No elevated execution/policy bypass.
     $detachedArgs = @('-NoLogo','-NoProfile','-File',('"{0}"' -f $PSCommandPath),
         '-DialogErrors','-Scenario',$Scenario,'-Port',"$Port",'-Seed',"$Seed")
-    foreach ($name in @('Demo','ShowTerminals','InteractiveScenario','OpenBrowser','NoAssistant','NoStreaming','NoMultiRound','NoHistory','UserData','ScoreTrial')) {
+    foreach ($name in @('Demo','ShowTerminals','InteractiveScenario','OpenBrowser','NoAssistant','NoStreaming','NoMultiRound','NoHistory','UserData','ScoreTrial','AutoDeviceReports')) {
         if (Get-Variable -Name $name -ValueOnly) { $detachedArgs += ('-' + $name) }
     }
     if ($DataRoot) { $detachedArgs += @('-DataRoot',('"{0}"' -f $DataRoot)) }
@@ -62,6 +62,7 @@ if ($ScoreTrial) { $launchArgs += '--score-trial' }
 # Approved Qwen unified trial follows History/transport switches in the supervisor.
 # Foreground supervisor owns only its two children; no Provider call on startup.
 $launchArgs+=@('--simulation-mode',$SimulationMode)
+if ($AutoDeviceReports) { $launchArgs+='--auto-device-reports' }
 if ($DeviceReportDirectory) { $launchArgs+=@('--device-report-directory',$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DeviceReportDirectory)) }
 if ($DeviceReportDeviceId) { $launchArgs+=@('--device-report-device-id',$DeviceReportDeviceId) }
 & $pythonPath @launchArgs

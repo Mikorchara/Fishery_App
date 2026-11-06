@@ -241,6 +241,7 @@ def main(argv=None):
     parser.add_argument('--score-trial',action='store_true')
     parser.add_argument('--simulation-mode',choices=('full','water-only'),default='full')
     parser.add_argument('--interactive-mode',action='store_true')
+    parser.add_argument('--auto-device-reports',action='store_true')
     parser.add_argument('--device-report-directory',type=Path)
     parser.add_argument('--device-report-device-id')
     args=parser.parse_args(arguments)

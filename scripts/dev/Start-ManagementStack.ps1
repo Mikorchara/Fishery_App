@@ -1,5 +1,5 @@
 ﻿[CmdletBinding()]
-param([ValidateSet('full','water-only')][string]$SimulationMode='full', [switch]$InteractiveMode,
+param([ValidateSet('full','water-only')][string]$SimulationMode='full', [switch]$InteractiveMode, [switch]$AutoDeviceReports,
  [string]$DeviceReportDirectory, [string]$DeviceReportDeviceId, [string]$Request, [string]$DataRoot, [int]$Port=8766,
       [string]$Scenario='normal', [switch]$WithBot, [switch]$NoBot,
       [switch]$OfflineDemo, [switch]$Check, [int]$RunSeconds=0, [switch]$NoAssistant,
@@ -27,4 +27,5 @@ $taskArguments+=@('--simulation-mode',$SimulationMode)
 if ($DeviceReportDirectory) { $taskArguments+=@('--device-report-directory',$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DeviceReportDirectory)) }
 if ($DeviceReportDeviceId) { $taskArguments+=@('--device-report-device-id',$DeviceReportDeviceId) }
 if ($InteractiveMode) { $taskArguments+='--interactive-mode' }
+if ($AutoDeviceReports) { $taskArguments+='--auto-device-reports' }
 Invoke-ManagementPython -NativeArguments $taskArguments

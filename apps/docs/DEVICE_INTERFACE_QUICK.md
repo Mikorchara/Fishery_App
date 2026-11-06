@@ -1,6 +1,6 @@
 # 设备怎么把数据发给 Management
 
-**现在支持两条独立的数据通道。** 开发板报告可以接收并在网页查看；真实水质传感器和实时视频仍需单独对接。
+**现在支持两条独立的数据通道。** 开发板报告可以接收并在网页查看；真实水质传感器和实时视频仍需单独对接。日常接收脚本已改为**局域网免令牌**，开发板不必填写`X-Device-Token`。
 
 | 数据 | 发送到哪里 | 网页用途 |
 |---|---|---|
@@ -35,14 +35,20 @@
 先正常关闭旧 Web / Simulator，再执行：
 
 ```powershell
-.\scripts\dev\run_local.ps1 -DataRoot "$PWD\outputs\qq-m3-real-test" -NoAssistant -ShowTerminals -InteractiveScenario -OpenBrowser -SimulationMode water-only -DeviceReportDirectory "$PWD\outputs\device-reports" -DeviceReportDeviceId fish-monitor-orin-01
+.\scripts\dev\启动演示系统.cmd
 ```
 
-在 Simulator 中选水质场景，推荐先选 `1` 正常。此模式不会生成模拟视觉；“疑似疾病、摄食减少”等视觉参数不生效。水质异常规则仍正常运行。
+先在**运行模式菜单选`2`设备联调**，再在Simulator中选水质场景，推荐`1`正常。四个普通启动脚本都会自动绑定本项目`outputs/device-reports`和设备`fish-monitor-orin-01`，不需要再复制长命令。此模式不会生成模拟视觉；“疑似疾病、摄食减少”等视觉参数不生效，水质异常规则仍正常运行。选`1`完整模拟则保持原行为，不绑定设备报告。
 
-要同时播放录像，在上述命令末尾加 `-DemoVideo "$PWD\sample.mp4"`。打开 http://127.0.0.1:8766 的“视频监控”：左侧模拟水质、中央录像、右侧设备报告。
+要同时播放录像，改用`.\scripts\dev\启动视频演示系统.cmd`，同样先选运行模式`2`。打开 http://127.0.0.1:8766 的“视频监控”：左侧模拟水质、中央录像、右侧设备报告。
 
-`fish-monitor-orin-01` 是示例设备 ID，必须与开发板 `device_id` 一致；修改时也要修改下一步接收器的 `-DeviceId`。
+`fish-monitor-orin-01` 必须与开发板`device_id`一致。若组员使用其他ID或需要自定义报告目录，使用显式入口，并同步修改下一步接收器的`-DeviceId`/`-Directory`：
+
+```powershell
+.\scripts\dev\run_local.ps1 -DataRoot "$PWD\outputs\qq-m3-real-test" -ShowTerminals -InteractiveScenario -OpenBrowser -SimulationMode water-only -DeviceReportDirectory "$PWD\outputs\device-reports" -DeviceReportDeviceId <开发板实际ID>
+```
+
+普通脚本不会自动创建报告库或启动8780接收器；首次先完成第1步初始化。没有收到设备报告时，不会用模拟视觉填充设备结果。
 
 ## 3. 单独启动报文接收器
 
@@ -53,20 +59,23 @@
 ```
 
 
-按提示输入与组员约定的 **32～128位字母数字令牌**，输入不回显。不要把令牌放到源码、Git、截图或普通日志中。看到 `DEVICE_REPORT_LISTENING`，保持这个窗口运行。
+这条命令直接启动，**不再要求输入令牌**。看到 `DEVICE_REPORT_LISTENING` 且 `auth_mode` 为 `NONE_LAN`，保持这个窗口运行。
 
 - 默认端口8780；Web仍是8766，互不占用。
 - 不填 `-Bind` 时只监听127.0.0.1，开发板访问不到。
 - 只绑定具体的私网IPv4，不使用0.0.0.0。防火墙如需放行，仅限可信专用网络、开发板地址与此端口；程序不自动改防火墙。
 - 首版是局域网 HTTP，不含 TLS，不要直接暴露到公网。
 
+旧令牌方式仍兼容：确实需要时在命令末尾加`-RequireToken`，电脑端按提示输入双方私下约定的32～128位字母数字，开发板才需要发送同一`X-Device-Token`。它不是QQ或Qwen密钥，不从开放平台领取。普通联调无需启用此选项。
+
 ## 4. 组员在开发板上填写
 
 ```http
 POST http://<电脑局域网IPv4>:8780/api/fish/reports
 Content-Type: application/json
-X-Device-Token: <私下约定的令牌>
 ```
+
+默认**不用填令牌，也不用加其他认证请求头**。接收器仍只接收绑定设备ID的报告，报文格式、大小、重复ID和频率处理保持原规则。
 
 正文按原 [TEXT_PACKAGE_API.md](development/TEXT_PACKAGE_API.md) 的 v1 JSON 发送。保留 `schema_version`、`report_id`、`device_id`、`sent_at`、`window`、`has_abnormality`、`report_text`、`detection`、`abnormalities`、`behavior`、`measurement`。本端不要求添加水质字段。
 
@@ -76,7 +85,7 @@ X-Device-Token: <私下约定的令牌>
 - JSON最大16 KiB，窗口最长1小时，最多60次请求/分钟。建议正常和异常窗口都上报；仅异常上报时，沉默不能证明恢复。
 - 原文示例的窗口起止和 `duration_s` 可能不一致，实际发送应校正；接收器保留原证据并返回警告，不替设备改时间。
 
-返回 `accepted` 表示已提交到独立报告库；`duplicate` 表示相同报文已保存。403检查令牌/设备ID，409检查重复ID内容，413检查大小，429降低频率，503检查存储状态。不要遇错就无限重试。
+返回 `accepted` 表示已提交到独立报告库；`duplicate` 表示相同报文已保存。403先检查设备ID及是否误带浏览器`Origin`；仅启用`-RequireToken`时才检查令牌。409检查重复ID内容，413检查大小，429降低频率，503检查存储状态。不要遇错就无限重试。
 
 ## 5. 验收和停止
 
@@ -88,13 +97,13 @@ X-Device-Token: <私下约定的令牌>
 
 ## QQ设备事件提醒（已有QQ配置的电脑）
 
-先保持上面的接收器运行，再用**同一份报告目录和设备ID**启动三终端。无需新增JSON配置，Web约每2秒同步一次；Bot沿用已有私聊接收人，在原启动审批中一并显示设备报告披露范围。
+先保持上面的接收器运行，再用普通QQ启动脚本，在**运行模式菜单选择`2`**。它会使用上面的同一份报告目录和设备ID，无需新增JSON配置；Web约每2秒同步一次。Bot沿用已有私聊接收人，在原启动审批中一并显示设备报告披露范围。
 
 ```powershell
-.\scripts\dev\Start-ManagementStack.ps1 -Request "$PWD\outputs\qq-m3-real-config\request.json" -WithBot -NoAssistant -SimulationMode water-only -DeviceReportDirectory "$PWD\outputs\device-reports" -DeviceReportDeviceId fish-monitor-orin-01 -InteractiveScenario -DemoVideo "$PWD\sample.mp4" -OpenBrowser
+.\scripts\dev\启动QQ演示系统.cmd
 ```
 
-将示例设备ID改为开发板实际ID。没有`sample.mp4`时去掉`-DemoVideo`。尚未绑定成功验证的QQ接收人时，只记录/展示事件，不擅自选择QQ用户或群。设备报告通知只发新异常，不虚构等级升级和恢复；持续同类报告不刷屏。原Simulator事件的新异常、升级与恢复通知保持原逻辑，设备通知不调用Qwen、不占AI轮数。
+要播放`sample.mp4`，改用`.\scripts\dev\启动QQ视频演示系统.cmd`并选`2`，不要同时启动两个入口。非默认ID或报告目录使用`Start-ManagementStack.ps1`的显式绑定参数。尚未绑定成功验证的QQ接收人时，只记录/展示事件，不擅自选择QQ用户或群。设备报告通知只发新异常，不虚构等级升级和恢复；持续同类报告不刷屏。原Simulator事件的新异常、升级与恢复通知保持原逻辑，设备通知不调用Qwen、不占AI轮数。
 
 人工验收：让设备重新采集并上报一份新异常报告 → 接收器返回`accepted` → 网页事件列表出现“设备视觉异常报告” → QQ私聊收到`DEVICE REPORT`提醒。不要修改旧包时间冒充新观测。重发同一报文应返回`duplicate`，不增加事件/通知；等待过期后应显示“状态待核实”，不能发“已恢复”。人工结束后有新的异常证据时，会重新提醒一次。
 
@@ -102,6 +111,6 @@ X-Device-Token: <私下约定的令牌>
 
 页面最多显示最近20条，独立库上限5000条，满后明确拒绝新报文，不自动删除历史。达到上限请停接收后由维护者备份并安排新存储，不清空旧库。
 
-当前已完成合成报文离线验证；组员仍需确认真实开发板的网络、令牌、时间和实际字段。**视频流与设备报告是两项验收，不能互相替代。**
+当前已完成合成报文离线验证；组员仍需确认真实开发板的网络、设备ID、时间和实际字段。**视频流与设备报告是两项验收，不能互相替代。**
 
 原模拟批次的精确格式见 [监测协议](development/INTEGRATION.md)；四个日常入口见 [启动说明](BUILD_RUN.md)。

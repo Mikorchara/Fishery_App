@@ -36,7 +36,7 @@
 | 6 | 设备离线 | device_offline |
 | 7 | 溶解氧快速下降后逐步回升 | oxygen_drop_recovery |
 
-设备联调模式停发模拟视觉；疑似疾病/摄食等视觉参数不生效，水质场景仍生效。四个cmd不会自动开启局域网接收器或猜测设备绑定；选择2但未绑定报告目录时，页面明确显示未接入。真正接设备请按 [设备连接步骤](DEVICE_INTERFACE_QUICK.md) 显式指定目录、设备ID并单独启动接收器。
+设备联调模式停发模拟视觉；疑似疾病/摄食等视觉参数不生效，水质场景仍生效。**四个cmd选2后自动绑定本项目`outputs/device-reports`和设备`fish-monitor-orin-01`；选1不绑定设备报告。** 首次先按[设备连接步骤](DEVICE_INTERFACE_QUICK.md)创建报告库，并在另一个窗口启动8780接收器；四个cmd不会自动建库或开启接收器。开发板`device_id`须与此ID一致；其他ID或目录仍用下方显式参数，不自动选择已有实例。
 
 ## 数据和AI要点
 
@@ -59,7 +59,7 @@
 .\scripts\dev\Start-ManagementStack.ps1 -Request "$PWD\outputs\qq-m3-real-config\request.json" -WithBot -NoAssistant -Scenario low_oxygen -OpenBrowser
 ```
 
-需要运行模式菜单时加 `-InteractiveMode`；直接指定模式用 `-SimulationMode water-only`（默认full）。需要场景菜单时加 `-InteractiveScenario`；需要视频时加 `-DemoVideo "$PWD\sample.mp4"`；Web评分加 `-ScoreTrial` 并去掉 `-NoAssistant`。`-Port 8767`可改端口，不结束未知Python进程。PowerShell接受相对Request路径，JSON内部仍必须是本机正确的绝对路径。
+需要运行模式菜单时加 `-InteractiveMode`；直接指定模式用 `-SimulationMode water-only`（默认full）。四个cmd已带`-AutoDeviceReports`，仅在water-only且未提供绑定时使用上述固定目录/ID；手动启动不加此开关时保持原行为。需要场景菜单时加 `-InteractiveScenario`；需要视频时加 `-DemoVideo "$PWD\sample.mp4"`；Web评分加 `-ScoreTrial` 并去掉 `-NoAssistant`。`-Port 8767`可改端口，不结束未知Python进程。PowerShell接受相对Request路径，JSON内部仍必须是本机正确的绝对路径。
 
 **停止：**三终端在最初编排终端Ctrl+C；两终端可在Web或Simulator窗口Ctrl+C。单独关闭Bot不停止其他两项。优先正常停止以保存结果。独立停止、日志与备份见 [维护说明](deep-dive/OPERATIONS.md)。
 
@@ -69,13 +69,13 @@
 
 ## 已配置QQ的设备联调
 
-先按 [连接步骤](DEVICE_INTERFACE_QUICK.md) 初始化并启动独立接收器；再使用原QQ实例启动三终端：
+先按 [连接步骤](DEVICE_INTERFACE_QUICK.md) 初始化并启动独立接收器；再使用普通QQ入口并在运行模式菜单选择`2`：
 
 ```powershell
-.\scripts\dev\Start-ManagementStack.ps1 -Request "$PWD\outputs\qq-m3-real-config\request.json" -WithBot -NoAssistant -SimulationMode water-only -DeviceReportDirectory "$PWD\outputs\device-reports" -DeviceReportDeviceId fish-monitor-orin-01 -InteractiveScenario -OpenBrowser
+.\scripts\dev\启动QQ演示系统.cmd
 ```
 
-需要录像再加 `-DemoVideo "$PWD\sample.mp4"`。绑定后Web会把新鲜设备异常同步到事件列表；Bot原审批会一并显示该设备的视觉异常通知范围，使用已有已验证私聊接收人。AI仍只查询原授权模拟水质，设备提醒不调用模型。同类报告合并提醒，过期只显示状态待核实，不自动判定恢复。独立接收器是额外的第四个终端，需单独Ctrl+C关闭。详见[设备连接步骤](DEVICE_INTERFACE_QUICK.md)。
+需要录像时改用`.\scripts\dev\启动QQ视频演示系统.cmd`，同样选`2`。绑定后Web会把新鲜设备异常同步到事件列表；Bot原审批会一并显示该设备的视觉异常通知范围，使用已有已验证私聊接收人。AI仍只查询原授权模拟水质，设备提醒不调用模型。同类报告合并提醒，过期只显示状态待核实，不自动判定恢复。独立接收器是额外的第四个终端，需单独Ctrl+C关闭。非默认设备ID/目录可显式启动`Start-ManagementStack.ps1`并传`-SimulationMode water-only -DeviceReportDirectory <目录> -DeviceReportDeviceId <ID>`。详见[设备连接步骤](DEVICE_INTERFACE_QUICK.md)。
 
 若提示 `MANAGEMENT_SCOPE_REVIEW_REQUIRED`，按[QQ专题](deep-dive/QQ_BOT.md#排错与验证)核对源码、准备资源和本机配置；不要复用旧批准或手工关闭指纹检查。
 

@@ -81,6 +81,82 @@ class DeviceReportTests(unittest.TestCase):
         v=report();v['sent_at']=(NOW+timedelta(seconds=1)).isoformat()
         self.assertEqual(self.send(raw(v)).status_code,400)
 
+    def test_explicit_token_free_receiver_preserves_report_and_admission_boundaries(self):
+        client=create_receiver(self.store,device_id=DEVICE,require_token=False,clock=lambda:NOW).test_client()
+        def send(value=None,**kwargs):
+            return client.post('/api/fish/reports',data=raw(value),content_type='application/json',**kwargs)
+        self.assertEqual(send().json['status'],'accepted')
+        self.assertEqual(send().json['status'],'duplicate')
+        other=report();other['device_id']='unbound-device';other['report_id']='unbound-report'
+        self.assertGreaterEqual(send(other).status_code,400)
+        self.assertEqual(send(headers={'Origin':'http://untrusted.invalid'}).status_code,403)
+        self.assertEqual(client.get('/api/fish/reports').status_code,404)
+        self.assertEqual(client.post('/api/fish/reports',data=raw(),content_type='text/plain').status_code,400)
+        self.assertEqual(client.post('/api/fish/reports',data=b' '*16385,content_type='application/json').status_code,413)
+        self.assertEqual(len(self.store.recent(DEVICE,now=NOW)['items']),1)
+        # A fresh admission bucket makes the existing rolling limit deterministic.
+        rate_client=create_receiver(self.store,device_id=DEVICE,require_token=False,clock=lambda:NOW).test_client()
+        with patch('apps.device_reports.__main__.monotonic',return_value=100.):
+            for _ in range(60):
+                self.assertEqual(rate_client.post('/api/fish/reports',data=raw(),content_type='application/json').status_code,200)
+            self.assertEqual(rate_client.post('/api/fish/reports',data=raw(),content_type='application/json').status_code,429)
+
+    def test_token_required_remains_the_direct_receiver_default(self):
+        with self.assertRaisesRegex(ReportError,'DEVICE_REPORT_TOKEN_REQUIRED'):
+            create_receiver(self.store,device_id=DEVICE,clock=lambda:NOW)
+        for headers in ({},{'X-Device-Token':'wrong-but-valid-token-01234567890123456789'}):
+            response=self.client.post('/api/fish/reports',data=raw(),content_type='application/json',headers=headers)
+            self.assertEqual(response.status_code,403)
+        self.assertEqual(self.store.recent(DEVICE,now=NOW)['items'],[])
+
+    def test_cli_default_token_mode_still_rejects_missing_token_before_opening_store(self):
+        with (patch('apps.device_reports.__main__.os.environ',{}),
+              patch('apps.device_reports.__main__.ReportStore',side_effect=AssertionError('no store without required token')),
+              patch('werkzeug.serving.make_server',side_effect=AssertionError('must not listen')),
+              patch('sys.stdout',new=io.StringIO()) as output):
+            self.assertEqual(main(['--directory',str(self.root/'reports'),'--device-id',DEVICE,'--serve']),1)
+        self.assertEqual(json.loads(output.getvalue())['code'],'DEVICE_REPORT_TOKEN_REQUIRED')
+
+    def test_cli_explicit_token_free_serve_never_reads_token_and_closes_owned_server(self):
+        class NoTokenEnvironment(dict):
+            def get(self,key,default=None):
+                if key=='FISHERY_DEVICE_REPORT_TOKEN':raise AssertionError('token must not be read')
+                return super().get(key,default)
+        with (patch('apps.device_reports.__main__.os.environ',NoTokenEnvironment()),
+              patch('werkzeug.serving.make_server') as factory,
+              patch('sys.stdout',new=io.StringIO()) as output):
+            self.assertEqual(main(['--directory',str(self.root/'reports'),'--device-id',DEVICE,
+                '--serve','--no-token','--bind','192.168.2.193']),0)
+        factory.assert_called_once()
+        self.assertEqual(factory.call_args.args[:2],('192.168.2.193',8780))
+        factory.return_value.serve_forever.assert_called_once_with()
+        factory.return_value.server_close.assert_called_once_with()
+        status=json.loads(output.getvalue())
+        self.assertEqual(status['code'],'DEVICE_REPORT_LISTENING')
+        self.assertEqual(status['auth_mode'],'NONE_LAN')
+        self.assertNotIn(TOKEN,output.getvalue())
+        self.assertNotIn(report()['report_text'],output.getvalue())
+        # Test client exercises the actual CLI-built app; make_server was mocked.
+        response=factory.call_args.args[2].test_client().post('/api/fish/reports',data=raw(),content_type='application/json')
+        self.assertEqual(response.json['status'],'accepted')
+
+    def test_cli_token_free_check_opens_no_database_and_reads_no_token(self):
+        class NoTokenEnvironment(dict):
+            def get(self,key,default=None):
+                if key=='FISHERY_DEVICE_REPORT_TOKEN':raise AssertionError('check must not read token')
+                return super().get(key,default)
+        with (patch('apps.device_reports.storage.sqlite3.connect',side_effect=AssertionError('check must not open DB')),
+              patch('apps.device_reports.__main__.os.environ',NoTokenEnvironment()),
+              patch('werkzeug.serving.make_server',side_effect=AssertionError('check must not listen')),
+              patch('sys.stdout',new=io.StringIO()) as output):
+            self.assertEqual(main(['--directory',str(self.root/'absent'),'--device-id',DEVICE,'--check','--no-token']),0)
+        status=json.loads(output.getvalue())
+        self.assertEqual(status['code'],'DEVICE_REPORT_CONFIG_CHECKED')
+        self.assertEqual(status['auth_mode'],'NONE_LAN')
+        self.assertFalse(status['database_opened'])
+        self.assertFalse(status['credential_checked'])
+        self.assertEqual(status['network_requests'],0)
+
     def test_concurrent_duplicates_commit_failure_and_no_reinitialization(self):
         def receive(_):return self.store.receive(raw(),device_id=DEVICE,now=NOW)['status']
         with ThreadPoolExecutor(max_workers=4) as executor:results=list(executor.map(receive,range(8)))

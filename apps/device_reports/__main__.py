@@ -15,9 +15,9 @@ from .contracts import MAX_BYTES,ReportError
 from .storage import ReportStore,safe_directory
 
 
-def create_receiver(store,*,device_id,token,clock=lambda:datetime.now(timezone.utc)):
+def create_receiver(store,*,device_id,token=None,require_token=True,clock=lambda:datetime.now(timezone.utc)):
     identifier(device_id)
-    if not valid_token(token):raise ReportError('DEVICE_REPORT_TOKEN_REQUIRED')
+    if require_token and not valid_token(token):raise ReportError('DEVICE_REPORT_TOKEN_REQUIRED')
     app=Flask(__name__,static_folder=None);app.config['MAX_CONTENT_LENGTH']=MAX_BYTES
     rate_lock=Lock();last=[]
 
@@ -25,9 +25,12 @@ def create_receiver(store,*,device_id,token,clock=lambda:datetime.now(timezone.u
     def boundary():
         if request.path!='/api/fish/reports' or request.method!='POST':
             return jsonify(error_code='DEVICE_REPORT_ENDPOINT_ONLY'),404
-        supplied=request.headers.get('X-Device-Token','')
-        if request.headers.get('Origin') or not valid_token(supplied) or not compare_digest(supplied,token):
+        if request.headers.get('Origin'):
             return jsonify(error_code='DEVICE_REPORT_ACCESS_DENIED'),403
+        if require_token:
+            supplied=request.headers.get('X-Device-Token','')
+            if not valid_token(supplied) or not compare_digest(supplied,token):
+                return jsonify(error_code='DEVICE_REPORT_ACCESS_DENIED'),403
         if request.mimetype!='application/json':return jsonify(error_code='DEVICE_REPORT_JSON_REQUIRED'),400
         # Bounded rolling admission, no remote identifier or content in diagnostics.
         with rate_lock:
@@ -58,6 +61,7 @@ def main(argv=None):
     actions=parser.add_mutually_exclusive_group(required=True)
     actions.add_argument('--init-store',action='store_true');actions.add_argument('--check',action='store_true');actions.add_argument('--serve',action='store_true')
     parser.add_argument('--bind',default='127.0.0.1');parser.add_argument('--port',type=int,default=8780)
+    parser.add_argument('--no-token',action='store_true',help='Receive LAN device reports without X-Device-Token')
     args=parser.parse_args(argv)
     try:
         identifier(args.device_id);safe_directory(args.directory)
@@ -67,17 +71,19 @@ def main(argv=None):
         if not 1<=args.port<=65535:raise ReportError('DEVICE_REPORT_PORT_INVALID')
         if args.check:
             print(json.dumps(dict(code='DEVICE_REPORT_CONFIG_CHECKED',store_exists=(args.directory/'device-reports.sqlite3').is_file(),
+                auth_mode='NONE_LAN' if args.no_token else 'TOKEN',
                 database_opened=False,credential_checked=False,network_requests=0)));return 0
         if args.init_store:
             ReportStore.initialize(args.directory);print(json.dumps(dict(code='DEVICE_REPORT_STORE_CREATED')));return 0
-        token=os.environ.get('FISHERY_DEVICE_REPORT_TOKEN','')
-        if not valid_token(token):raise ReportError('DEVICE_REPORT_TOKEN_REQUIRED')
-        app=create_receiver(ReportStore(args.directory),device_id=args.device_id,token=token)
+        token=None if args.no_token else os.environ.get('FISHERY_DEVICE_REPORT_TOKEN','')
+        if not args.no_token and not valid_token(token):raise ReportError('DEVICE_REPORT_TOKEN_REQUIRED')
+        app=create_receiver(ReportStore(args.directory),device_id=args.device_id,token=token,require_token=not args.no_token)
         # Suppress HTTP request lines: user-controlled URLs must not reach logs.
         logging.getLogger('werkzeug').setLevel(logging.CRITICAL)
         from werkzeug.serving import make_server
         server=make_server(str(host),args.port,app)
-        print(json.dumps(dict(code='DEVICE_REPORT_LISTENING',port=args.port)),flush=True)
+        print(json.dumps(dict(code='DEVICE_REPORT_LISTENING',port=args.port,
+            auth_mode='NONE_LAN' if args.no_token else 'TOKEN')),flush=True)
         try:server.serve_forever()
         except KeyboardInterrupt:pass
         finally:server.server_close()

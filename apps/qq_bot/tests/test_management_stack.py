@@ -315,10 +315,11 @@ runpy.run_path(script,run_name='__main__')'''
         self.assertIn(b'MANAGEMENT_QQ_CHECKED_APPROVAL_REQUIRED',result.stdout)
         relative=str(self.request.relative_to(ROOT))
         for entry in ('Start-QQBot.ps1','Start-ManagementStack.ps1'):
-            extra=['-WithBot','-InteractiveScenario'] if entry=='Start-ManagementStack.ps1' else []
+            # Check must use this fixture's free port, not a running user's Web port.
+            extra=['-WithBot','-InteractiveScenario','-Port',str(self.port)] if entry=='Start-ManagementStack.ps1' else []
             checked=subprocess.run(['powershell.exe','-NoProfile','-File',str(ROOT/'scripts/dev'/entry),
                 '-Check','-OfflineDemo','-Request',relative,*extra],cwd=ROOT,capture_output=True,timeout=15)
-            self.assertEqual(checked.returncode,0,checked.stderr.decode(errors='replace'))
+            self.assertEqual(checked.returncode,0,(checked.stdout+checked.stderr).decode(errors='replace'))
             self.assertIn(b'STACK_PREFLIGHT_OK',checked.stdout)
         invalid=subprocess.run([*command[:-1],str(self.root/'missing.json')],cwd=ROOT,capture_output=True,timeout=15)
         self.assertNotEqual(invalid.returncode,0)
