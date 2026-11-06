@@ -58,3 +58,5 @@ Fishery_Management/
 数据根与源码目录分开，凭据又是独立私有Store。四个日常cmd共用 `outputs/qq-m3-real-test`；`apps/management_setup.py` 和 `Initialize-Management.ps1` 负责首次显式初始化，`knowledge/resources` 提供31条初始背景资料。QQ后续通过网页“QQ机器人”设置接入同库，见根目录[开始使用](../../开始使用.md)。不要为了目录整齐挪动实际数据库。
 
 QQ Web-Agent新增装配：`ai_service/channel_management_agent.py` 与 `channel_agent_presentation.py` 复用原四Tool/Receipt和2/2/3循环；`qq_bot/knowledge_source.py` 只读打开同一批准实例的知识库，`agent_conversations.py` 沿用原RAM预算、revision与CAS。原Web默认配置及旧QQ单轮合同不变。
+
+开发自动研究入口：`scripts/dev/Test-QQAgent.ps1`、`check_qq_agent.py`和`qq_agent_cases.py`仅用于离线/另行批准的本机真实Qwen测试，不打入生产启动器；复用当前四工具Agent，不连接QQ或读取日常业务库。

@@ -52,6 +52,7 @@
 .\scripts\dev\Start-DeviceReports.ps1 -Serve -Bind '<电脑局域网IPv4>' -DeviceId fish-monitor-orin-01
 ```
 
+
 按提示输入与组员约定的 **32～128位字母数字令牌**，输入不回显。不要把令牌放到源码、Git、截图或普通日志中。看到 `DEVICE_REPORT_LISTENING`，保持这个窗口运行。
 
 - 默认端口8780；Web仍是8766，互不占用。

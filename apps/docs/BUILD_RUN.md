@@ -79,13 +79,27 @@
 
 若提示 `MANAGEMENT_SCOPE_REVIEW_REQUIRED`，按[QQ专题](deep-dive/QQ_BOT.md#排错与验证)核对源码、准备资源和本机配置；不要复用旧批准或手工关闭指纹检查。
 
-## 本机模型排查（可选）
+## 自动测试当前QQ Agent（可选，模型调用收费）
 
-以下旧有限批测入口只用于调用诊断，不能证明正常聊天或多轮体验质量。它使用新建模拟实例，不连接QQ、不发送群消息；默认离线检查，加`--run`须终端另行批准真实Qwen调用。结果在`outputs/provider-checks/`，不自动重试；验收范围见[QQ专题](deep-dive/QQ_BOT.md#排错与验证)。
+不必逐题在群里发送。此入口复用当前四工具Agent，默认44题、重复3次，共132题；使用全新合成数据，不连接QQ、不读取日常数据库。
 
 ```powershell
-.\.venv\Scripts\python.exe -X utf8 -I -B scripts/dev/check_qq_provider.py
-.\.venv\Scripts\python.exe -X utf8 -I -B scripts/dev/check_qq_provider.py --run --cases 6
+# 只检查计划：不联网、不访问凭据或数据库
+.\scripts\dev\Test-QQAgent.ps1 -Check
+
+# 先跑六类冒烟样例：核对计划并批准一次，随后自动逐题执行
+.\scripts\dev\Test-QQAgent.ps1 -Run -Suite smoke -Repeats 1
+
+# 完整题库：44题 × 3次，批准一次后自动执行
+.\scripts\dev\Test-QQAgent.ps1 -Run
 ```
 
-若报`PROVIDER_CREDENTIAL_UNAVAILABLE_NO_REQUESTS`，在此前能正常调用Web/Bot的Windows账号终端运行；不要复制密钥到命令行，也不要放宽凭据目录权限。
+只补测指定合成题时可加 `-CaseIds 'C02,C03,E01,E02,E03,E04,E05,M01,M02,M03,M04,M05'`，不能与`-Cases`同时使用。脚本会按现有QQ限流节奏等待，不会放宽机器人权限；等待单独统计。新的补测是独立计划与批准，不重放旧Run，也不修改旧报告。
+
+Ctrl+C停止。每轮仍是最多3次模型请求、2次只读Tool、2048输出Token/请求、90秒、零重试。默认每批最多396次请求，不是预期实际调用数。普通模型或展示失败且SDK安全关闭时记录后继续下一条独立样本；权限、Scope、账本和资源故障停止。必要报告写入失败不重新推理。
+
+结果在 `outputs/agent-research/experiment-…/result.json` 和 `cases.csv`。每题的模型正文与安全答复仅存本机私有合成实验目录，普通日志不打印；不要把运行目录上传Git。`LOCAL_REVIEW`历史不代表QQ发送或客户端显示；真实QQ群交付仍需少量人工验收。细节见[QQ说明](deep-dive/QQ_BOT.md#本机真实qwen研究入口)。
+
+如报 `CREDENTIAL_FILE_ERROR`，说明原私有凭据存储的文件/权限检查失败，不是Qwen鉴权错误。报告会记录零请求并停止；不要把Key搬到命令行、复制密钥或关闭权限检查。正常Web/Bot可用也不保证当前测试进程的凭据环境相同，需要单独诊断。
+
+旧 `scripts/dev/check_qq_provider.py` 保留兼容，只测旧当前水质合同，不作为新四工具或多轮验收入口。
