@@ -258,10 +258,10 @@ function retainedDeviceDetails(key,children){
 }
 const deviceTaskSource=value=>({video_replay:'录像回放推理（非实时摄像头）',camera_live:'设备声明摄像头来源'}[value]||value||'来源未提供');
 const deviceNumber=value=>Number.isFinite(value)?String(value):'未提供';
+const unavailableDeviceTasks={missing:'本轮未提供结果，不代表正常。',unrecognized:'已保留原始对象，当前格式尚不能解释。',pending:'分包尚未完整核验，暂不解释本轮任务。'};
 function deviceTaskDetails(view,key){
   if(!view)return [];
   const d=view.detection,m=view.measurement,b=view.behavior;
-  const unavailable={missing:'本轮未提供结果，不代表正常。',unrecognized:'已保留原始对象，当前格式尚不能解释。',pending:'分包尚未完整核验，暂不解释本轮任务。'};
   const sections=[];
   if(d)sections.push(el('section',{class:'device-task'},[
     el('h4',{text:'检测结果'}),rows([['窗口',`${timeText(d.window?.start)} 至 ${timeText(d.window?.end)}`],
@@ -273,7 +273,7 @@ function deviceTaskDetails(view,key){
   ]));
   if(m)sections.push(el('section',{class:'device-task'},[
     el('h4',{text:'体长测量'}),
-    ...(m.status!=='available'?[el('p',{class:'muted',text:unavailable[m.status]||'状态未知。'})]:[
+    ...(m.status!=='available'?[el('p',{class:'muted',text:unavailableDeviceTasks[m.status]||'状态未知。'})]:[
       rows([['来源',deviceTaskSource(m.source_kind)],['采集时间',timeText(m.captured_at)],
         ['检测 / 测量 / 待复核',`${deviceNumber(m.counts?.fish_detected)} / ${deviceNumber(m.counts?.fish_measured)} / ${deviceNumber(m.counts?.fish_uncertain)}`],
         ['标定状态',m.calibration_status||'未提供']]),
@@ -289,7 +289,7 @@ function deviceTaskDetails(view,key){
   ]));
   if(b)sections.push(el('section',{class:'device-task'},[
     el('h4',{text:'行为分析'}),
-    ...(b.status!=='available'?[el('p',{class:'muted',text:unavailable[b.status]||'状态未知。'})]:[
+    ...(b.status!=='available'?[el('p',{class:'muted',text:unavailableDeviceTasks[b.status]||'状态未知。'})]:[
       rows([['来源',deviceTaskSource(b.source_kind)],['采集时间',timeText(b.captured_at)],['模型',b.model||'未提供'],
         ['分析片段',deviceNumber(b.clip_count)],['标记异常 / 未知片段',`${deviceNumber(b.anomalous_clips)} / ${deviceNumber(b.unknown_clips)}`],
         ['设备自报异常片段',deviceNumber(b.anomalous_reported)]]),
@@ -321,33 +321,105 @@ function deviceReportBody({report:r,received_at,warnings,assembly,presentation,r
       ...(raw_parts||[]).map(part=>retainedDeviceDetails(`${key}:raw:${part.report_id}`,[el('summary',{text:part.report_id}),el('pre',{class:'device-report-text',text:part.report_text})]))])
   ];
 }
+function deviceReportChoice({report,freshness,assembly,presentation},index){
+  const tasks=[];
+  if(presentation?.measurement?.status==='available')tasks.push('体长');
+  if(presentation?.behavior?.status==='available')tasks.push('行为');
+  let kind=tasks.length?`附${tasks.join('／')}`:'检测统计';
+  if(assembly?.status==='incomplete')kind='分包收集中';
+  if(assembly?.status==='invalid')kind='分包校验失败';
+  return [String(index),`${index+1}. ${kind} · ${deviceReportSummary(report,freshness)}`];
+}
+function showDeviceReportHistory(items,limited){
+  const body=el('div',{class:'device-report-history-body'});
+  const show=index=>{
+    const item=items[Number(index)];
+    if(!item)return;
+    const {report,freshness}=item;
+    body.replaceChildren(el('p',{class:'muted',text:deviceReportSummary(report,freshness)}),
+      ...deviceReportBody(item,`${report.device_id}:${report.report_id}`));
+  };
+  show(0);
+  details('设备报告记录',[el('div',{class:'device-report-wide'},[
+    el('p',{class:'muted',text:`最近 ${items.length} 份留存报告（同一结果的分包合并展示）。`}),
+    ...(limited?[el('p',{class:'muted',text:'本页仅在最近一批分包中合并。较早分包可能未纳入本页，原始记录仍保留。'})]:[]),
+    select('选择报告',items.map(deviceReportChoice),'0',show),
+    body
+  ])]);
+}
+function deviceDetectionCard(item){
+  if(!item)return card('检测结果','最新检测窗口。',[el('p',{class:'muted',text:'尚无检测结果。'})]);
+  const {report,freshness,assembly,presentation}=item;
+  const detection=presentation?.detection??report.detection;
+  const anomalies=detection.abnormalities??report.abnormalities;
+  const age=({fresh:'近期报告',stale:'过期留存',unknown:'时效未知'})[freshness]||'时效未知';
+  const collecting=assembly?.status==='incomplete';
+  const invalid=assembly?.status==='invalid';
+  const signal=report.has_abnormality||anomalies.length?'设备报告含异常信号（非确诊）':'报告未列异常信号，健康状态未知。';
+  return card('检测结果','按最新检测窗口显示。',[
+    badge(age,freshness==='fresh'?'neutral':'warning'),
+    rows([['窗口结束',timeText(report.window.end)],['跟踪目标（非存量）',deviceNumber(detection.unique_tracks)],
+      ['处理帧',deviceNumber(report.window.frames_processed)]]),
+    el('p',{class:'muted',text:signal}),
+    ...anomalies.slice(0,2).map(a=>el('p',{class:'device-summary-signal',text:`${a.name} · ${deviceNumber(a.targets)} 个目标`})),
+    ...(anomalies.length>2?[el('p',{class:'muted',text:`另有 ${anomalies.length-2} 类信号，详见报告记录。`})]:[]),
+    ...(collecting?[el('p',{class:'muted',text:`分包收集中 ${assembly.received_parts}/${deviceNumber(assembly.total_parts)}，以上为已收分包附带的检测统计。`})]:[]),
+    ...(invalid?[el('p',{class:'muted',text:'分包无法合并，以上为单包附带的检测统计。'})]:[])
+  ]);
+}
+function latestDeviceTask(items,key){
+  let chosen=null;
+  for(const item of items){
+    const task=item.presentation?.[key];
+    if(task?.status!=='available')continue;
+    const captured=Date.parse(task.captured_at);
+    if(!chosen||Number.isFinite(captured)&&(!Number.isFinite(chosen.captured)||captured>chosen.captured)){
+      chosen={task,item,captured};
+    }
+  }
+  return chosen;
+}
+function deviceTaskCard(title,key,items){
+  const latest=items[0];
+  const latestStatus=latest?.presentation?.[key]?.status??(latest?.report[key]?'unrecognized':'missing');
+  const chosen=latestDeviceTask(items,key);
+  const subtitle='按本任务采集时间选取留存结果。';
+  if(!chosen){
+    const message=latest?unavailableDeviceTasks[latestStatus]||'状态未知。':'尚无设备报告。';
+    return card(title,subtitle,[el('p',{class:'muted',text:message})]);
+  }
+  const {task,item,captured}=chosen;
+  const measurement=key==='measurement';
+  const calibration=({uncalibrated:'未标定',unverified_camera_and_depth:'尺度未核实'})[task.calibration_status]||task.calibration_status||'未提供';
+  const counts=measurement?[
+    ['检测目标',deviceNumber(task.counts?.fish_detected)],['设备报测量数',deviceNumber(task.counts?.fish_measured)],
+    ['待复核',deviceNumber(task.counts?.fish_uncertain)],['标定',calibration]
+  ]:[['分析片段',deviceNumber(task.clip_count)],['模型标记异常',deviceNumber(task.anomalous_clips)],
+    ['标记未知',deviceNumber(task.unknown_clips)]];
+  const hints=[];
+  if(!Number.isFinite(captured))hints.push('采集时间未知，按报告顺序显示留存结果。');
+  if(captured<Date.parse(latest.report.window.start))hints.push('采集时间早于最新检测窗口。');
+  if(item.freshness!=='fresh')hints.push('来源报告已过期或时效未知。');
+  return card(title,subtitle,[
+    badge(deviceTaskSource(task.source_kind),'demo'),
+    rows([['采集时间',timeText(task.captured_at)],...counts]),
+    el('p',{class:'muted',text:measurement?'模型估长和逐目标测量依据见报告记录。':'片段可能重叠，标记仅供核查。'}),
+    ...hints.map(text=>el('p',{class:'muted',text}))
+  ]);
+}
 function deviceReports(){
   const inbox=state.data.integration?.device_reports;
   const deviceEvents=state.data.integration?.device_events;
   const eventDescription=deviceEvents?.enabled===true&&!deviceEvents.error_code
     ?'设备异常信号进入事件列表，但不自动判定恢复。':'设备报告仅展示；事件同步未启用或暂不可用，不自动判定恢复。';
   const items=inbox?.logical_items??inbox?.items??[];
-  return card('设备视觉报告','设备联调 · 水质仍为 SIMULATOR；报告不等于疾病确诊或事件恢复证据。',[
+  return [card('设备视觉报告',inbox?.device_id||'设备联调',[
     badge('DEVICE REPORT · 独立视觉来源','demo'),
-    el('p',{text:inbox?.error_code?'设备报告读取失败 · 状态未知':!inbox?'尚未绑定设备报告目录 · 状态未知':`设备 ${inbox.device_id} · 最近 ${items.length} 份留存报告（同一结果的分包合并展示）`}),
-    el('p',{class:'muted',text:`仅异常上报时，沉默不能证明正常或离线。任务覆盖与连续性尚未确认；${eventDescription}旧模拟视觉与事件保留历史，不作为设备状态。`}),
-    ...(inbox?.packet_scan_limited?[el('p',{class:'muted',text:'报告较多，本页仅在最近一批分包中合并；较早分包可能未纳入本页，原始记录仍保留。'})]:[]),
-    ...(deviceEvents?.error_code?[el('p',{class:'muted',text:'设备报告已保存，事件同步暂不可用；请检查同步服务。报告仍可查看，原有模拟监测继续运行。'})]:[]),
-    ...items.map(item=>{
-      const report=item.report;
-      const key=`${report.device_id}:${report.report_id}`;
-      const summary=deviceReportSummary(report,item.freshness);
-      return el('details',{class:'device-report',...(openedDeviceReports.has(key)?{open:''}:{}),
-        ontoggle:event=>{if(event.target.open){openedDeviceReports.add(key);if(openedDeviceReports.size>100)openedDeviceReports.delete(openedDeviceReports.values().next().value);}else openedDeviceReports.delete(key);}},[
-        el('summary',{text:summary}),
-        el('div',{class:'device-report-action'},[button('宽屏查看',()=>details('设备报告详情',[
-          el('div',{class:'device-report-wide'},[el('p',{class:'muted',text:summary}),...deviceReportBody(item,`wide:${key}`)])
-        ]))]),
-        ...deviceReportBody(item,key)
-      ]);
-    }),
-    ...(!items.length?[empty('尚无可显示设备报告','不会用模拟视觉填补设备报告。','camera')]:[])
-  ]);
+    ...(!items.length?[el('p',{class:'muted',text:inbox?.error_code?'设备报告读取失败 · 状态未知':!inbox?'尚未绑定设备报告目录 · 状态未知':'尚无可显示设备报告 · 状态未知'})]:[]),
+    ...(items.length?[el('div',{class:'device-report-action'},[button('查看报告记录',()=>showDeviceReportHistory(items,inbox.packet_scan_limited))])]:[]),
+    el('p',{class:'muted',text:eventDescription}),
+    ...(deviceEvents?.error_code?[el('p',{class:'muted',text:'设备报告已保存，事件同步暂不可用；请检查同步服务。报告仍可查看，原有模拟监测继续运行。'})]:[])
+  ]),deviceDetectionCard(items[0]),deviceTaskCard('体长测量','measurement',items),deviceTaskCard('行为分析','behavior',items)];
 }
 function video(){
   const snapshot=state.data.monitoring;
@@ -369,7 +441,7 @@ function video(){
         '本窗口未命中已评估规则，不等于全部正常。':'当前证据不足，不能据此排除风险。'})]),
     card('观测信息','时间均为北京时间。',[rows([['设备',state.device],['接收时间',timeText(snapshot?.received_at)],['评估时间',timeText(snapshot?.evaluated_at)]]),
       el('details',{class:'data-details'},[el('summary',{text:'窗口与批次'}),rows([['窗口开始',timeText(snapshot?.window?.start)],['窗口结束',timeText(snapshot?.window?.end)],['批次',snapshot?.batch_id]])])])];
-  const right=state.data.integration?.simulation_mode==='water-only'?[deviceReports()]:[
+  const right=state.data.integration?.simulation_mode==='water-only'?deviceReports():[
     card('视觉数据状态',`${sourceName(camera?.source_kind)} · 与播放画面独立。`,[
       ...(cameras.length>1?[el('div',{class:'camera-list'},cameras.map(c=>button(c.name,()=>{state.camera=c.id;render();},state.camera===c.id?'selected':'secondary')))]:[]),
       rows([['设备',camera?.name||'无设备'],['来源',sourceName(camera?.source_kind)],['上报状态',connectionName(camera?.status)],['新鲜度',freshnessNames[camera?.freshness]||'未知'],['检测信号',camera?.signal_status==='no_obvious_anomaly'?'未出现所列异常信号（模拟）':camera?.signal_status==='suspected_anomaly'?'疑似异常（模拟，非确诊）':camera?.signal_status==='no_valid_frames'?'无有效帧，信号未知':camera?.signal_status==='indeterminate'?'当前状态待确认':'暂无信号'],['观测时间',timeText(camera?.observed_at)],['接收时间',timeText(camera?.received_at)]])]),

@@ -835,7 +835,14 @@ test('dashboard prioritizes AI beside trends without a video placeholder and pre
   assert.ok(p.requests.every(url=>url.startsWith('/api/bootstrap')));
 });
 
-test('device integration renders original reports as text and never mixes old simulated vision into device facts',async()=>{
+const deviceNodes=node=>[node,...node.children.flatMap(deviceNodes)];
+const deviceSummaryCard=(p,title)=>deviceNodes(p.node('content')).find(n=>n.className==='card'&&n.children[0]?.textContent.startsWith(title));
+function openDeviceHistory(p){
+  deviceNodes(p.node('content')).find(n=>n.tagName==='button'&&n.textContent==='查看报告记录').events.click();
+  return p.node('dialog-body');
+}
+
+test('device integration shows stale detection and keeps original reports as text in history',async()=>{
   const data=fixture();data.integration={simulation_mode:'water-only',device_events:{enabled:true},device_reports:{device_id:'test-board',items:[{
     report:{device_id:'test-board',report_id:'original-1',window:{end:data.monitoring.observed_at,frames_processed:3},
       detection:{unique_tracks:2},behavior:null,measurement:null,has_abnormality:true,
@@ -846,19 +853,17 @@ test('device integration renders original reports as text and never mixes old si
   assert.match(p.node('source-notice').textContent,/水质为 SIMULATOR/);
   p.run("location.hash='#video';render()");
   const text=p.node('content').textContent;
-  assert.match(text,/设备视觉报告/);assert.match(text,/过期／未知/);assert.match(text,/未提供/);
-  assert.match(text,/设备异常信号进入事件列表，但不自动判定恢复/);assert.match(text,/WINDOW_DURATION_MISMATCH/);
-  assert.match(text,/<script>untrusted<\/script>/);
-  const walk=n=>[n,...n.children.flatMap(walk)];
-  assert.equal(walk(p.node('content')).filter(n=>n.tagName==='script').length,0);
+  assert.match(text,/设备视觉报告/);assert.match(text,/过期留存/);assert.match(text,/未提供/);
+  assert.match(text,/设备异常信号进入事件列表，但不自动判定恢复/);
+  assert.doesNotMatch(text,/WINDOW_DURATION_MISMATCH|<script>/);
   assert.doesNotMatch(text,/3 \/ 20 有效帧/);
-  const expanded=walk(p.node('content')).find(n=>n.tagName==='details'&&n.className==='device-report');
-  expanded.open=true;expanded.events.toggle({target:expanded});
-  await p.run('refresh()');
-  const retained=walk(p.node('content')).find(n=>n.tagName==='details'&&n.className==='device-report');
-  assert.equal(retained.getAttribute('open'),'');
+  const history=openDeviceHistory(p);
+  assert.match(history.textContent,/WINDOW_DURATION_MISMATCH/);
+  assert.match(history.textContent,/<script>untrusted<\/script>/);
+  assert.equal(deviceNodes(history).filter(n=>n.tagName==='script').length,0);
   data.integration.device_reports={items:[],error_code:'DEVICE_REPORT_READ_UNAVAILABLE'};
   await p.run('refresh()');assert.match(p.node('content').textContent,/状态未知/);
+  assert.doesNotMatch(p.node('content').textContent,/查看报告记录|疑似病灶/);
 });
 
 test('device report card distinguishes disabled event sync and bounded sync failure without raw diagnostics',async()=>{
@@ -896,13 +901,16 @@ function logicalDeviceFixture(){
   return {data,item};
 }
 
-test('logical multipart report renders once with detection, uncalibrated length and overlapping behavior clips',async()=>{
+test('logical device reports show direct summaries and keep full per-target details in history',async()=>{
   const {data}=logicalDeviceFixture(),p=page(data);await p.ready();p.run("location.hash='#video';render()");
-  const walk=n=>[n,...n.children.flatMap(walk)],nodes=walk(p.node('content')),text=p.node('content').textContent;
-  assert.equal(nodes.filter(n=>n.tagName==='details'&&n.className==='device-report').length,1);
-  for(const value of ['最近 1 份留存报告','分包已合并 4/4','检测结果','体长测量','行为分析','录像回放推理（非实时摄像头）','疑似腹水','非确诊',
-    '123.4 mm（估计）','画面截断','未取得长度','88 px（像素）','未核实物理标定','不能相加为鱼数','分数不是概率','原始报告与分包','raw-4'])assert.ok(text.includes(value),value);
+  const text=p.node('content').textContent;
+  for(const value of ['检测结果','体长测量','行为分析','跟踪目标（非存量）12','处理帧2','录像回放推理（非实时摄像头）',
+    '疑似腹水 · 2 个目标','非确诊','设备报测量数10','待复核6','未标定','分析片段2','模型标记异常1'])assert.ok(text.includes(value),value);
+  assert.doesNotMatch(text,/原始报告与分包|raw-4|123.4/);
   assert.doesNotMatch(text,/已提供原始对象，尚未解释|123.4 cm|实时摄像头已连接/);
+  const history=openDeviceHistory(p),nodes=deviceNodes(history);
+  for(const value of ['最近 1 份留存报告','分包已合并 4/4','123.4 mm（估计）','画面截断','未取得长度','88 px（像素）',
+    '未核实物理标定','不能相加为鱼数','分数不是概率','原始报告与分包','raw-4'])assert.ok(history.textContent.includes(value),value);
   assert.equal(nodes.filter(n=>n.tagName==='script').length,0);
   const detection=nodes.find(n=>n.className==='device-task'&&n.textContent.startsWith('检测结果'));
   assert.ok(detection.textContent.includes('设备上报平均置信度0'));
@@ -912,28 +920,55 @@ test('logical multipart report renders once with detection, uncalibrated length 
     detail.open=true;detail.events.toggle({target:detail});
   }
   await p.run('refresh()');
-  const refreshed=walk(p.node('content'));
+  const refreshed=deviceNodes(openDeviceHistory(p));
   for(const label of labels)assert.equal(refreshed.find(n=>n.tagName==='details'&&n.children[0]?.textContent===label).getAttribute('open'),'');
 });
 
-test('device report opens the selected result in the existing wide details dialog',async()=>{
-  const {data}=logicalDeviceFixture(),p=page(data);await p.ready();p.run("location.hash='#video';render()");
-  const walk=n=>[n,...n.children.flatMap(walk)];
-  const open=walk(p.node('content')).find(n=>n.tagName==='button'&&n.textContent==='宽屏查看');
+test('device report history selects one result in the existing wide dialog without network I/O',async()=>{
+  const {data,item}=logicalDeviceFixture();
+  const older=structuredClone(item);older.report.report_id='older-result';older.raw_parts[0].report_id='older-raw-1';
+  older.presentation.measurement={status:'missing'};older.presentation.behavior={status:'missing'};
+  data.integration.device_reports.logical_items.push(older);
+  const p=page(data);await p.ready();p.run("location.hash='#video';render()");
   let opened=0;p.node('details-dialog').showModal=()=>{opened++;};
-  const requests=p.requests.length;open.events.click();
-  const body=p.node('dialog-body');
+  const requests=p.requests.length,body=openDeviceHistory(p);
   assert.equal(opened,1);
-  assert.equal(p.node('dialog-title').textContent,'设备报告详情');
+  assert.equal(p.node('dialog-title').textContent,'设备报告记录');
   assert.equal(body.children[0].className,'device-report-wide');
   for(const text of ['logical-report','过期／未知','检测结果','体长测量','行为分析','原始报告与分包','raw-4']){
     assert.ok(body.textContent.includes(text),text);
   }
-  assert.equal(walk(body).filter(n=>n.tagName==='script').length,0);
+  const select=deviceNodes(body).find(n=>n.tagName==='select');
+  assert.equal(select.children.length,2);
+  assert.match(select.children[0].textContent,/附体长／行为/);
+  assert.match(select.children[1].textContent,/检测统计/);
+  select.events.change({target:{value:'1'}});
+  assert.match(body.textContent,/older-result.*older-raw-1/s);
+  assert.doesNotMatch(body.textContent,/logical-report/);
+  assert.equal(deviceNodes(body).filter(n=>n.tagName==='script').length,0);
   assert.equal(p.requests.length,requests);
   p.run("details('其他详情',[el('p',{text:'普通内容'})])");
   assert.equal(body.textContent,'普通内容');
-  assert.equal(walk(body).some(n=>n.className==='device-report-wide'),false);
+  assert.equal(deviceNodes(body).some(n=>n.className==='device-report-wide'),false);
+});
+
+test('device summary uses one latest detection window and selects task captures independently',async()=>{
+  const {data,item}=logicalDeviceFixture();item.freshness='fresh';
+  item.presentation.measurement.captured_at='2026-10-13T23:59:45+00:00';
+  item.presentation.behavior.captured_at='2026-10-14T00:00:08+00:00';
+  const older=structuredClone(item);older.report.report_id='older-report';older.report.window.end='2026-10-13T23:59:55+00:00';
+  older.presentation.detection.unique_tracks=999;older.freshness='stale';
+  older.presentation.measurement.captured_at='2026-10-13T23:59:50+00:00';
+  older.presentation.measurement.counts.fish_measured=41;
+  older.presentation.behavior.captured_at='2026-10-13T23:59:54+00:00';older.presentation.behavior.clip_count=123;
+  data.integration.device_reports.logical_items.push(older);
+  const p=page(data);await p.ready();p.run("location.hash='#video';render()");
+  const detection=deviceSummaryCard(p,'检测结果').textContent;
+  const length=deviceSummaryCard(p,'体长测量').textContent;
+  const behavior=deviceSummaryCard(p,'行为分析').textContent;
+  assert.match(detection,/近期报告.*08:00:10.*跟踪目标（非存量）12/);assert.doesNotMatch(detection,/999/);
+  assert.match(length,/07:59:50.*设备报测量数41.*采集时间早于最新检测窗口.*来源报告已过期/);
+  assert.match(behavior,/08:00:08.*分析片段2/);assert.doesNotMatch(behavior,/123|07:59:54/);
 });
 
 test('incomplete and invalid groups retain evidence but do not render stale task interpretations',async()=>{
@@ -942,9 +977,10 @@ test('incomplete and invalid groups retain evidence but do not render stale task
   item.presentation.measurement={status:'pending'};item.presentation.behavior={status:'pending'};
   const p=page(data);await p.ready();p.run("location.hash='#video';render()");
   let text=p.node('content').textContent;assert.match(text,/分包收集中 2\/4/);assert.match(text,/分包尚未完整核验/);
-  assert.doesNotMatch(text,/123.4|模型估长|synthetic-behavior/);assert.match(text,/raw-1/);
+  assert.doesNotMatch(text,/123.4|模型估长|synthetic-behavior|raw-1/);
+  assert.match(openDeviceHistory(p).textContent,/raw-1/);
   item.assembly.status='invalid';item.assembly.issue_codes=['CONTENT_HASH_MISMATCH'];p.setData(data);await p.run('refresh()');
-  text=p.node('content').textContent;assert.match(text,/分包无法合并/);assert.match(text,/CONTENT_HASH_MISMATCH/);
+  text=p.node('content').textContent;assert.match(text,/分包无法合并/);assert.match(openDeviceHistory(p).textContent,/CONTENT_HASH_MISMATCH/);
   assert.doesNotMatch(text,/内容摘要核验通过/);
 });
 
@@ -955,8 +991,7 @@ test('missing or unknown task objects remain unknown while known unflagged behav
   item.presentation.behavior={status:'available',source_kind:null,captured_at:null,clip_count:1,anomalous_clips:0,unknown_clips:0,
     anomalous_reported:0,clips:[{start_s:0,end_s:1,score:0,anomaly:false}]};
   p.setData(data);await p.run('refresh()');text=p.node('content').textContent;
-  assert.match(text,/来源未提供/);assert.match(text,/未标异常/);
-  const walk=n=>[n,...n.children.flatMap(walk)];
-  const behavior=walk(p.node('content')).find(n=>n.className==='device-task'&&n.textContent.startsWith('行为分析'));
-  assert.doesNotMatch(behavior.textContent,/全部正常|疾病已经治愈/);
+  const behavior=deviceSummaryCard(p,'行为分析').textContent;
+  assert.match(behavior,/来源未提供.*模型标记异常0.*采集时间未知，按报告顺序显示留存结果/);
+  assert.doesNotMatch(behavior,/全部正常|疾病已经治愈/);
 });
