@@ -35,6 +35,9 @@
 | 5 | 复合异常 | combined_anomaly |
 | 6 | 设备离线 | device_offline |
 | 7 | 溶解氧快速下降后逐步回升 | oxygen_drop_recovery |
+| 9 | 模拟开发板视觉信号（异常后消退，仅完整模拟） | device_visual_recovery |
+
+选项`9`在完整模拟菜单中显示。水质保持正常场景。前两个10秒窗口出现疑似病灶和体表异常信号，之后连续三个完整窗口未检出，约第50秒两条事件消退。事件来源显示为`SIMULATOR`。`0`或`8`退出。
 
 设备联调模式停发模拟视觉；疑似疾病/摄食等视觉参数不生效，水质场景仍生效。**四个cmd选2后自动绑定本项目`outputs/device-reports`和设备`fish-monitor-orin-01`；选1不绑定设备报告。** 首次先按[设备连接步骤](DEVICE_INTERFACE_QUICK.md)创建报告库，并在另一个窗口启动8780接收器；四个cmd不会自动建库或开启接收器。开发板`device_id`须与此ID一致；其他ID或目录仍用下方显式参数，不自动选择已有实例。
 

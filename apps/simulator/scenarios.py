@@ -34,6 +34,10 @@ SCENARIOS = {
         Phase(180, dissolved_oxygen_mg_l=4.2, reduced_activity=.2),
         Phase(300), Phase(360)),
     "suspected_disease": (Phase(0), Phase(30, lesion_rate=.3, surface_rate=.25), Phase(120, lesion_rate=.6, surface_rate=.4, death_rate=.08)),
+    # At the default 10-second cadence, keep two positive windows. Switch to
+    # clean frames before the next sample so three full CLEAR windows follow.
+    "device_visual_recovery": (Phase(0, lesion_rate=1, surface_rate=1),
+        Phase(20, lesion_rate=1, surface_rate=1), Phase(20.1)),
     "reduced_feeding": (Phase(0, feeding=.5), Phase(60, feeding=.05, feeding_anomaly=.6, reduced_activity=.25)),
     "combined_anomaly": (Phase(0), Phase(60, temperature_c=32, dissolved_oxygen_mg_l=3.8, lesion_rate=.3, feeding_anomaly=.3),
                          Phase(120, temperature_c=34, dissolved_oxygen_mg_l=2.2, lesion_rate=.6, surface_rate=.4, feeding_anomaly=.5)),

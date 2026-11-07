@@ -16,33 +16,38 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# Deliberately limited to the seven user-facing demos; fault-injection scenarios
+# Deliberately limited to user-facing demos; fault-injection scenarios
 # remain available only through the original Simulator CLI.
 DEMO_SCENARIOS = (
     ('normal', '正常水质'), ('low_oxygen', '低溶解氧'),
     ('suspected_disease', '疑似疾病'), ('reduced_feeding', '摄食减少'),
     ('combined_anomaly', '复合异常'), ('device_offline', '设备离线'),
     ('oxygen_drop_recovery', '溶解氧快速下降后逐步回升'),
+    ('device_visual_recovery', '模拟开发板视觉信号（异常后消退）'),
 )
 
 
-def choose_scenario(*, read=input, emit=print):
+def choose_scenario(*, read=input, emit=print, water_only=False):
+    choices = dict(zip(('1', '2', '3', '4', '5', '6', '7', '9'), DEMO_SCENARIOS))
+    if water_only:
+        del choices['9']
+    available = '1–7' if water_only else '1–7、9'
     emit('请选择模拟场景（开始发送数据前选择）：')
-    for number, (key, label) in enumerate(DEMO_SCENARIOS, 1):
+    for number, (key, label) in choices.items():
         emit(f'  {number}. {label} ({key})')
     emit('  0. 退出（8 也可退出）')
     while True:
         try:
-            value = read('输入 1–7，Enter 默认正常水质，0 退出：').strip()
+            value = read(f'输入 {available}，Enter 默认正常水质，0 退出：').strip()
         except (EOFError, KeyboardInterrupt):
             return None
         if value in ('0', '8'):
             return None
         if value == '':
-            return DEMO_SCENARIOS[0]
-        if value in tuple(str(i) for i in range(1, len(DEMO_SCENARIOS)+1)):
-            return DEMO_SCENARIOS[int(value)-1]
-        emit('输入无效，请输入 1–7 或 0；直接 Enter 选择正常水质。')
+            return choices['1']
+        if value in choices:
+            return choices[value]
+        emit(f'输入无效，请输入 {available} 或 0。直接 Enter 选择正常水质。')
 
 
 def require_free_port(port):
@@ -191,11 +196,11 @@ def console_role(argv):
     water_only = role == 'simulator' and '--mode' in arguments and arguments[arguments.index('--mode')+1] == 'water-only'
     print('AI 监测系统 · '+('Web 服务' if role == 'web' else '模拟器（每10秒更新水质）' if water_only else '模拟器（每10秒更新水质与视觉数据）'), flush=True)
     if water_only:
-        print('设备联调：仅模拟水质，疑似疾病、摄食等视觉场景参数不生效。设备报告由独立接收器提供，不自动生成监测事件。', flush=True)
+        print('设备联调：仅模拟水质。开发板视觉报告由独立接收器提供。', flush=True)
     print('按 Ctrl+C 或关闭任一窗口，停止本次启动的两个服务。', flush=True)
     try:
         if interactive:
-            choice = choose_scenario()
+            choice = choose_scenario(water_only=water_only)
             if choice is None:
                 print('已取消模拟；正在停止本次 Web / Simulator。', flush=True)
                 return 0

@@ -11,15 +11,23 @@ from scripts.dev import local_session as entry
 
 
 class ScenarioMenuTests(unittest.TestCase):
-    def test_seven_labels_map_to_existing_simulator_scenarios(self):
+    def test_numbered_labels_map_to_simulator_scenarios(self):
         self.assertEqual([key for key, _ in entry.DEMO_SCENARIOS], [
             'normal', 'low_oxygen', 'suspected_disease', 'reduced_feeding',
-            'combined_anomaly', 'device_offline', 'oxygen_drop_recovery'])
-        for index, (key, label) in enumerate(entry.DEMO_SCENARIOS, 1):
+            'combined_anomaly', 'device_offline', 'oxygen_drop_recovery', 'device_visual_recovery'])
+        for index, (key, label) in zip((1, 2, 3, 4, 5, 6, 7, 9), entry.DEMO_SCENARIOS):
             self.assertIn(key, SCENARIOS)
             output = []
             self.assertEqual(entry.choose_scenario(read=lambda _:str(index), emit=output.append), (key, label))
             self.assertTrue(any(label in line and key in line for line in output))
+
+    def test_device_mode_hides_visual_demo_and_keeps_numbering(self):
+        answers = iter(['9', '7']); output = []
+        self.assertEqual(entry.choose_scenario(read=lambda _:next(answers), emit=output.append, water_only=True),
+                         ('oxygen_drop_recovery', '溶解氧快速下降后逐步回升'))
+        self.assertFalse(any('device_visual_recovery' in line for line in output))
+        self.assertEqual(sum('输入无效' in line for line in output), 1)
+        self.assertIsNone(entry.choose_scenario(read=lambda _:'8', emit=lambda _:None, water_only=True))
 
     def test_enter_default_invalid_retry_and_exit(self):
         for final, expected in [('', entry.DEMO_SCENARIOS[0]), ('2', entry.DEMO_SCENARIOS[1]), ('0', None), ('8', None)]:
@@ -43,11 +51,11 @@ class ScenarioMenuTests(unittest.TestCase):
         probe.assert_not_called()
 
     @unittest.skipUnless(os.name == 'nt', 'Windows console wrapper')
-    def test_real_console_wrapper_input_runs_all_seven_dry_scenarios_and_cancels_without_send(self):
+    def test_real_console_wrapper_input_runs_dry_scenarios_and_cancels_without_send(self):
         command = [sys.executable, '-X', 'utf8', '-I', '-B', '-u', str(Path(entry.__file__)),
             '--console-role', 'simulator', '--interactive-scenario', '--', '-m', 'apps.simulator',
             '--scenario', 'normal', '--server', 'http://127.0.0.1:8766', '--interval', '10', '--dry-run', '--windows', '1']
-        for number, (scenario, label) in enumerate(entry.DEMO_SCENARIOS, 1):
+        for number, (scenario, label) in zip((1, 2, 3, 4, 5, 6, 7, 9), entry.DEMO_SCENARIOS):
             with self.subTest(scenario=scenario):
                 result = subprocess.run(command, input=str(number)+'\n', text=True, encoding='utf-8',
                     cwd=entry.ROOT, capture_output=True, timeout=10)
@@ -69,6 +77,7 @@ class ScenarioMenuTests(unittest.TestCase):
         self.assertIn('[switch]$InteractiveScenario', script)
         self.assertIn("if ($InteractiveScenario) { $launchArgs += '--interactive-scenario' }", script)
         self.assertIn("'ShowTerminals','InteractiveScenario','OpenBrowser'", script)
+        self.assertIn("'device_visual_recovery')]", script)
         command = (entry.ROOT/'scripts/dev/启动演示系统.cmd').read_text()
         self.assertIn('-ShowTerminals -InteractiveScenario -OpenBrowser -Detach', command)
         for scenario, _ in entry.DEMO_SCENARIOS:

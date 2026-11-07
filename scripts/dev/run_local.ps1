@@ -1,6 +1,6 @@
 ﻿param([ValidateSet('full','water-only')][string]$SimulationMode='full', [switch]$InteractiveMode,
  [string]$DeviceReportDirectory, [string]$DeviceReportDeviceId, [switch]$AutoDeviceReports,
-    [ValidateSet('normal','low_oxygen','oxygen_drop_recovery','suspected_disease','reduced_feeding','combined_anomaly','device_offline')]
+    [ValidateSet('normal','low_oxygen','oxygen_drop_recovery','suspected_disease','reduced_feeding','combined_anomaly','device_offline','device_visual_recovery')]
     [string]$Scenario = 'normal',
     [ValidateRange(1,65535)][int]$Port = 8766,
     [int]$Seed = 42,

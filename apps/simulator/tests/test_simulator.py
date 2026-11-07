@@ -54,6 +54,37 @@ class SimulatorTests(unittest.TestCase):
         c=self.create(seed=1)
         self.assertNotEqual(self.create().advance()['water'],c.advance()['water'])
 
+    def test_device_visual_demo_creates_two_signals_and_resolves_after_three_clear_windows(self):
+        scenario = 'device_visual_recovery'
+        sim = self.create(scenario=scenario)
+        water_only = self.create(scenario=scenario, mode='water-only')
+        normal = self.create()
+        now = self.start
+        codes = {'SUSPECTED_LESION', 'SURFACE_ANOMALY'}
+        with TemporaryDirectory() as directory:
+            service = MonitoringService(MonitoringRepository(Path(directory)/'monitoring.sqlite3'), clock=lambda:now)
+            for window, clears in enumerate((0, 0, 1, 2, 3, 3), 1):
+                batch = sim.advance()
+                water_batch = water_only.advance()
+                self.assertIsNone(water_batch['visual'])
+                self.assertEqual(batch['water'], normal.advance()['water'])
+                self.assertEqual(water_batch['water'], batch['water'])
+                visual = batch['visual']
+                self.assertEqual(visual['valid_frames'], visual['frames_processed'])
+                for label in ('suspected_lesion', 'surface_anomaly'):
+                    self.assertEqual(visual['anomaly_counts'][label] > 0, window <= 2)
+                now = datetime.fromisoformat(batch['timestamp'])
+                service.ingest(batch)
+                events = service.events()
+                self.assertEqual(len(events), 2)
+                self.assertEqual({event['code'] for event in events}, codes)
+                for event in events:
+                    self.assertEqual(event['source_kind'], 'simulator')
+                    self.assertEqual(event['visual_recovery']['clear_count'], clears)
+                    self.assertEqual(event['lifecycle_state'], 'ACTIVE' if clears < 3 else 'RESOLVED')
+                    if clears == 3:
+                        self.assertEqual(event['resolved_at'], (self.start+timedelta(seconds=50)).isoformat())
+
     def test_all_handwritten_scenarios_validate_each_channel(self):
         for scenario in SCENARIOS:
             with self.subTest(scenario=scenario):
