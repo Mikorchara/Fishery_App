@@ -321,16 +321,23 @@ function deviceReportBody({report:r,received_at,warnings,assembly,presentation,r
       ...(raw_parts||[]).map(part=>retainedDeviceDetails(`${key}:raw:${part.report_id}`,[el('summary',{text:part.report_id}),el('pre',{class:'device-report-text',text:part.report_text})]))])
   ];
 }
-function deviceReportChoice({report,freshness,assembly,presentation},index){
+function completeDeviceReport({report,assembly}){
+  if(assembly)return assembly.status==='complete'||assembly.status==='single';
+  // Older bootstrap responses contain raw packets without assembly status.
+  return !report.report_text?.startsWith('【结果分包')&&!/^web-[0-9a-f]{40}-[1-9][0-9]{0,2}$/.test(report.report_id);
+}
+function deviceReportChoice(item,index){
+  const {report,freshness,assembly,presentation}=item;
   const tasks=[];
   if(presentation?.measurement?.status==='available')tasks.push('体长');
   if(presentation?.behavior?.status==='available')tasks.push('行为');
   let kind=tasks.length?`附${tasks.join('／')}`:'检测统计';
   if(assembly?.status==='incomplete')kind='分包收集中';
   if(assembly?.status==='invalid')kind='分包校验失败';
+  if(!assembly&&!completeDeviceReport(item))kind='分包待核对';
   return [String(index),`${index+1}. ${kind} · ${deviceReportSummary(report,freshness)}`];
 }
-function showDeviceReportHistory(items,limited){
+function deviceReportPicker(items,label){
   const body=el('div',{class:'device-report-history-body'});
   const show=index=>{
     const item=items[Number(index)];
@@ -340,31 +347,34 @@ function showDeviceReportHistory(items,limited){
       ...deviceReportBody(item,`${report.device_id}:${report.report_id}`));
   };
   show(0);
+  return [select(label,items.map(deviceReportChoice),'0',show),body];
+}
+function showDeviceReportHistory(items,transfers,limited){
   details('设备报告记录',[el('div',{class:'device-report-wide'},[
-    el('p',{class:'muted',text:`最近 ${items.length} 份留存报告（同一结果的分包合并展示）。`}),
+    el('p',{class:'muted',text:items.length?`最近 ${items.length} 份完整报告。`:'等待完整报告。'}),
     ...(limited?[el('p',{class:'muted',text:'本页仅在最近一批分包中合并。较早分包可能未纳入本页，原始记录仍保留。'})]:[]),
-    select('选择报告',items.map(deviceReportChoice),'0',show),
-    body
+    ...(items.length?deviceReportPicker(items,'选择报告'):[]),
+    ...(transfers.length?[el('details',{class:'data-details'},[
+      el('summary',{text:`传输检查（${transfers.length} 份）`}),
+      el('p',{class:'muted',text:'在此核对待收齐、待核对或校验失败的分包及原始文本。'}),
+      ...deviceReportPicker(transfers,'选择传输记录')
+    ])]:[])
   ])]);
 }
 function deviceDetectionCard(item){
   if(!item)return card('检测结果','最新检测窗口。',[el('p',{class:'muted',text:'尚无检测结果。'})]);
-  const {report,freshness,assembly,presentation}=item;
+  const {report,freshness,presentation}=item;
   const detection=presentation?.detection??report.detection;
   const anomalies=detection.abnormalities??report.abnormalities;
   const age=({fresh:'近期报告',stale:'过期留存',unknown:'时效未知'})[freshness]||'时效未知';
-  const collecting=assembly?.status==='incomplete';
-  const invalid=assembly?.status==='invalid';
   const signal=report.has_abnormality||anomalies.length?'设备报告含异常信号（非确诊）':'报告未列异常信号，健康状态未知。';
-  return card('检测结果','按最新检测窗口显示。',[
+  return card('检测结果','按最近完整报告的检测窗口显示。',[
     badge(age,freshness==='fresh'?'neutral':'warning'),
     rows([['窗口结束',timeText(report.window.end)],['跟踪目标（非存量）',deviceNumber(detection.unique_tracks)],
       ['处理帧',deviceNumber(report.window.frames_processed)]]),
     el('p',{class:'muted',text:signal}),
     ...anomalies.slice(0,2).map(a=>el('p',{class:'device-summary-signal',text:`${a.name} · ${deviceNumber(a.targets)} 个目标`})),
-    ...(anomalies.length>2?[el('p',{class:'muted',text:`另有 ${anomalies.length-2} 类信号，详见报告记录。`})]:[]),
-    ...(collecting?[el('p',{class:'muted',text:`分包收集中 ${assembly.received_parts}/${deviceNumber(assembly.total_parts)}，以上为已收分包附带的检测统计。`})]:[]),
-    ...(invalid?[el('p',{class:'muted',text:'分包无法合并，以上为单包附带的检测统计。'})]:[])
+    ...(anomalies.length>2?[el('p',{class:'muted',text:`另有 ${anomalies.length-2} 类信号，详见报告记录。`})]:[])
   ]);
 }
 function latestDeviceTask(items,key){
@@ -385,7 +395,7 @@ function deviceTaskCard(title,key,items){
   const chosen=latestDeviceTask(items,key);
   const subtitle='按本任务采集时间选取留存结果。';
   if(!chosen){
-    const message=latest?unavailableDeviceTasks[latestStatus]||'状态未知。':'尚无设备报告。';
+    const message=latest?unavailableDeviceTasks[latestStatus]||'状态未知。':'暂无完整报告。';
     return card(title,subtitle,[el('p',{class:'muted',text:message})]);
   }
   const {task,item,captured}=chosen;
@@ -412,11 +422,18 @@ function deviceReports(){
   const deviceEvents=state.data.integration?.device_events;
   const eventDescription=deviceEvents?.enabled===true&&!deviceEvents.error_code
     ?'设备异常信号进入事件列表，但不自动判定恢复。':'设备报告仅展示；事件同步未启用或暂不可用，不自动判定恢复。';
-  const items=inbox?.logical_items??inbox?.items??[];
+  const reports=inbox?.logical_items??inbox?.items??[];
+  const items=[],transfers=[];
+  for(const item of reports)(completeDeviceReport(item)?items:transfers).push(item);
+  let status='';
+  if(inbox?.error_code)status='设备报告读取失败 · 状态未知';
+  else if(!inbox)status='尚未绑定设备报告目录 · 状态未知';
+  else if(!reports.length)status='尚无可显示设备报告 · 状态未知';
+  else if(!items.length)status='等待完整报告';
   return [card('设备视觉报告',inbox?.device_id||'设备联调',[
     badge('DEVICE REPORT · 独立视觉来源','demo'),
-    ...(!items.length?[el('p',{class:'muted',text:inbox?.error_code?'设备报告读取失败 · 状态未知':!inbox?'尚未绑定设备报告目录 · 状态未知':'尚无可显示设备报告 · 状态未知'})]:[]),
-    ...(items.length?[el('div',{class:'device-report-action'},[button('查看报告记录',()=>showDeviceReportHistory(items,inbox.packet_scan_limited))])]:[]),
+    ...(status?[el('p',{class:'muted',text:status})]:[]),
+    ...(reports.length?[el('div',{class:'device-report-action'},[button('查看报告记录',()=>showDeviceReportHistory(items,transfers,inbox.packet_scan_limited))])]:[]),
     el('p',{class:'muted',text:eventDescription}),
     ...(deviceEvents?.error_code?[el('p',{class:'muted',text:'设备报告已保存，事件同步暂不可用；请检查同步服务。报告仍可查看，原有模拟监测继续运行。'})]:[])
   ]),deviceDetectionCard(items[0]),deviceTaskCard('体长测量','measurement',items),deviceTaskCard('行为分析','behavior',items)];

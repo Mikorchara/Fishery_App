@@ -909,7 +909,7 @@ test('logical device reports show direct summaries and keep full per-target deta
   assert.doesNotMatch(text,/原始报告与分包|raw-4|123.4/);
   assert.doesNotMatch(text,/已提供原始对象，尚未解释|123.4 cm|实时摄像头已连接/);
   const history=openDeviceHistory(p),nodes=deviceNodes(history);
-  for(const value of ['最近 1 份留存报告','分包已合并 4/4','123.4 mm（估计）','画面截断','未取得长度','88 px（像素）',
+  for(const value of ['最近 1 份完整报告','分包已合并 4/4','123.4 mm（估计）','画面截断','未取得长度','88 px（像素）',
     '未核实物理标定','不能相加为鱼数','分数不是概率','原始报告与分包','raw-4'])assert.ok(history.textContent.includes(value),value);
   assert.equal(nodes.filter(n=>n.tagName==='script').length,0);
   const detection=nodes.find(n=>n.className==='device-task'&&n.textContent.startsWith('检测结果'));
@@ -971,17 +971,77 @@ test('device summary uses one latest detection window and selects task captures 
   assert.match(behavior,/08:00:08.*分析片段2/);assert.doesNotMatch(behavior,/123|07:59:54/);
 });
 
-test('incomplete and invalid groups retain evidence but do not render stale task interpretations',async()=>{
-  const {data,item}=logicalDeviceFixture();item.report.report_text='';item.raw_parts=item.raw_parts.slice(0,2);
-  item.assembly={status:'incomplete',received_parts:2,total_parts:4,issue_codes:[]};
+function deviceTransferCheck(history){
+  const transfer=history.children[0].children.find(n=>n.tagName==='details'&&n.children[0]?.textContent.startsWith('传输检查'));
+  assert.ok(transfer);
+  assert.equal(transfer.getAttribute('open'),null);
+  return transfer;
+}
+
+test('a newer incomplete group leaves the latest complete report and its freshness in normal view',async()=>{
+  const {data,item}=logicalDeviceFixture();
+  const newer=structuredClone(item);
+  newer.report.report_id='new-partial';newer.report.window.end='2026-10-14T00:01:10+00:00';newer.freshness='fresh';
+  newer.assembly={status:'incomplete',received_parts:3,total_parts:4,issue_codes:[]};
+  newer.raw_parts=newer.raw_parts.slice(0,3).map(part=>({...part,report_id:`pending-${part.report_id}`}));
+  newer.presentation.detection.unique_tracks=999;
+  newer.presentation.measurement.captured_at=newer.report.window.end;newer.presentation.measurement.counts.fish_measured=888;
+  newer.presentation.behavior.captured_at=newer.report.window.end;newer.presentation.behavior.clip_count=777;
+  data.integration.device_reports.logical_items.unshift(newer);
+  const p=page(data);await p.ready();p.run("location.hash='#video';render()");
+  const text=p.node('content').textContent;
+  assert.match(deviceSummaryCard(p,'检测结果').textContent,/过期留存.*08:00:10.*跟踪目标（非存量）12/);
+  assert.match(deviceSummaryCard(p,'体长测量').textContent,/设备报测量数10/);
+  assert.match(deviceSummaryCard(p,'行为分析').textContent,/分析片段2/);
+  assert.doesNotMatch(text,/999|888|777|08:01:10|3\/4|等待完整报告/);
+  const history=openDeviceHistory(p);
+  const select=deviceNodes(history).find(n=>n.tagName==='select'&&n.getAttribute('aria-label')==='选择报告');
+  assert.equal(select.children.length,1);
+  const transfer=deviceTransferCheck(history);
+  assert.match(transfer.textContent,/分包收集中 3\/4.*pending-raw-1/s);
+  assert.doesNotMatch(history.children[0].children.filter(n=>n!==transfer).map(n=>n.textContent).join(''),/new-partial|3\/4/);
+});
+
+test('partial-only or invalid history waits for a complete report while preserving diagnostic evidence',async()=>{
+  const {data,item}=logicalDeviceFixture(),complete=structuredClone(item);
+  item.report.report_text='';item.raw_parts=item.raw_parts.slice(0,3);
+  item.assembly={status:'incomplete',received_parts:3,total_parts:4,issue_codes:[]};
   item.presentation.measurement={status:'pending'};item.presentation.behavior={status:'pending'};
   const p=page(data);await p.ready();p.run("location.hash='#video';render()");
-  let text=p.node('content').textContent;assert.match(text,/分包收集中 2\/4/);assert.match(text,/分包尚未完整核验/);
-  assert.doesNotMatch(text,/123.4|模型估长|synthetic-behavior|raw-1/);
-  assert.match(openDeviceHistory(p).textContent,/raw-1/);
+  let text=p.node('content').textContent;
+  assert.match(text,/等待完整报告/);
+  assert.doesNotMatch(text,/跟踪目标（非存量）12|123.4|模型估长|synthetic-behavior|raw-1|3\/4/);
+  let history=openDeviceHistory(p);
+  assert.match(history.textContent,/等待完整报告/);
+  assert.equal(deviceNodes(history).some(n=>n.tagName==='select'&&n.getAttribute('aria-label')==='选择报告'),false);
+  assert.match(deviceTransferCheck(history).textContent,/分包收集中 3\/4.*raw-1/s);
   item.assembly.status='invalid';item.assembly.issue_codes=['CONTENT_HASH_MISMATCH'];p.setData(data);await p.run('refresh()');
-  text=p.node('content').textContent;assert.match(text,/分包无法合并/);assert.match(openDeviceHistory(p).textContent,/CONTENT_HASH_MISMATCH/);
-  assert.doesNotMatch(text,/内容摘要核验通过/);
+  text=p.node('content').textContent;
+  assert.match(text,/等待完整报告/);
+  assert.doesNotMatch(text,/分包无法合并|内容摘要核验通过|CONTENT_HASH_MISMATCH/);
+  history=openDeviceHistory(p);
+  assert.match(deviceTransferCheck(history).textContent,/分包无法合并.*CONTENT_HASH_MISMATCH/s);
+  data.integration.device_reports.logical_items=[complete];p.setData(data);await p.run('refresh()');
+  assert.match(deviceSummaryCard(p,'检测结果').textContent,/跟踪目标（非存量）12/);
+  assert.doesNotMatch(p.node('content').textContent,/等待完整报告/);
+});
+
+test('legacy raw fragments stay in transmission check and ordinary single reports remain visible',async()=>{
+  const {data,item}=logicalDeviceFixture(),inbox=data.integration.device_reports;
+  delete inbox.logical_items;
+  const single={...item,report:{...item.report,report_id:'legacy-single'}};
+  const fragment={...item,report:{...item.report,report_id:`web-${'a'.repeat(40)}-3`,
+    report_text:'【结果分包 3/4；SHA256=example】\n留存分片'} };
+  delete single.assembly;delete fragment.assembly;
+  inbox.items=[fragment,single];
+  const p=page(data);await p.ready();p.run("location.hash='#video';render()");
+  assert.match(deviceSummaryCard(p,'检测结果').textContent,/跟踪目标（非存量）12/);
+  const history=openDeviceHistory(p);
+  const select=deviceNodes(history).find(n=>n.tagName==='select'&&n.getAttribute('aria-label')==='选择报告');
+  assert.equal(select.children.length,1);
+  const transfer=deviceTransferCheck(history);
+  assert.match(transfer.textContent,/分包待核对.*留存分片/s);
+  assert.doesNotMatch(history.children[0].children.filter(n=>n!==transfer).map(n=>n.textContent).join(''),/留存分片/);
 });
 
 test('missing or unknown task objects remain unknown while known unflagged behavior is not called healthy',async()=>{
