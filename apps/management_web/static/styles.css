@@ -307,3 +307,6 @@ body:has(.video-workspace) main{padding-top:20px}
 .device-task .details-grid{grid-template-columns:minmax(75px,.85fr) minmax(0,1.15fr)}
 .device-task dd{overflow-wrap:anywhere}.device-task p,.device-assembly{font-size:12px;line-height:1.8;overflow-wrap:anywhere}
 .device-report>.data-details{margin-top:14px}.device-report-text{max-height:320px;overflow:auto;font-size:11px}
+.device-report-action{margin-top:10px}
+#details-dialog:has(.device-report-wide){width:900px}
+.device-report-wide .device-task th,.device-report-wide .device-task td{font-size:13px;padding:10px;white-space:normal}

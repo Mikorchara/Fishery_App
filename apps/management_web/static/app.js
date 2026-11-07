@@ -302,6 +302,25 @@ function deviceTaskDetails(view,key){
   ]));
   return sections;
 }
+function deviceReportSummary(report,freshness){
+  const age=freshness==='fresh'?'近期报告':'过期／未知，仅供回看';
+  const signal=report.has_abnormality?'设备报告含异常信号（非确诊）':'设备报告未标异常（不代表全部正常）';
+  return `${timeText(report.window.end)} · ${age} · ${signal}`;
+}
+function deviceReportBody({report:r,received_at,warnings,assembly,presentation,raw_parts},key){
+  return [
+    rows([['设备',r.device_id],['报告ID',r.report_id],['窗口结束',timeText(r.window.end)],['服务器接收',timeText(received_at)],
+      ...(presentation?[]:[['可见跟踪目标（非存量）',r.detection.unique_tracks],['处理帧',r.window.frames_processed],['行为任务',r.behavior===null?'未提供':'已提供原始对象，尚未解释'],['体长任务',r.measurement===null?'未提供':'已提供原始对象，尚未解释']])]),
+    ...(assembly?[el('p',{class:'device-assembly',text:assembly.status==='single'?'完整单包报告':assembly.status==='complete'?`分包已合并 ${assembly.received_parts}/${deviceNumber(assembly.total_parts)} · 内容摘要核验通过`:assembly.status==='incomplete'?`分包收集中 ${assembly.received_parts}/${deviceNumber(assembly.total_parts)} · 暂不解释体长和行为`:`分包无法合并 ${assembly.received_parts}/${deviceNumber(assembly.total_parts)} · 请核对原始报告`})]:[]),
+    ...(assembly?.issue_codes?.length?[el('p',{class:'muted',text:`合并提示：${assembly.issue_codes.join('、')}`} )]:[]),
+    ...(warnings?.length?[el('p',{text:`报文校验提示：${warnings.map(code=>({WINDOW_DURATION_MISMATCH:'窗口时长与起止时间不一致（WINDOW_DURATION_MISMATCH）',ABNORMALITY_FLAG_INCONSISTENT:'异常标志与列表不一致（ABNORMALITY_FLAG_INCONSISTENT）'}[code]||code)).join('、')}；不作为恢复证据。`})]:[]),
+    ...deviceTaskDetails(presentation,key),
+    ...(!presentation?r.abnormalities.map(a=>el('p',{text:`${a.name}（模型标签 ${a.label}）：${a.targets} 个目标，${a.count} 帧次；检测信号，非确诊。`})):[]),
+    retainedDeviceDetails(`${key}:raw`,[el('summary',{text:'原始报告与分包（留存证据）'}),
+      ...(r.report_text?[el('pre',{class:'device-report-text',text:r.report_text})]:[]),
+      ...(raw_parts||[]).map(part=>retainedDeviceDetails(`${key}:raw:${part.report_id}`,[el('summary',{text:part.report_id}),el('pre',{class:'device-report-text',text:part.report_text})]))])
+  ];
+}
 function deviceReports(){
   const inbox=state.data.integration?.device_reports;
   const deviceEvents=state.data.integration?.device_events;
@@ -314,21 +333,19 @@ function deviceReports(){
     el('p',{class:'muted',text:`仅异常上报时，沉默不能证明正常或离线。任务覆盖与连续性尚未确认；${eventDescription}旧模拟视觉与事件保留历史，不作为设备状态。`}),
     ...(inbox?.packet_scan_limited?[el('p',{class:'muted',text:'报告较多，本页仅在最近一批分包中合并；较早分包可能未纳入本页，原始记录仍保留。'})]:[]),
     ...(deviceEvents?.error_code?[el('p',{class:'muted',text:'设备报告已保存，事件同步暂不可用；请检查同步服务。报告仍可查看，原有模拟监测继续运行。'})]:[]),
-    ...items.map(({report:r,received_at,warnings,freshness,assembly,presentation,raw_parts})=>el('details',{class:'device-report',
-      ...(openedDeviceReports.has(`${r.device_id}:${r.report_id}`)?{open:''}:{}),
-      ontoggle:event=>{const key=`${r.device_id}:${r.report_id}`;if(event.target.open){openedDeviceReports.add(key);if(openedDeviceReports.size>100)openedDeviceReports.delete(openedDeviceReports.values().next().value);}else openedDeviceReports.delete(key);}},[
-      el('summary',{text:`${timeText(r.window.end)} · ${freshness==='fresh'?'近期报告':'过期／未知，仅供回看'} · ${r.has_abnormality?'设备报告含异常信号（非确诊）':'设备报告未标异常（不代表全部正常）'}`}),
-      rows([['设备',r.device_id],['报告ID',r.report_id],['窗口结束',timeText(r.window.end)],['服务器接收',timeText(received_at)],
-        ...(presentation?[]:[['可见跟踪目标（非存量）',r.detection.unique_tracks],['处理帧',r.window.frames_processed],['行为任务',r.behavior===null?'未提供':'已提供原始对象，尚未解释'],['体长任务',r.measurement===null?'未提供':'已提供原始对象，尚未解释']])]),
-      ...(assembly?[el('p',{class:'device-assembly',text:assembly.status==='single'?'完整单包报告':assembly.status==='complete'?`分包已合并 ${assembly.received_parts}/${deviceNumber(assembly.total_parts)} · 内容摘要核验通过`:assembly.status==='incomplete'?`分包收集中 ${assembly.received_parts}/${deviceNumber(assembly.total_parts)} · 暂不解释体长和行为`:`分包无法合并 ${assembly.received_parts}/${deviceNumber(assembly.total_parts)} · 请核对原始报告`})]:[]),
-      ...(assembly?.issue_codes?.length?[el('p',{class:'muted',text:`合并提示：${assembly.issue_codes.join('、')}`} )]:[]),
-      ...(warnings?.length?[el('p',{text:`报文校验提示：${warnings.map(code=>({WINDOW_DURATION_MISMATCH:'窗口时长与起止时间不一致（WINDOW_DURATION_MISMATCH）',ABNORMALITY_FLAG_INCONSISTENT:'异常标志与列表不一致（ABNORMALITY_FLAG_INCONSISTENT）'}[code]||code)).join('、')}；不作为恢复证据。`})]:[]),
-      ...deviceTaskDetails(presentation,`${r.device_id}:${r.report_id}`),
-      ...(!presentation?r.abnormalities.map(a=>el('p',{text:`${a.name}（模型标签 ${a.label}）：${a.targets} 个目标，${a.count} 帧次；检测信号，非确诊。`})):[]),
-      retainedDeviceDetails(`${r.device_id}:${r.report_id}:raw`,[el('summary',{text:'原始报告与分包（留存证据）'}),
-        ...(r.report_text?[el('pre',{class:'device-report-text',text:r.report_text})]:[]),
-        ...(raw_parts||[]).map(part=>retainedDeviceDetails(`${r.device_id}:${r.report_id}:raw:${part.report_id}`,[el('summary',{text:part.report_id}),el('pre',{class:'device-report-text',text:part.report_text})]))])
-    ])),
+    ...items.map(item=>{
+      const report=item.report;
+      const key=`${report.device_id}:${report.report_id}`;
+      const summary=deviceReportSummary(report,item.freshness);
+      return el('details',{class:'device-report',...(openedDeviceReports.has(key)?{open:''}:{}),
+        ontoggle:event=>{if(event.target.open){openedDeviceReports.add(key);if(openedDeviceReports.size>100)openedDeviceReports.delete(openedDeviceReports.values().next().value);}else openedDeviceReports.delete(key);}},[
+        el('summary',{text:summary}),
+        el('div',{class:'device-report-action'},[button('宽屏查看',()=>details('设备报告详情',[
+          el('div',{class:'device-report-wide'},[el('p',{class:'muted',text:summary}),...deviceReportBody(item,`wide:${key}`)])
+        ]))]),
+        ...deviceReportBody(item,key)
+      ]);
+    }),
     ...(!items.length?[empty('尚无可显示设备报告','不会用模拟视觉填补设备报告。','camera')]:[])
   ]);
 }

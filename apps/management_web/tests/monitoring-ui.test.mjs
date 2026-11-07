@@ -916,6 +916,26 @@ test('logical multipart report renders once with detection, uncalibrated length 
   for(const label of labels)assert.equal(refreshed.find(n=>n.tagName==='details'&&n.children[0]?.textContent===label).getAttribute('open'),'');
 });
 
+test('device report opens the selected result in the existing wide details dialog',async()=>{
+  const {data}=logicalDeviceFixture(),p=page(data);await p.ready();p.run("location.hash='#video';render()");
+  const walk=n=>[n,...n.children.flatMap(walk)];
+  const open=walk(p.node('content')).find(n=>n.tagName==='button'&&n.textContent==='宽屏查看');
+  let opened=0;p.node('details-dialog').showModal=()=>{opened++;};
+  const requests=p.requests.length;open.events.click();
+  const body=p.node('dialog-body');
+  assert.equal(opened,1);
+  assert.equal(p.node('dialog-title').textContent,'设备报告详情');
+  assert.equal(body.children[0].className,'device-report-wide');
+  for(const text of ['logical-report','过期／未知','检测结果','体长测量','行为分析','原始报告与分包','raw-4']){
+    assert.ok(body.textContent.includes(text),text);
+  }
+  assert.equal(walk(body).filter(n=>n.tagName==='script').length,0);
+  assert.equal(p.requests.length,requests);
+  p.run("details('其他详情',[el('p',{text:'普通内容'})])");
+  assert.equal(body.textContent,'普通内容');
+  assert.equal(walk(body).some(n=>n.className==='device-report-wide'),false);
+});
+
 test('incomplete and invalid groups retain evidence but do not render stale task interpretations',async()=>{
   const {data,item}=logicalDeviceFixture();item.report.report_text='';item.raw_parts=item.raw_parts.slice(0,2);
   item.assembly={status:'incomplete',received_parts:2,total_parts:4,issue_codes:[]};
