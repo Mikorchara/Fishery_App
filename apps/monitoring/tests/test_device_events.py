@@ -10,6 +10,7 @@ import uuid
 from apps.monitoring.repository import MonitoringRepository
 from apps.monitoring.service import MonitoringService
 from apps.monitoring.event_handling import GRADE_VERSION,digest,RANKS
+from apps.monitoring.device_events import APPEARANCE, BEHAVIOR, DEVICE_EVENT_CODES, GAP
 from apps.monitoring.tests import test_event_ack as ack_fixture
 
 
@@ -96,7 +97,7 @@ class DeviceEventTests(unittest.TestCase):
         self.oxygen(4.2)
         event=next(e for e in self.service.events() if e['code']=='OXYGEN_LOW')
         legacy=deepcopy(event['handling']);self.ack(event)
-        self.assertEqual(GRADE_VERSION,'ack-grades-v1:'+digest({k:v for k,v in RANKS.items() if k!='DEVICE_REPORT_SIGNAL'})[:16])
+        self.assertEqual(GRADE_VERSION,'ack-grades-v1:'+digest({k:v for k,v in RANKS.items() if k not in DEVICE_EVENT_CODES})[:16])
         self.submit()
         event=next(e for e in self.service.events() if e['code']=='OXYGEN_LOW')
         self.assertEqual(event['handling']['grade_token'],legacy['grade_token'])
@@ -136,6 +137,122 @@ class DeviceEventTests(unittest.TestCase):
         self.assertEqual(self.current()['id'],event['id'])
         self.assertEqual(self.current()['source_kind'],'device_report')
         self.assertEqual(len([e for e in self.repo.events() if e['device_id']=='board-1']),1)
+
+    def peak_report(self, number, *, at=None, appearance=False, behavior=None):
+        report = self.report(number, positive=appearance, at=at)
+        report['behavior'] = dict(behavior or {})
+        report['behavior']['report_context'] = dict(aggregation_policy='peak_frame_v1',
+            observed_detection_frames=95, observed_abnormality_frames=17 if appearance else 0,
+            abnormality_count_semantics='detections_in_one_peak_frame',
+            abnormality_status='observed' if appearance else 'not_observed')
+        if appearance:
+            report['abnormalities'][0]['count'] = report['abnormalities'][0]['targets']
+        return report
+
+    def submit_peak(self, number, *, received_at=None, **fields):
+        return self.repo.import_device_report(self.peak_report(number, **fields),
+            received_at=received_at or self.now, inbox_cursor=number, now=self.now)
+
+    def test_peak_appearance_uses_only_explicit_evidence_and_distinct_fresh_windows(self):
+        self.submit()
+        self.now += timedelta(minutes=1)
+        first = self.submit_peak(2, appearance=True)['event_id']
+        appearance, legacy = sorted(self.service.events(), key=lambda event: event['code'])
+        self.assertEqual(appearance['code'], APPEARANCE)
+        self.assertEqual(appearance['lifecycle_state'], 'ACTIVE')
+        self.assertEqual(legacy['lifecycle_state'], 'INDETERMINATE')
+        self.assertEqual(appearance['device_report_event']['labels'][0]['targets'], 46)
+        self.ack(appearance)
+        self.assertEqual(self.submit_peak(3, appearance=True)['status'], 'same_window')
+        self.assertEqual(self.repo.device_report_cursor('board-1'), 3)
+        self.now += timedelta(minutes=1)
+        self.assertEqual(self.submit_peak(4, appearance=True)['event_id'], first)
+        event = next(item for item in self.service.events() if item['id'] == first)
+        self.assertEqual(event['last_batch_id'], 'report-4')
+        self.assertEqual(event['handling']['state'], 'ACKNOWLEDGED')
+        self.now += timedelta(minutes=1)
+        report = self.peak_report(5)
+        report['has_abnormality'] = True  # Can mean the old behavior snapshot alone.
+        self.assertEqual(self.repo.import_device_report(report, received_at=self.now,
+            inbox_cursor=5, now=self.now)['status'], 'no_signal')
+        event = next(item for item in self.service.events() if item['id'] == first)
+        self.assertEqual(event['lifecycle_state'], 'INDETERMINATE')
+        self.assertIsNone(event.get('resolved_at'))
+
+    def test_modern_fragments_and_delayed_arrivals_do_not_emit_events(self):
+        malformed = self.peak_report(1, appearance=True)
+        malformed['report_text'] = '【结果分包 残片'
+        self.assertEqual(self.repo.import_device_report(malformed, received_at=self.now,
+            inbox_cursor=1, now=self.now)['status'], 'no_signal')
+        self.assertEqual(self.service.events(), [])
+        self.assertEqual(self.submit_peak(2, appearance=True)['status'], 'accepted')
+        self.now += timedelta(seconds=180)
+        self.assertEqual(self.submit_peak(3, appearance=True,
+            at=self.now-timedelta(seconds=61))['status'], 'no_signal')
+        self.assertEqual(len(self.service.events()), 1)
+        self.assertEqual(self.service.events()[0]['last_batch_id'], 'report-2')
+
+    def test_video_behavior_without_window_context_cannot_become_legacy_visual_signal(self):
+        report = self.report(1, positive=True)
+        report['abnormalities'] = []
+        report['behavior'] = dict(aggregation_policy='independent_video_results')
+        self.assertEqual(self.repo.import_device_report(report, received_at=self.now,
+            inbox_cursor=1, now=self.now)['status'], 'no_signal')
+        self.assertEqual(self.service.events(), [])
+
+    def test_behavior_version_uses_its_own_clock_and_evidence(self):
+        old = dict(report_id='old', result_timestamp=(self.now-timedelta(hours=1)).isoformat(),
+            aggregation_policy='independent_video_results', result_semantics='snapshot_not_additive',
+            new_result=True, results=[dict(video='old.mp4', is_abnormal=True)])
+        self.assertEqual(self.submit_peak(1, behavior=old)['status'], 'no_signal')
+        first_end = self.now
+        self.now += timedelta(minutes=1)
+        new = dict(old, report_id='new', result_timestamp=(self.now-timedelta(seconds=5)).isoformat(),
+            new_result=False, results=[dict(video='abnormal.mp4', is_abnormal=True),
+                dict(video='normal.mp4', is_abnormal=False)])
+        # The board may have prepared a previous packet that never reached the site.
+        event_id = self.submit_peak(2, behavior=new)['event_id']
+        event = self.current()
+        self.assertEqual(event['id'], event_id)
+        self.assertEqual(event['code'], BEHAVIOR)
+        self.assertEqual(event['occurred_at'], new['result_timestamp'])
+        self.assertEqual(event['device_report_event']['abnormal_videos'], ['abnormal.mp4'])
+        self.now += timedelta(minutes=1)
+        self.assertEqual(self.submit_peak(3, behavior=dict(new, new_result=True))['status'], 'no_signal')
+        out_of_order = dict(new, report_id='out-of-order', result_timestamp=(first_end+timedelta(seconds=12)).isoformat())
+        self.now += timedelta(seconds=1)
+        self.assertEqual(self.submit_peak(4, behavior=out_of_order)['status'], 'no_signal')
+        self.assertEqual(len(self.service.events()), 1)
+
+    def test_gap_requires_established_stream_and_resumes_on_fresh_window(self):
+        self.submit_peak(1)
+        for number in (2, 3):
+            self.now += timedelta(minutes=1)
+            self.assertIsNone(self.repo.check_device_report_gap('board-1', now=self.now))
+            self.submit_peak(number)
+        last_valid = self.now
+        self.now += timedelta(seconds=179)
+        self.assertIsNone(self.repo.check_device_report_gap('board-1', now=self.now))
+        self.now += timedelta(seconds=1)
+        gap_id = self.repo.check_device_report_gap('board-1', now=self.now)
+        self.assertIsNotNone(gap_id)
+        restarted = MonitoringRepository(self.repo.path, require_existing=True)
+        self.assertEqual(restarted.check_device_report_gap('board-1', now=self.now), gap_id)
+        self.submit_peak(4, at=last_valid+timedelta(seconds=60))
+        self.assertEqual(self.current()['lifecycle_state'], 'ACTIVE')
+        self.assertEqual(self.current()['code'], GAP)
+        self.assertEqual(self.current()['current_data_quality']['connectivity'], 'unknown')
+        invalid = self.peak_report(5)
+        invalid['behavior']['report_context']['observed_detection_frames'] = 0
+        self.repo.import_device_report(invalid, received_at=self.now, inbox_cursor=5, now=self.now)
+        self.assertEqual(self.current()['lifecycle_state'], 'ACTIVE')
+        self.submit_peak(6)
+        self.assertEqual(self.current()['id'], gap_id)
+        self.assertEqual(self.current()['lifecycle_state'], 'RESOLVED')
+        self.assertEqual(self.current()['state_reason'], 'DEVICE_REPORT_UPDATES_RESUMED')
+        self.assertEqual(self.current()['device_report_event']['resumed_window_end'], self.now.isoformat())
+        self.now += timedelta(minutes=4)
+        self.assertIsNone(self.repo.check_device_report_gap('board-1', now=self.now))
 
 
 if __name__=='__main__':unittest.main()

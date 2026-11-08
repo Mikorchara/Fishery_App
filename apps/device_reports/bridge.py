@@ -1,6 +1,9 @@
-"""Local inbox-to-event bridge; existing simulator ingestion is never called."""
+"""Local inbox-to-event bridge and report continuity check."""
 from datetime import datetime,timezone
 import threading
+
+
+INBOX_BATCH_SIZE = 100
 
 
 class DeviceEventBridge:
@@ -13,11 +16,14 @@ class DeviceEventBridge:
     def sync_once(self):
         with self._lock:
             cursor=self.repository.device_report_cursor(self.device_id)
-            rows=self.store.pending(self.device_id,after=cursor,limit=100)
+            rows=self.store.pending(self.device_id,after=cursor,limit=INBOX_BATCH_SIZE)
             for row in rows:
                 self.repository.import_device_report(row['report'],received_at=row['received_at'],
                     inbox_cursor=row['cursor'],now=self.clock())
                 self.processed+=1
+            # A full batch may have more recent evidence waiting in the inbox.
+            if len(rows)<INBOX_BATCH_SIZE:
+                self.repository.check_device_report_gap(self.device_id,now=self.clock())
             self.code=None
             return len(rows)
 

@@ -24,7 +24,12 @@ export function eventHandlingName(item){
 export function eventStateName(item){
   if(item.manual_end?.active)return '已人工结束';
   if(item.legacy_closed&&item.status==='closed')return '旧版已结束（未复核）';
-  if(item.source_kind==='device_report')return ({ACTIVE:'异常中',INDETERMINATE:'状态待核实',RESOLVED:'已结束（未证实恢复）'})[eventState(item)]||'状态待核实';
+  if(item.source_kind==='device_report'){
+    const state=eventState(item);
+    if(item.code==='DEVICE_REPORT_GAP')return ({ACTIVE:'报告未更新',RESOLVED:'上报已恢复'})[state]||'状态待核实';
+    if(item.code==='DEVICE_REPORT_BEHAVIOR'&&state==='ACTIVE')return '待核查';
+    return ({ACTIVE:'异常中',INDETERMINATE:'状态待核实',RESOLVED:'已结束（未证实恢复）'})[state]||'状态待核实';
+  }
   if(item.cycle_summary)return ({ACTIVE:'异常中',INDETERMINATE:'状态待核实',RESOLVED:'已恢复'})[eventState(item)]||'状态待核实';
   const state=eventState(item),progress=item.visual_recovery;
   if(state==='ACTIVE'&&progress?.clear_count>0)return `恢复观察中 ${progress.clear_count}/${progress.required_clear_windows}`;
@@ -41,9 +46,16 @@ export function eventStateName(item){
   return state==='ACTIVE'?'异常持续':'状态未知';
 }
 export function eventStateReasonName(item){
-  if(item.source_kind==='device_report')return eventState(item)==='ACTIVE'
-    ?'设备模型检测信号，需核查；非确诊。设备报告尚未提供可靠的异常消退证据。'
-    :'设备报告不足以确认当前状态；停止上报或旧报告过期不代表异常消退。';
+  if(item.source_kind==='device_report'){
+    const state=eventState(item);
+    if(item.code==='DEVICE_REPORT_GAP')return state==='RESOLVED'
+      ?'已收到时间较新的有效报告，报告更新恢复。':'连续上报后，超过规定时间没有新的有效窗口。';
+    if(item.code==='DEVICE_REPORT_BEHAVIOR')return state==='ACTIVE'
+      ?'这份行为结果的模型标记需人工核查。':'保留原行为结果供核查。';
+    return state==='ACTIVE'
+      ?'设备模型检测信号，需核查；非确诊。设备报告尚未提供可靠的异常消退证据。'
+      :'设备报告不足以确认当前状态；停止上报或旧报告过期不代表异常消退。';
+  }
   if(item.legacy_closed&&item.status==='closed')return '原记录已结束，但缺少完整生命周期或规则身份，未经新版规则复核；不补造恢复证据或人工确认。';
   const state=eventState(item),quality=item.current_data_quality;
   if(state==='RESOLVED')return item.channel==='visual'

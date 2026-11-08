@@ -198,6 +198,12 @@ class MonitoringRepository:
             manual_end.sync_history(db)
             return result
 
+    def check_device_report_gap(self, device_id, *, now):
+        from .device_events import check_gap
+        with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
+            return check_gap(db, device_id, now=now)
+
     @staticmethod
     def _contact(db, batch, received_at):
         for channel in ("water", "visual"):

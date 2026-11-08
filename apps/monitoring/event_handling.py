@@ -8,6 +8,7 @@ import uuid
 from .event_families import FAMILIES, family_group
 from .event_records import EventRecordError,parse_time
 from .rules import VISUAL_RULES
+from .device_events import DEVICE_EVENT_CODES
 
 
 RANKS = {code: value[3] for code, value in FAMILIES.items()} | dict.fromkeys(
@@ -21,12 +22,12 @@ def digest(value):
 GRADE_VERSION = 'ack-grades-v1:' + digest(RANKS)[:16]
 # Keep the exact legacy hash/tokens for every existing simulator ACK. New report
 # signals own their grade version rather than changing the legacy registry hash.
-RANKS['DEVICE_REPORT_SIGNAL']=1
+RANKS.update(dict.fromkeys(DEVICE_EVENT_CODES, 1))
 DEVICE_GRADE_VERSION='device-report-ack-grades-v1'
 
 
 def grade_version(code):
-    return DEVICE_GRADE_VERSION if code=='DEVICE_REPORT_SIGNAL' else GRADE_VERSION
+    return DEVICE_GRADE_VERSION if code in DEVICE_EVENT_CODES else GRADE_VERSION
 
 
 def cycle_reference(event):

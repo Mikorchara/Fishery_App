@@ -32,9 +32,9 @@ class DeviceBridgeTests(unittest.TestCase):
             fixture.DEVICE,clock=lambda:self.now,interval=.01)
         self.addCleanup(self.bridge.close)
 
-    def send(self,*,report_id='sample-1',at=None):
+    def send(self,*,report_id='sample-1',at=None,**fields):
         report=fixture.report();at=at or self.now
-        report.update(report_id=report_id,sent_at=at.isoformat())
+        report.update(fields,report_id=report_id,sent_at=at.isoformat())
         report['window'].update(start=(at-timedelta(seconds=39)).isoformat(),end=at.isoformat())
         return self.receiver.post('/api/fish/reports',data=json.dumps(report),content_type='application/json',
                                   headers={'X-Device-Token':fixture.TOKEN})
@@ -87,3 +87,49 @@ class DeviceBridgeTests(unittest.TestCase):
             self.bridge.start();self.assertTrue(completed.wait(5));self.bridge.close()
         self.assertFalse(self.bridge._thread.is_alive())
         self.assertEqual(self.repo.device_report_cursor(fixture.DEVICE),1)
+
+    def test_new_report_events_from_receiver_and_gap_without_pending_packets(self):
+        # The behavior result is a file snapshot carried on multiple reports.
+        behavior=dict(report_id='behavior-file-synthetic',source='slowfast-json',
+            aggregation_policy='independent_video_results',result_semantics='snapshot_not_additive',
+            new_result=True,result_timestamp=self.now.isoformat(),status='abnormal',is_abnormal=True,
+            results=[dict(video='synthetic.mp4',label='异常',is_abnormal=True)],
+            report_context=dict(aggregation_policy='peak_frame_v1',abnormality_status='observed',
+                abnormality_count_semantics='detections_in_one_peak_frame',observed_detection_frames=20,
+                observed_abnormality_frames=10,
+                detection_timestamp_ms=int(self.now.timestamp()*1000)))
+
+        def events():
+            return {event['code']:event for event in self.service.events(device_id=fixture.DEVICE)}
+
+        for index in range(3):
+            if index:
+                self.now+=timedelta(minutes=1)
+                behavior.update(new_result=False)
+                behavior['report_context']['detection_timestamp_ms']=int(self.now.timestamp()*1000)
+            self.assertEqual(self.send(report_id=f'peak-{index}',behavior=behavior).json['status'],'accepted')
+            self.assertEqual(self.bridge.sync_once(),1)
+        self.assertEqual(set(events()),{'DEVICE_REPORT_APPEARANCE','DEVICE_REPORT_BEHAVIOR'})
+        self.assertEqual(events()['DEVICE_REPORT_APPEARANCE']['last_batch_id'],'peak-2')
+
+        self.now+=timedelta(minutes=3)
+        self.assertEqual(self.bridge.sync_once(),0)
+        gap=events()['DEVICE_REPORT_GAP']
+        self.assertEqual(gap['lifecycle_state'],'ACTIVE')
+        self.assertEqual(self.bridge.sync_once(),0)
+        self.assertEqual(events()['DEVICE_REPORT_GAP']['id'],gap['id'])
+
+        # An older cache arrival cannot clear the active interruption.
+        self.assertEqual(self.send(report_id='cache',at=self.now-timedelta(minutes=5),behavior=behavior).status_code,200)
+        self.bridge.sync_once()
+        self.assertEqual(events()['DEVICE_REPORT_GAP']['lifecycle_state'],'ACTIVE')
+        behavior['report_context'].update(abnormality_status='not_observed',
+            detection_timestamp_ms=int(self.now.timestamp()*1000))
+        self.assertEqual(self.send(report_id='peak-return',behavior=behavior,abnormalities=[],
+            has_abnormality=True).status_code,200)
+        self.bridge.sync_once()
+        after=events()
+        self.assertEqual(after['DEVICE_REPORT_GAP']['id'],gap['id'])
+        self.assertEqual(after['DEVICE_REPORT_GAP']['lifecycle_state'],'RESOLVED')
+        self.assertEqual(after['DEVICE_REPORT_APPEARANCE']['last_batch_id'],'peak-2')
+        self.assertEqual(after['DEVICE_REPORT_APPEARANCE']['lifecycle_state'],'INDETERMINATE')

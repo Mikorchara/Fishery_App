@@ -854,7 +854,7 @@ test('device integration shows stale detection and keeps original reports as tex
   p.run("location.hash='#video';render()");
   const text=p.node('content').textContent;
   assert.match(text,/设备视觉报告/);assert.match(text,/过期留存/);assert.match(text,/未提供/);
-  assert.match(text,/设备异常信号进入事件列表，但不自动判定恢复/);
+  assert.match(text,/在事件记录中查看外观异常、行为异常和报告更新中断/);
   assert.doesNotMatch(text,/WINDOW_DURATION_MISMATCH|<script>/);
   assert.doesNotMatch(text,/3 \/ 20 有效帧/);
   const history=openDeviceHistory(p);
@@ -870,14 +870,14 @@ test('device report card distinguishes disabled event sync and bounded sync fail
   const data=fixture();data.integration={simulation_mode:'water-only',device_reports:{device_id:'test-board',items:[]}};
   const p=page(data);await p.ready();p.run("location.hash='#video';render()");
   assert.match(p.node('content').textContent,/事件同步未启用或暂不可用/);
-  assert.doesNotMatch(p.node('content').textContent,/设备异常信号进入事件列表/);
+  assert.doesNotMatch(p.node('content').textContent,/在事件记录中查看外观异常/);
   data.integration.device_events={enabled:true,error_code:'PRIVATE_INTERNAL_EXCEPTION'};
   p.setData(data);await p.run('refresh()');
   assert.match(p.node('content').textContent,/设备报告已保存，事件同步暂不可用/);
-  assert.doesNotMatch(p.node('content').textContent,/PRIVATE_INTERNAL_EXCEPTION|设备异常信号进入事件列表/);
+  assert.doesNotMatch(p.node('content').textContent,/PRIVATE_INTERNAL_EXCEPTION|在事件记录中查看外观异常/);
   data.integration.device_events.error_code=null;
   p.setData(data);await p.run('refresh()');
-  assert.match(p.node('content').textContent,/设备异常信号进入事件列表，但不自动判定恢复/);
+  assert.match(p.node('content').textContent,/在事件记录中查看外观异常、行为异常和报告更新中断/);
   assert.doesNotMatch(p.node('content').textContent,/事件同步暂不可用/);
 });
 
@@ -904,9 +904,9 @@ function logicalDeviceFixture(){
 test('logical device reports show direct summaries and keep full per-target details in history',async()=>{
   const {data}=logicalDeviceFixture(),p=page(data);await p.ready();p.run("location.hash='#video';render()");
   const text=p.node('content').textContent;
-  for(const value of ['检测结果','体长测量','行为分析','跟踪目标（非存量）12','处理帧2','录像回放推理（非实时摄像头）',
-    '疑似腹水 · 2 个目标','非确诊','设备报测量数10','待复核6','未标定','分析片段2','模型标记异常1'])assert.ok(text.includes(value),value);
-  assert.doesNotMatch(text,/原始报告与分包|raw-4|123.4/);
+  for(const value of ['检测结果','行为分析','跟踪目标（非存量）12','录像回放推理（非实时摄像头）',
+    '疑似腹水 · 2 个目标','非确诊','分析片段2','模型标记异常1'])assert.ok(text.includes(value),value);
+  assert.doesNotMatch(text,/体长测量|处理帧2|待复核6|原始报告与分包|raw-4|123.4/);
   assert.doesNotMatch(text,/已提供原始对象，尚未解释|123.4 cm|实时摄像头已连接/);
   const history=openDeviceHistory(p),nodes=deviceNodes(history);
   for(const value of ['最近 1 份完整报告','分包已合并 4/4','123.4 mm（估计）','画面截断','未取得长度','88 px（像素）',
@@ -914,9 +914,10 @@ test('logical device reports show direct summaries and keep full per-target deta
   assert.equal(nodes.filter(n=>n.tagName==='script').length,0);
   const detection=nodes.find(n=>n.className==='device-task'&&n.textContent.startsWith('检测结果'));
   assert.ok(detection.textContent.includes('设备上报平均置信度0'));
-  const labels=['测量依据与限制','查看行为片段','原始报告与分包（留存证据）','raw-1'];
+  const labels=['检测统计与信号依据','测量依据与限制','查看行为片段','原始报告与分包（留存证据）','raw-1'];
   for(const label of labels){
     const detail=nodes.find(n=>n.tagName==='details'&&n.children[0]?.textContent===label);
+    assert.equal(detail.getAttribute('open'),null);
     detail.open=true;detail.events.toggle({target:detail});
   }
   await p.run('refresh()');
@@ -952,7 +953,7 @@ test('device report history selects one result in the existing wide dialog witho
   assert.equal(deviceNodes(body).some(n=>n.className==='device-report-wide'),false);
 });
 
-test('device summary uses one latest detection window and selects task captures independently',async()=>{
+test('device summary keeps length in history and selects behavior capture independently',async()=>{
   const {data,item}=logicalDeviceFixture();item.freshness='fresh';
   item.presentation.measurement.captured_at='2026-10-13T23:59:45+00:00';
   item.presentation.behavior.captured_at='2026-10-14T00:00:08+00:00';
@@ -964,10 +965,10 @@ test('device summary uses one latest detection window and selects task captures 
   data.integration.device_reports.logical_items.push(older);
   const p=page(data);await p.ready();p.run("location.hash='#video';render()");
   const detection=deviceSummaryCard(p,'检测结果').textContent;
-  const length=deviceSummaryCard(p,'体长测量').textContent;
   const behavior=deviceSummaryCard(p,'行为分析').textContent;
   assert.match(detection,/近期报告.*08:00:10.*跟踪目标（非存量）12/);assert.doesNotMatch(detection,/999/);
-  assert.match(length,/07:59:50.*设备报测量数41.*采集时间早于最新检测窗口.*来源报告已过期/);
+  assert.equal(deviceSummaryCard(p,'体长测量'),undefined);
+  assert.match(openDeviceHistory(p).textContent,/体长测量.*07:59:45.*19 \/ 10 \/ 6/s);
   assert.match(behavior,/08:00:08.*分析片段2/);assert.doesNotMatch(behavior,/123|07:59:54/);
 });
 
@@ -991,7 +992,7 @@ test('a newer incomplete group leaves the latest complete report and its freshne
   const p=page(data);await p.ready();p.run("location.hash='#video';render()");
   const text=p.node('content').textContent;
   assert.match(deviceSummaryCard(p,'检测结果').textContent,/过期留存.*08:00:10.*跟踪目标（非存量）12/);
-  assert.match(deviceSummaryCard(p,'体长测量').textContent,/设备报测量数10/);
+  assert.equal(deviceSummaryCard(p,'体长测量'),undefined);
   assert.match(deviceSummaryCard(p,'行为分析').textContent,/分析片段2/);
   assert.doesNotMatch(text,/999|888|777|08:01:10|3\/4|等待完整报告/);
   const history=openDeviceHistory(p);
@@ -1047,11 +1048,63 @@ test('legacy raw fragments stay in transmission check and ordinary single report
 test('missing or unknown task objects remain unknown while known unflagged behavior is not called healthy',async()=>{
   const {data,item}=logicalDeviceFixture();item.presentation.measurement={status:'unrecognized'};item.presentation.behavior={status:'missing'};
   const p=page(data);await p.ready();p.run("location.hash='#video';render()");
-  let text=p.node('content').textContent;assert.match(text,/当前格式尚不能解释/);assert.match(text,/本轮未提供结果，不代表正常/);
+  let text=p.node('content').textContent;assert.match(text,/本轮未提供结果，不代表正常/);
+  assert.match(openDeviceHistory(p).textContent,/当前格式尚不能解释/);
   item.presentation.behavior={status:'available',source_kind:null,captured_at:null,clip_count:1,anomalous_clips:0,unknown_clips:0,
     anomalous_reported:0,clips:[{start_s:0,end_s:1,score:0,anomaly:false}]};
   p.setData(data);await p.run('refresh()');text=p.node('content').textContent;
   const behavior=deviceSummaryCard(p,'行为分析').textContent;
   assert.match(behavior,/来源未提供.*模型标记异常0.*采集时间未知，按报告顺序显示留存结果/);
   assert.doesNotMatch(behavior,/全部正常|疾病已经治愈/);
+});
+
+
+test('peak reports separate counts, video versions and folded technical evidence',async()=>{
+  const {data,item}=logicalDeviceFixture();
+  item.freshness='fresh';
+  item.receive_delay_seconds=1.25;
+  item.presentation.detection.aggregation_policy='peak_frame_v1';
+  item.presentation.detection.count_semantics='detections_in_one_peak_frame';
+  item.presentation.detection.report_context={observed_detection_frames:15,observed_abnormality_frames:9,detection_timestamp_ms:1e20};
+  item.presentation.behavior={status:'available',kind:'videos',source_kind:'video_replay',new_result:false,
+    result_timestamp:'2026-10-13T23:58:10+00:00',report_id:'version-1',video_count:2,anomalous_videos:1,unknown_videos:0,
+    videos:[{video_name:'fixture-clip-a.mp4',is_abnormal:true,threshold:0.37},
+      {video_name:'fixture-clip-b.mp4',is_abnormal:false}]};
+  const p=page(data);await p.ready();p.run("location.hash='#video';render()");
+  assert.match(deviceSummaryCard(p,'检测结果').textContent,/峰值帧可见目标（非存量）12.*疑似腹水 · 2 个目标/s);
+  assert.match(deviceSummaryCard(p,'行为分析').textContent,/结果文件版本时间.*07:58:10.*异常 \/ 视频总数1 \/ 2.*重复携带/s);
+  assert.doesNotMatch(p.node('content').textContent,/体长测量|帧次|fixture-clip|阈值/);
+  const history=openDeviceHistory(p),nodes=deviceNodes(history);
+  assert.match(history.textContent,/接收延迟（秒）1.25.*异常峰值帧 2 个目标.*fixture-clip-a.mp4/s);
+  assert.doesNotMatch(history.textContent,/2 帧次/);
+  assert.match(history.textContent,/鱼群峰值帧时间未提供/);
+  const advanced=nodes.find(n=>n.tagName==='details'&&n.children[0]?.textContent==='行为模型与逐视频指标');
+  assert.equal(advanced.getAttribute('open'),null);
+  assert.match(advanced.textContent,/结果编号version-1.*模型阈值0.37/s);
+  const transport=nodes.find(n=>n.tagName==='details'&&n.children[0]?.textContent==='原始报告与分包（留存证据）');
+  assert.equal(transport.getAttribute('open'),null);
+  assert.match(transport.textContent,/报告字段（JSON）.*"device_id": "test-board"/s);
+});
+
+test('device event evidence distinguishes appearance, behavior and recovered report updates',async()=>{
+  const data=fixture(),time=data.monitoring.observed_at;
+  const report={report_id:'evidence-report',window:{...data.monitoring.window,frames_processed:222}};
+  const evidence=[
+    ['DEVICE_REPORT_APPEARANCE','ACTIVE',{kind:'appearance',labels:[{label:'ascites',targets:2,count:2}]}],
+    ['DEVICE_REPORT_BEHAVIOR','ACTIVE',{kind:'behavior',result_id:'version-2',result_timestamp:time,abnormal_videos:['fixture-behavior.mp4']}],
+    ['DEVICE_REPORT_GAP','RESOLVED',{kind:'gap',last_window_end:time,threshold_seconds:180,resumed_window_end:time}]
+  ];
+  const base=data.events[0];
+  data.events=evidence.map(([code,lifecycle_state,device_report_event],i)=>({...base,id:'device-event-'+i,source_kind:'device_report',
+    channel:'visual',code,lifecycle_state,device_report_event,device_report:i===2?undefined:report}));
+  const p=page(data);await p.ready();
+  const show=i=>{p.run('eventDetail(state.data.events['+i+'])');return p.node('dialog-body').textContent;};
+  assert.match(show(0),/外观检测证据.*异常峰值帧目标数.*腹水信号（ascites）2/s);
+  assert.doesNotMatch(show(0),/检出帧次/);
+  assert.match(show(1),/待核查.*行为文件证据.*version-2.*fixture-behavior.mp4/s);
+  assert.match(show(2),/上报已恢复.*报告更新记录.*未更新时限（秒）180.*恢复更新的窗口/s);
+  assert.doesNotMatch(show(2),/未证实恢复|疾病消退/);
+  const grouped=p.run("eventsTable([{...state.data.events[2],cycle_summary:{ended:true,count:1}}]).textContent");
+  assert.match(grouped,/恢复更新.*上报已恢复/s);
+  assert.doesNotMatch(grouped,/恢复 \/ 原结束/);
 });

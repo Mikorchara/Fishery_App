@@ -48,15 +48,30 @@ function eventHandlingPanel(item){
 }
 function deviceReportEvidence(item){
   if(item.source_kind!=='device_report')return [];
+  const evidence=item.device_report_event;
   const report=item.device_report||{};
+  if(evidence?.kind==='gap')return [el('section',{class:'event-handling'},[
+    el('h3',{text:'报告更新记录'}),
+    rows([['中断前最后有效窗口',timeText(evidence.last_window_end)],
+      ['未更新时限（秒）',deviceNumber(evidence.threshold_seconds)],
+      ['恢复更新的窗口',evidence.resumed_window_end?timeText(evidence.resumed_window_end):'尚未收到']])
+  ])];
+  if(evidence?.kind==='behavior')return [el('section',{class:'event-handling'},[
+    el('h3',{text:'行为文件证据'}),
+    rows([['结果编号',evidence.result_id],['结果文件版本时间',timeText(evidence.result_timestamp)],
+      ['关联报告编号',report.report_id||item.batch_id]]),
+    table(['模型标记异常的视频'],evidence.abnormal_videos||[],name=>[name])
+  ])];
+  const peak=evidence?.kind==='appearance';
+  const labels=peak?evidence.labels:report.abnormalities;
   return [el('section',{class:'event-handling'},[
-    el('h3',{text:'设备报告证据'}),
+    el('h3',{text:peak?'外观检测证据':'设备报告证据'}),
     el('p',{class:'muted',text:'设备模型检测信号，需核查；非确诊。报告与视频播放独立，不自动判断异常已消退。'}),
     rows([['原始报告ID',report.report_id||item.batch_id],['报告窗口开始',timeText(report.window?.start)],
       ['报告窗口结束',timeText(report.window?.end)],['处理帧',report.window?.frames_processed??'未提供'],
       ['设备发送时间',timeText(report.sent_at)]]),
-    table(['设备异常标签','去重目标数','检出帧次'],report.abnormalities||[],a=>[
-      `${a.name}（${a.label}）`,a.targets,a.count]),
+    table(peak?['设备异常标签','异常峰值帧目标数']:['设备异常标签','去重目标数','检出帧次'],labels||[],a=>[
+      `${deviceAnomalyName(a)}（${a.label}）`,a.targets,...(peak?[]:[a.count])]),
     ...(report.report_text?[el('details',{class:'data-details'},[el('summary',{text:'原始设备报告文本'}),
       el('pre',{class:'device-report-text',text:report.report_text})])]:[])
   ])];
@@ -82,7 +97,10 @@ function requestEventAck(item){
     el('p',{class:'muted',text:'来源记录为本机操作，不代表经过认证的工作人员身份。'}),
     button('取消',()=>eventDetail(item),'secondary'),commit]);
 }
-function eventDetail(item){details(item.title,[badge(sourceName(item.source_kind),'demo'),rows([['记录编号',item.id],['时间',timeText(item.occurred_at)],['设备',item.device],['类型',item.type],['等级',eventSeverityName(item)],['状态',managedEvent(item)?eventStateName(item):'演示处理状态'],['状态说明',managedEvent(item)?eventStateReasonName(item):'仅为演示处理状态'],['原因代码',item.state_reason],['规则发布',item.publication_status||'PROTOTYPE'],['关联批次',item.batch_id],['接收时间',timeText(item.received_at)],['最近检出信号',timeText(item.last_observed_at)],['最近有效观测',timeText(item.visual_recovery?.last_valid_observed_at||item.last_observed_at)],['恢复观察',item.visual_recovery?`${item.visual_recovery.clear_count}/${item.visual_recovery.required_clear_windows}（本地实验参数）`:'未记录'],['连续观测段起点',timeText(item.visual_recovery?.segment_started_at)],['观测连续性',item.visual_recovery?.continuity==='interrupted'?'历史观测存在不连续，未知时段不计为已证实持续异常':'以有效窗口为依据'],['最近中断原因',item.visual_recovery?.last_interruption_reason],['规则恢复时间',timeText(item.resolved_at)],['规则版本',item.rule_version],['规则范围',item.rule_identity?.scope?.join(' / ')||'旧记录未记录']]),
+function eventDetail(item){
+  const evidenceKind=item.device_report_event?.kind;
+  const independentEvidence=evidenceKind==='behavior'||evidenceKind==='gap';
+  details(item.title,[badge(sourceName(item.source_kind),'demo'),rows([['记录编号',item.id],['时间',timeText(item.occurred_at)],['设备',item.device],['类型',item.type],['等级',eventSeverityName(item)],['状态',managedEvent(item)?eventStateName(item):'演示处理状态'],['状态说明',managedEvent(item)?eventStateReasonName(item):'仅为演示处理状态'],['原因代码',item.state_reason],['规则发布',item.publication_status||'PROTOTYPE'],['关联批次',item.batch_id],['接收时间',timeText(item.received_at)],...(independentEvidence?[]:[['最近检出信号',timeText(item.last_observed_at)],['最近有效观测',timeText(item.visual_recovery?.last_valid_observed_at||item.last_observed_at)],['恢复观察',item.visual_recovery?`${item.visual_recovery.clear_count}/${item.visual_recovery.required_clear_windows}（本地实验参数）`:'未记录'],['连续观测段起点',timeText(item.visual_recovery?.segment_started_at)],['观测连续性',item.visual_recovery?.continuity==='interrupted'?'历史观测存在不连续，未知时段不计为已证实持续异常':'以有效窗口为依据'],['最近中断原因',item.visual_recovery?.last_interruption_reason],['规则恢复时间',timeText(item.resolved_at)]]),['规则版本',item.rule_version],['规则范围',item.rule_identity?.scope?.join(' / ')||'旧记录未记录']]),
   ...(item.risk_family?[el('h3',{text:item.risk_family.label+' · 等级变化'}),
     el('p',{text:item.state_reason==='OTHER_RISK_CONDITION_ACTIVE'?'该等级暂未命中，但同指标仍有其他风险等级；不表示异常已恢复。':'各 code 保留原 ID，事件族只提供关联与当前等级展示。'}),
     el('p',{text:item.risk_family.inferred?'旧事件仅关联当前未结束成员，未重建缺失的历史变化。':`保留首次及最近等级变化；略去 ${item.risk_family.omitted_transitions||0} 次中间变化。`}),
@@ -146,12 +164,21 @@ async function showEventDetail(item){
   try{eventDetail(await services.eventDetail(item.cycle_summary.detail_event_id));}
   catch(_){details('详情暂不可用',[el('p',{text:'请刷新列表后重试；没有修改任何记录。'})]);}
 }
+function eventCycleTime(item){
+  if(item.manual_end?.active)return `人工结束：${timeText(item.manual_end.acted_at)}`;
+  const evidence=item.device_report_event;
+  if(evidence?.kind==='gap')return evidence.resumed_window_end
+    ?`恢复更新：${timeText(evidence.resumed_window_end)}`:`最后有效窗口：${timeText(evidence.last_window_end)}`;
+  if(evidence?.kind==='behavior')return `结果文件版本：${timeText(evidence.result_timestamp)}`;
+  return item.cycle_summary.ended?`恢复 / 原结束：${timeText(item.resolved_at)}`:`最近观测：${timeText(item.last_observed_at)}`;
+}
 function eventsTable(items,maintenance=false){return table(['风险 / 类型','设备','首次发生 / 恢复','等级','状态','是否确认',...(maintenance?['删除']:[]),'操作'],items,item=>[
   el('div',{class:'table-title'},[el('strong',{text:item.title}),
-    ...(item.cycle_summary?[el('small',{text:`${item.cycle_summary.reading_label}：${item.cycle_summary.reading}`}),
+    ...(item.cycle_summary?[
+      ...(item.device_report_event?[]:[el('small',{text:`${item.cycle_summary.reading_label}：${item.cycle_summary.reading}`})]),
       el('small',{text:`${item.cycle_summary.count} 条原始记录 · ${sourceName(item.source_kind)}`})]:[el('small',{text:`${item.id} · ${item.type} · ${sourceName(item.source_kind)}`})])]),
   item.device,el('div',{class:'cycle-time'},[el('span',{text:timeText(item.occurred_at)}),
-    ...(item.cycle_summary?[el('small',{text:item.manual_end?.active?`人工结束：${timeText(item.manual_end.acted_at)}`:item.cycle_summary.ended?`恢复 / 原结束：${timeText(item.resolved_at)}`:`最近观测：${timeText(item.last_observed_at)}`})]:[])]),
+    ...(item.cycle_summary?[el('small',{text:eventCycleTime(item)})]:[])]),
   el('div',{class:'cycle-level'},[...(item.cycle_summary?.ended?[el('small',{text:'历史最高等级'})]:[]),severity(item)]),
   item.cycle_summary?badge(eventStateName(item),item.manual_end?.active?'neutral':eventState(item)==='RESOLVED'?'resolved':item.status==='closed'?'neutral':'warning'):status(item),
   badge(cycleConfirmationName(item),cycleConfirmationName(item)==='已确认'?'success':'neutral'),
@@ -258,6 +285,22 @@ function retainedDeviceDetails(key,children){
 }
 const deviceTaskSource=value=>({video_replay:'录像回放推理（非实时摄像头）',camera_live:'设备声明摄像头来源'}[value]||value||'来源未提供');
 const deviceNumber=value=>Number.isFinite(value)?String(value):'未提供';
+const deviceAnomalyName=a=>a.name&&a.name!==a.label?a.name:({ascites:'腹水信号',head_ulceration:'头部溃疡信号'})[a.label]||a.name||a.label;
+const peakDetection=d=>d?.aggregation_policy==='peak_frame_v1';
+function deviceAbnormalityCount(d,a){
+  if(d.count_semantics==='detections_in_one_peak_frame')return `异常峰值帧 ${deviceNumber(a.targets)} 个目标`;
+  if(peakDetection(d))return `${deviceNumber(a.targets)} 个目标，设备未注明计数口径`;
+  return `${deviceNumber(a.targets)} 个目标，${deviceNumber(a.count)} 帧次`;
+}
+function deviceFrameTime(value){
+  const date=new Date(Number.isFinite(value)&&value>0?value:NaN);
+  return Number.isFinite(date.getTime())?timeText(date.toISOString()):'未提供';
+}
+const deviceTaskCounts=counts=>Object.entries({
+  fish_detected:'检测目标',fish_measured:'设备报测量数',fish_uncertain:'待复核',
+  fish_computed:'已计算数量',fish_with_pixel_length:'有像素长度的数量',fish_geometry_failed:'几何计算失败数量',fish_skipped:'跳过数量'
+}).map(([field,label])=>[label,deviceNumber(counts?.[field])]);
+const deviceModelMark=marked=>marked===true?'异常':marked===false?'未标异常':'未知';
 const unavailableDeviceTasks={missing:'本轮未提供结果，不代表正常。',unrecognized:'已保留原始对象，当前格式尚不能解释。',pending:'分包尚未完整核验，暂不解释本轮任务。'};
 function deviceTaskDetails(view,key){
   if(!view)return [];
@@ -265,11 +308,22 @@ function deviceTaskDetails(view,key){
   const sections=[];
   if(d)sections.push(el('section',{class:'device-task'},[
     el('h4',{text:'检测结果'}),rows([['窗口',`${timeText(d.window?.start)} 至 ${timeText(d.window?.end)}`],
-      ['可见跟踪目标（非存量）',deviceNumber(d.unique_tracks)],['处理帧',deviceNumber(d.frames_processed)],
-      ['平均 / 最多可见目标',`${deviceNumber(d.avg_per_frame)} / ${deviceNumber(d.max_per_frame)}`],
-      ['设备上报平均置信度',deviceNumber(d.avg_confidence)]]),
-    ...(d.abnormalities||[]).map(a=>el('p',{text:`${a.name}（${a.label}）：${deviceNumber(a.targets)} 个目标，${deviceNumber(a.count)} 帧次；模型检测信号，非确诊。`})),
-    ...(!(d.abnormalities||[]).length?[el('p',{class:'muted',text:'本报告未列异常类别；不代表已完成全部检测或全部正常。'})]:[])
+      [peakDetection(d)?'峰值帧可见目标（非存量）':'可见跟踪目标（非存量）',deviceNumber(d.unique_tracks)],
+      ['平均 / 最多可见目标',`${deviceNumber(d.avg_per_frame)} / ${deviceNumber(d.max_per_frame)}`]]),
+    ...(d.abnormalities||[]).map(a=>el('p',{text:`${deviceAnomalyName(a)}（${a.label}）：${deviceAbnormalityCount(d,a)}。模型信号需核查。`})),
+    ...(!(d.abnormalities||[]).length?[el('p',{class:'muted',text:d.report_context?.abnormality_status==='not_observed'
+      ?'本窗缺少有效外观观测。':'本报告未列外观异常类别。'})]:[]),
+    retainedDeviceDetails(`${key}:detection`,[el('summary',{text:'检测统计与信号依据'}),
+      rows([['处理帧',deviceNumber(d.frames_processed)],['设备上报平均置信度',deviceNumber(d.avg_confidence)],
+        ['窗口时长（秒）',deviceNumber(d.window?.duration_s)],['统计方式',d.aggregation_policy||'旧版窗口统计'],
+        ...(peakDetection(d)?[['外观观测',({observed:'已观测',not_observed:'未观测'})[d.report_context?.abnormality_status]||'未知'],
+          ['鱼群检测 / 外观观测帧数',`${deviceNumber(d.report_context?.observed_detection_frames)} / ${deviceNumber(d.report_context?.observed_abnormality_frames)}`],
+          ['鱼群 / 外观峰值帧编号',`${d.report_context?.detection_frame_id??'未提供'} / ${d.report_context?.abnormality_frame_id??'未提供'}`],
+          ['鱼群峰值帧时间',deviceFrameTime(d.report_context?.detection_timestamp_ms)],
+          ['外观峰值帧时间',deviceFrameTime(d.report_context?.abnormality_timestamp_ms)]]:[])]),
+      ...((d.abnormalities||[]).length?[table(['外观信号','设备上报置信度','设备上报目标框'],d.abnormalities,a=>[
+        deviceAnomalyName(a),deviceNumber(a.avg_confidence),a.last_bbox?.join(' / ')||'未提供'
+      ])]:[])])
   ]));
   if(m)sections.push(el('section',{class:'device-task'},[
     el('h4',{text:'体长测量'}),
@@ -282,43 +336,84 @@ function deviceTaskDetails(view,key){
         Number.isFinite(fish.length_mm)?`${fish.length_mm} mm（估计）`:Number.isFinite(fish.length_px)?`${fish.length_px} px（像素）`:'未取得长度',
         fish.status_text||fish.status||'未知']),
       retainedDeviceDetails(`${key}:measurement`,[el('summary',{text:'测量依据与限制'}),
+        rows([['测量结果编号',m.report_id||'未提供'],['结果生成时间',timeText(m.created_at)],['画面编号',m.frame_id??'未提供'],
+          ['结果更新标记',m.new_result===true?'本次新结果':m.new_result===false?'重复携带':'未提供'],
+          ['源视频',m.source_video||'未提供'],['视频时刻（秒）',deviceNumber(m.video_time)],['流编号',m.stream_id||'未提供'],
+          ['跟踪会话',m.track_session||'未提供'],['质量策略',m.quality_policy||'未提供'],
+          ['结果口径',m.result_semantics||'未提供'],...deviceTaskCounts(m.counts)]),
         el('p',{text:m.measurement_note||'设备未提供额外测量说明。'}),
-        ...(m.fishes||[]).map(fish=>el('p',{text:`${fish.id}：设备自报物理长度 ${Number.isFinite(fish.physical_length_mm)?`${fish.physical_length_mm} mm（未经本端核验）`:'未提供'}；关联 ${fish.association_status||'未知'}；提示 ${(fish.quality_warnings||[]).join('、')||'未提供'}`}))]),
+        table(['目标','像素长','倍率前估值 / 倍率','自报物理长度','鱼体完整性 / 关联','质量提示'],m.fishes||[],fish=>[
+          fish.id,deviceNumber(fish.length_px),`${deviceNumber(fish.length_mm_raw)} / ${deviceNumber(fish.length_scale_factor)}`,
+          Number.isFinite(fish.physical_length_mm)?`${fish.physical_length_mm} mm（未经本端核验）`:'未提供',
+          `${fish.body_incomplete===true?'不完整':fish.body_incomplete===false?'完整':'未知'} / ${fish.association_status||'未知'}`,
+          (fish.quality_warnings||[]).join('、')||'未提供'
+        ])]),
       ...(m.display_truncated?[el('p',{class:'muted',text:`共 ${deviceNumber(m.total_fishes)} 条目标记录，本页仅显示部分；完整内容保留在原始报告。`})]:[])
     ])
   ]));
   if(b)sections.push(el('section',{class:'device-task'},[
     el('h4',{text:'行为分析'}),
-    ...(b.status!=='available'?[el('p',{class:'muted',text:unavailableDeviceTasks[b.status]||'状态未知。'})]:[
-      rows([['来源',deviceTaskSource(b.source_kind)],['采集时间',timeText(b.captured_at)],['模型',b.model||'未提供'],
-        ['分析片段',deviceNumber(b.clip_count)],['标记异常 / 未知片段',`${deviceNumber(b.anomalous_clips)} / ${deviceNumber(b.unknown_clips)}`],
-        ['设备自报异常片段',deviceNumber(b.anomalous_reported)]]),
-      el('p',{class:'muted',text:'行为异常是模型片段标记，不是鱼病诊断。片段可能重叠，不能相加为鱼数或独立事件数；分数不是概率。'}),
-      retainedDeviceDetails(`${key}:behavior`,[el('summary',{text:'查看行为片段'}),
-        table(['片段区间（秒）','模型分数','模型标记'],b.clips||[],clip=>[
-          `${deviceNumber(clip.start_s)}–${deviceNumber(clip.end_s)}`,deviceNumber(clip.score),clip.anomaly===true?'异常':clip.anomaly===false?'未标异常':'未知'])]),
-      ...(b.display_truncated?[el('p',{class:'muted',text:'片段列表仅显示部分，完整内容保留在原始报告。'})]:[])
-    ])
+    ...(b.status!=='available'?[el('p',{class:'muted',text:unavailableDeviceTasks[b.status]||'状态未知。'})]:
+      b.kind==='videos'?deviceVideoBehaviorDetails(b,key):[
+        rows([['来源',deviceTaskSource(b.source_kind)],['采集时间',timeText(b.captured_at)],
+          ['分析片段',deviceNumber(b.clip_count)],['标记异常 / 未知片段',`${deviceNumber(b.anomalous_clips)} / ${deviceNumber(b.unknown_clips)}`]]),
+        el('p',{class:'muted',text:'行为异常是模型片段标记，不是鱼病诊断。片段可能重叠，不能相加为鱼数或独立事件数；分数不是概率。'}),
+        retainedDeviceDetails(`${key}:behavior`,[el('summary',{text:'查看行为片段'}),
+          rows([['模型',b.model||'未提供'],['设备自报异常片段',deviceNumber(b.anomalous_reported)]]),
+          table(['片段区间（秒）','模型分数','模型标记'],b.clips||[],clip=>[
+            `${deviceNumber(clip.start_s)}–${deviceNumber(clip.end_s)}`,deviceNumber(clip.score),deviceModelMark(clip.anomaly)])])
+      ]),
+    ...(b.display_truncated?[el('p',{class:'muted',text:'结果列表仅显示部分，完整内容保留在原始报告。'})]:[])
   ]));
   return sections;
+}
+function deviceVideoBehaviorDetails(b,key){
+  const videos=b.videos||[];
+  return [
+    rows([['来源',deviceTaskSource(b.source_kind)],['结果文件版本时间',timeText(b.result_timestamp)],
+      ['模型标记异常 / 视频总数',`${deviceNumber(b.anomalous_videos)} / ${deviceNumber(b.video_count)}`],
+      ['结论未知的视频数',deviceNumber(b.unknown_videos)]]),
+    el('p',{class:'muted',text:'按视频呈现模型标记。文件版本时间只表示结果更新，视频拍摄时间另计。'}),
+    table(['视频','模型标记','分析片段数'],videos,v=>[v.video_name||'未提供',deviceModelMark(v.is_abnormal),deviceNumber(v.num_clips)]),
+    retainedDeviceDetails(`${key}:behavior`,[el('summary',{text:'行为模型与逐视频指标'}),
+      rows([['结果编号',b.report_id||'未提供'],['模型',b.model||'未提供'],
+        ['结果更新标记',b.new_result===true?'本次新结果':b.new_result===false?'重复携带':'未提供'],
+        ['设备报告状态',b.reported_status||'未提供'],['结果文件',b.result_file||'未提供'],
+        ['文件摘要',b.file_sha256||'未提供'],['汇总方式',b.aggregation_policy||'未提供'],
+        ['结果口径',b.result_semantics||'未提供'],['设备提示',b.error||'未提供']]),
+      ...videos.map((v,i)=>retainedDeviceDetails(`${key}:behavior:video:${i}`,[el('summary',{text:v.video_name||`视频 ${i+1}`}),
+        rows([['原始标签',v.label||'未提供'],
+          ...Object.entries({rise_rel:'相对上升',rise_z:'标准化上升',late_early_ratio:'后段 / 前段活动比',
+            emb_shift:'特征偏移',split_time:'时间分界',activity_early:'前段活动',activity_late:'后段活动',
+            threshold:'模型阈值'}).map(([field,label])=>[label,deviceNumber(v[field])])])]))
+    ])
+  ];
 }
 function deviceReportSummary(report,freshness){
   const age=freshness==='fresh'?'近期报告':'过期／未知，仅供回看';
   const signal=report.has_abnormality?'设备报告含异常信号（非确诊）':'设备报告未标异常（不代表全部正常）';
   return `${timeText(report.window.end)} · ${age} · ${signal}`;
 }
-function deviceReportBody({report:r,received_at,warnings,assembly,presentation,raw_parts},key){
+function deviceReportBody({report:r,received_at,receive_delay_seconds,warnings,assembly,presentation,raw_parts},key){
+  const {report_text,...reportFields}=r;
   return [
-    rows([['设备',r.device_id],['报告ID',r.report_id],['窗口结束',timeText(r.window.end)],['服务器接收',timeText(received_at)],
+    rows([['设备',r.device_id],['窗口结束',timeText(r.window.end)],['服务器接收',timeText(received_at)],
+      ['接收延迟（秒）',deviceNumber(receive_delay_seconds)],
       ...(presentation?[]:[['可见跟踪目标（非存量）',r.detection.unique_tracks],['处理帧',r.window.frames_processed],['行为任务',r.behavior===null?'未提供':'已提供原始对象，尚未解释'],['体长任务',r.measurement===null?'未提供':'已提供原始对象，尚未解释']])]),
-    ...(assembly?[el('p',{class:'device-assembly',text:assembly.status==='single'?'完整单包报告':assembly.status==='complete'?`分包已合并 ${assembly.received_parts}/${deviceNumber(assembly.total_parts)} · 内容摘要核验通过`:assembly.status==='incomplete'?`分包收集中 ${assembly.received_parts}/${deviceNumber(assembly.total_parts)} · 暂不解释体长和行为`:`分包无法合并 ${assembly.received_parts}/${deviceNumber(assembly.total_parts)} · 请核对原始报告`})]:[]),
-    ...(assembly?.issue_codes?.length?[el('p',{class:'muted',text:`合并提示：${assembly.issue_codes.join('、')}`} )]:[]),
-    ...(warnings?.length?[el('p',{text:`报文校验提示：${warnings.map(code=>({WINDOW_DURATION_MISMATCH:'窗口时长与起止时间不一致（WINDOW_DURATION_MISMATCH）',ABNORMALITY_FLAG_INCONSISTENT:'异常标志与列表不一致（ABNORMALITY_FLAG_INCONSISTENT）'}[code]||code)).join('、')}；不作为恢复证据。`})]:[]),
     ...deviceTaskDetails(presentation,key),
-    ...(!presentation?r.abnormalities.map(a=>el('p',{text:`${a.name}（模型标签 ${a.label}）：${a.targets} 个目标，${a.count} 帧次；检测信号，非确诊。`})):[]),
+    ...(!presentation?r.abnormalities.map(a=>el('p',{text:`${deviceAnomalyName(a)}（模型标签 ${a.label}）：${a.targets} 个目标，${a.count} 帧次。模型信号需核查。`})):[]),
     retainedDeviceDetails(`${key}:raw`,[el('summary',{text:'原始报告与分包（留存证据）'}),
-      ...(r.report_text?[el('pre',{class:'device-report-text',text:r.report_text})]:[]),
-      ...(raw_parts||[]).map(part=>retainedDeviceDetails(`${key}:raw:${part.report_id}`,[el('summary',{text:part.report_id}),el('pre',{class:'device-report-text',text:part.report_text})]))])
+      rows([['报告ID',r.report_id],['设备发送时间',timeText(r.sent_at)],['报文版本',r.schema_version??'未提供']]),
+      ...(assembly?[el('p',{class:'device-assembly',text:assembly.status==='single'?'完整单包报告':assembly.status==='complete'?`分包已合并 ${assembly.received_parts}/${deviceNumber(assembly.total_parts)} · 内容摘要核验通过`:assembly.status==='incomplete'?`分包收集中 ${assembly.received_parts}/${deviceNumber(assembly.total_parts)} · 暂不解释体长和行为`:`分包无法合并 ${assembly.received_parts}/${deviceNumber(assembly.total_parts)} · 请核对原始报告`})]:[]),
+      ...(assembly?.issue_codes?.length?[el('p',{class:'muted',text:`合并提示：${assembly.issue_codes.join('、')}`})]:[]),
+      ...(warnings?.length?[el('p',{text:`报文校验提示：${warnings.map(code=>({WINDOW_DURATION_MISMATCH:'窗口时长与起止时间不一致（WINDOW_DURATION_MISMATCH）',ABNORMALITY_FLAG_INCONSISTENT:'异常标志与列表不一致（ABNORMALITY_FLAG_INCONSISTENT）'}[code]||code)).join('、')}。`})]:[]),
+      ...(report_text?[el('pre',{class:'device-report-text',text:report_text})]:[]),
+      retainedDeviceDetails(`${key}:raw:fields`,[el('summary',{text:'报告字段（JSON）'}),
+        el('pre',{class:'device-report-text',text:JSON.stringify(reportFields,null,2)})]),
+      ...(raw_parts||[]).map(part=>retainedDeviceDetails(`${key}:raw:${part.report_id}`,[el('summary',{text:part.report_id}),
+        rows([['设备发送时间',timeText(part.sent_at)],['服务器接收',timeText(part.received_at)]]),
+        el('pre',{class:'device-report-text',text:part.report_text}),
+        ...(part.context?[el('pre',{class:'device-report-text',text:JSON.stringify(part.context,null,2)})]:[])]))])
   ];
 }
 function completeDeviceReport({report,assembly}){
@@ -367,53 +462,52 @@ function deviceDetectionCard(item){
   const detection=presentation?.detection??report.detection;
   const anomalies=detection.abnormalities??report.abnormalities;
   const age=({fresh:'近期报告',stale:'过期留存',unknown:'时效未知'})[freshness]||'时效未知';
-  const signal=report.has_abnormality||anomalies.length?'设备报告含异常信号（非确诊）':'报告未列异常信号，健康状态未知。';
+  const signal=anomalies.length?'外观信号需核查（非确诊）':detection.report_context?.abnormality_status==='not_observed'
+    ?'本窗缺少有效外观观测。':'本报告未列外观异常类别。';
   return card('检测结果','按最近完整报告的检测窗口显示。',[
     badge(age,freshness==='fresh'?'neutral':'warning'),
-    rows([['窗口结束',timeText(report.window.end)],['跟踪目标（非存量）',deviceNumber(detection.unique_tracks)],
-      ['处理帧',deviceNumber(report.window.frames_processed)]]),
+    rows([['窗口结束',timeText(report.window.end)],
+      [peakDetection(detection)?'峰值帧可见目标（非存量）':'跟踪目标（非存量）',deviceNumber(detection.unique_tracks)]]),
     el('p',{class:'muted',text:signal}),
-    ...anomalies.slice(0,2).map(a=>el('p',{class:'device-summary-signal',text:`${a.name} · ${deviceNumber(a.targets)} 个目标`})),
+    ...anomalies.slice(0,2).map(a=>el('p',{class:'device-summary-signal',
+      text:`${deviceAnomalyName(a)} · ${deviceNumber(a.targets)} 个目标`})),
     ...(anomalies.length>2?[el('p',{class:'muted',text:`另有 ${anomalies.length-2} 类信号，详见报告记录。`})]:[])
   ]);
 }
-function latestDeviceTask(items,key){
+function deviceBehaviorCard(items){
+  const latest=items[0];
   let chosen=null;
   for(const item of items){
-    const task=item.presentation?.[key];
-    if(task?.status!=='available')continue;
-    const captured=Date.parse(task.captured_at);
-    if(!chosen||Number.isFinite(captured)&&(!Number.isFinite(chosen.captured)||captured>chosen.captured)){
-      chosen={task,item,captured};
+    const task=item.presentation?.behavior;
+    if(task?.status!=='available'||task.kind==='videos'&&task.video_count==null)continue;
+    const timestamp=Date.parse(task.kind==='videos'?task.result_timestamp:task.captured_at);
+    if(!chosen||Number.isFinite(timestamp)&&(!Number.isFinite(chosen.timestamp)||timestamp>chosen.timestamp)){
+      chosen={task,item,timestamp};
     }
   }
-  return chosen;
-}
-function deviceTaskCard(title,key,items){
-  const latest=items[0];
-  const latestStatus=latest?.presentation?.[key]?.status??(latest?.report[key]?'unrecognized':'missing');
-  const chosen=latestDeviceTask(items,key);
-  const subtitle='按本任务采集时间选取留存结果。';
+  const subtitle='按行为任务自身的时间显示留存结果。';
   if(!chosen){
-    const message=latest?unavailableDeviceTasks[latestStatus]||'状态未知。':'暂无完整报告。';
-    return card(title,subtitle,[el('p',{class:'muted',text:message})]);
+    const task=latest?.presentation?.behavior;
+    const status=task?.status??(latest?.report.behavior?'unrecognized':'missing');
+    const message=latest?unavailableDeviceTasks[status]||'本报告未附可用行为结论。':'暂无完整报告。';
+    return card('行为分析',subtitle,[el('p',{class:'muted',text:message})]);
   }
-  const {task,item,captured}=chosen;
-  const measurement=key==='measurement';
-  const calibration=({uncalibrated:'未标定',unverified_camera_and_depth:'尺度未核实'})[task.calibration_status]||task.calibration_status||'未提供';
-  const counts=measurement?[
-    ['检测目标',deviceNumber(task.counts?.fish_detected)],['设备报测量数',deviceNumber(task.counts?.fish_measured)],
-    ['待复核',deviceNumber(task.counts?.fish_uncertain)],['标定',calibration]
+  const {task,item,timestamp}=chosen;
+  const videos=task.kind==='videos';
+  const counts=videos?[
+    ['模型标记异常 / 视频总数',`${deviceNumber(task.anomalous_videos)} / ${deviceNumber(task.video_count)}`]
   ]:[['分析片段',deviceNumber(task.clip_count)],['模型标记异常',deviceNumber(task.anomalous_clips)],
     ['标记未知',deviceNumber(task.unknown_clips)]];
   const hints=[];
-  if(!Number.isFinite(captured))hints.push('采集时间未知，按报告顺序显示留存结果。');
-  if(captured<Date.parse(latest.report.window.start))hints.push('采集时间早于最新检测窗口。');
+  if(item!==latest)hints.push('显示较早报告中的留存结果。');
+  if(videos&&task.new_result===false)hints.push('板端标记为重复携带的行为结果。');
+  if(videos&&task.unknown_videos>0)hints.push(`另有 ${task.unknown_videos} 个视频结论未知。`);
+  if(!Number.isFinite(timestamp))hints.push(videos?'结果文件版本时间未知。':'采集时间未知，按报告顺序显示留存结果。');
+  if(timestamp<Date.parse(latest.report.window.start))hints.push(videos?'行为文件版本早于最新检测窗口。':'采集时间早于最新检测窗口。');
   if(item.freshness!=='fresh')hints.push('来源报告已过期或时效未知。');
-  return card(title,subtitle,[
+  return card('行为分析',subtitle,[
     badge(deviceTaskSource(task.source_kind),'demo'),
-    rows([['采集时间',timeText(task.captured_at)],...counts]),
-    el('p',{class:'muted',text:measurement?'模型估长和逐目标测量依据见报告记录。':'片段可能重叠，标记仅供核查。'}),
+    rows([[videos?'结果文件版本时间':'采集时间',timeText(videos?task.result_timestamp:task.captured_at)],...counts]),
     ...hints.map(text=>el('p',{class:'muted',text}))
   ]);
 }
@@ -421,7 +515,7 @@ function deviceReports(){
   const inbox=state.data.integration?.device_reports;
   const deviceEvents=state.data.integration?.device_events;
   const eventDescription=deviceEvents?.enabled===true&&!deviceEvents.error_code
-    ?'设备异常信号进入事件列表，但不自动判定恢复。':'设备报告仅展示；事件同步未启用或暂不可用，不自动判定恢复。';
+    ?'在事件记录中查看外观异常、行为异常和报告更新中断。':'设备报告仅展示。事件同步未启用或暂不可用。';
   const reports=inbox?.logical_items??inbox?.items??[];
   const items=[],transfers=[];
   for(const item of reports)(completeDeviceReport(item)?items:transfers).push(item);
@@ -436,7 +530,7 @@ function deviceReports(){
     ...(reports.length?[el('div',{class:'device-report-action'},[button('查看报告记录',()=>showDeviceReportHistory(items,transfers,inbox.packet_scan_limited))])]:[]),
     el('p',{class:'muted',text:eventDescription}),
     ...(deviceEvents?.error_code?[el('p',{class:'muted',text:'设备报告已保存，事件同步暂不可用；请检查同步服务。报告仍可查看，原有模拟监测继续运行。'})]:[])
-  ]),deviceDetectionCard(items[0]),deviceTaskCard('体长测量','measurement',items),deviceTaskCard('行为分析','behavior',items)];
+  ]),deviceDetectionCard(items[0]),deviceBehaviorCard(items)];
 }
 function video(){
   const snapshot=state.data.monitoring;
@@ -592,8 +686,8 @@ async function refresh(force=false){
     if(!data.devices.some(d=>d.id===state.device))state.device=data.devices[0]?.id||'';
     if(!data.cameras.some(c=>c.id===state.camera))state.camera=data.cameras[0]?.id||'';
     $('source-label').textContent=sourceName(data.data_mode);
-    $('source-notice').textContent=data.integration?.simulation_mode==='water-only'?'设备联调：水质为 SIMULATOR；视觉来自独立设备报告，未确认设备恢复。':data.data_mode==='simulator'?'水质与视觉来自模拟器 HTTP 上报，非真实设备或疾病诊断。页面与已启用的水质 Tool 共用统一存储。':'独立 R1 Demo；不是传感器、NPU 或正式 AI 数据。';
-    document.querySelector('.environment').textContent=data.integration?.simulation_mode==='water-only'?'设备联调：水质为 SIMULATOR；视觉来自独立设备报告，未确认设备恢复。':data.data_mode==='simulator'?'本机模拟接入':'DEMO 环境';
+    $('source-notice').textContent=data.integration?.simulation_mode==='water-only'?'设备联调：水质为 SIMULATOR，视觉来自独立设备报告。':data.data_mode==='simulator'?'水质与视觉来自模拟器 HTTP 上报，非真实设备或疾病诊断。页面与已启用的水质 Tool 共用统一存储。':'独立 R1 Demo；不是传感器、NPU 或正式 AI 数据。';
+    document.querySelector('.environment').textContent=data.integration?.simulation_mode==='water-only'?'设备联调：水质为 SIMULATOR，视觉来自独立设备报告。':data.data_mode==='simulator'?'本机模拟接入':'DEMO 环境';
     $('refresh-status').textContent='服务器状态已更新';
     const active=document.activeElement;
     if(force||!active?.matches('input,select,textarea')){

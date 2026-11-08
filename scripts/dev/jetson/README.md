@@ -1,6 +1,6 @@
 # Jetson 开发板联调
 
-这里集中存放 Management 侧的 SSH 排查步骤和报文精简工具。正式接收器及网页启动见 [设备连接步骤](../../../apps/docs/DEVICE_INTERFACE_QUICK.md)。
+这里集中存放 Management 侧的 SSH 排查步骤和旧版报文精简工具。正式接收器及网页启动见 [设备连接步骤](../../../apps/docs/DEVICE_INTERFACE_QUICK.md)。2026-11-08 交接后的板端现用 `peak_frame_v1` 自动发送完整单包。现行字段见 [设备视觉页改版与数据清单](../../../apps/docs/development/DEVICE_REPORT_REDESIGN.md)。
 
 源码副本、现场日志、报文样本、验证结果和队列备份保存在 Git 忽略的 `outputs/hardware-evidence` 与 `outputs/hardware-checks`。SSH 密码、密钥和实际凭据使用原有私有存储。
 
@@ -25,6 +25,8 @@ sha256sum website_publish.py
 
 2026-11-06 的只读归档识别到 NVIDIA Jetson Orin NX，架构为 aarch64。此前跑通的是板端录像回放推理。现场运行版本、实时摄像头和新配置仍要逐项确认。
 
+下表记录旧版现场归档的控制点，供追溯。
+
 | 要调整的内容 | 已核对的控制点 |
 |---|---|
 | 发哪些字段 | Python `website_publish.py` 的 `make_packets` 与 `Publisher.prepare` |
@@ -34,7 +36,9 @@ sha256sum website_publish.py
 
 先缩小报文，再用现场数据测量窗口结束到完整接收的耗时。需要调频时分别测量窗口、队列和任务调度，每次只调整一项。改动 C++ 调度需核对源码和运行二进制对应关系。
 
-## 精简报文候选
+## 旧版精简报文候选
+
+候选仅适用于下列归档源码指纹，供旧版复核。一次性直发、旧队列切换记录及验证结果已归入本机忽略目录 `outputs/hardware-checks/archive-legacy-lab`。
 
 - `compact_payload.py` 保留网页所需的检测、体长、行为、时间和质量字段。开启 `"website_compact_reports": true` 才尝试单包。超过 16 KiB 或遇到未覆盖的输入时使用原打包方式。首次入队时选择格式，已有队列字节和原始归档继续沿用原逻辑。
 - `make_candidate.py` 校验 2026-11-06 归档的完整文件摘要和发送函数原文。默认只检查。源码不匹配就停下，按实际板端版本重新审阅。

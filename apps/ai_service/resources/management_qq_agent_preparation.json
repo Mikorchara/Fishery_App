@@ -153,7 +153,7 @@
       "apps/qq_bot/conversations.py": "0706c530175e7a0e6b2e878b24ef7bb9eda9ddee2e5099c1529047780e6a9efd",
       "apps/ai_service/channel_conversation.py": "9fff8f9fc66bbe9733fe034ae15877b3ca1054318c3ec3a0da2709343a3392be",
       "apps/management_paths.py": "466e32076f93617299989c42ee5b3067d74b25ac633f77d1bdc696a9d37ac116",
-      "apps/monitoring/repository.py": "0505ad4783c30c3c79d1608c2449eb0a2a06b5cd952a987d09cf333fedc46d37",
+      "apps/monitoring/repository.py": "0c6910aab818bcdb0de75df0a08ce7d1a2a94324a6241a2de6a05218bb6b7ff5",
       "apps/monitoring/schema.py": "85d631b3186c67802a9ac892469b23f6b44be5ef0a1f82d03caf2676a29c0f18",
       "apps/monitoring/service.py": "7dccab235c17956824e6aeec0854b141a6ba17f8b3b3214be74d4895fdda6786",
       "apps/monitoring/analysis.py": "f2f2867d73205e9676c03cc53b892eee52791dfb75d92a99aed8e276a0ac8748",
@@ -180,7 +180,7 @@
     "failure_notice": "TWO_FIXED_ERRORS_PASSIVE_ONCE_NO_HISTORY@1",
     "websocket_dependency": "websockets==15.0.1",
     "entry_implementation": {
-      "apps/qq_bot/event_notifications.py": "0fed5ecc653fce25982cebdb5baa6044b61b663415605172bf9369d4d6ab54a7",
+      "apps/qq_bot/event_notifications.py": "edb24d01f6b21d6718348863882ceae4bca694f4a72460048e781a5e11bb0441",
       "apps/qq_bot/event_recipients.py": "c9f4d69d27a77a9790557da6d7426ed6ec90dea5d9459d0e10de6b7a1ed40856",
       "apps/ai_service/channel_management_live.py": "3d146bb031467df20c5d4382730ae2d2080010bde6ecf28d50c0996d4fbd677e",
       "apps/qq_bot/management_run.py": "86b4965c3e6d9eb74f9010ea27d268f23c69d9953ea02e1aab400c4d13425eee",
@@ -192,8 +192,8 @@
       "apps/management_web/__main__.py": "5e8a20bb98a4885d474ffaf8c2783cb62796262dd0f712fa041587a73f1b413b",
       "apps/ai_service/management_channel_budget.py": "648495ccaacf7bbc7c7e56e44159aa12e264d461cb8cd6852ae4809ae2aaaba9",
       "apps/qq_bot/management_limits.py": "a11ea52784cbfaae22e805753d87c928b8c39ce5eeb03e1c5fd57073b159cbb8",
-      "apps/monitoring/device_events.py": "be1e9d9b967e519ad182aa84a1026c004d358ff5063a42fd9b093c78cd59d0f6",
-      "apps/device_reports/bridge.py": "141ea1a57ca1f0c0b7a8cd376a53c92b3fbfa00fdae9091173692800779fec04",
+      "apps/monitoring/device_events.py": "a09121f1599922467f6632c37ed1cb80b14e7fafab94cc22349a3d4cad8b67c6",
+      "apps/device_reports/bridge.py": "3949342747fbf82111a567d83395adfbe3ab22180537fe6402ffa8f074773b0b",
       "apps/device_reports/storage.py": "8ad53a18c242c125ed4fac98a6b952dbbb08ac30c388e9f260d368ae7e8ac793",
       "apps/monitoring/event_reset.py": "0e97bbfc12a44ffbd3619b562f9597a9e2c1dbf0861bbb27cbf27a79bae897d7",
       "apps/ai_service/channel_management_continuous.py": "feeedd5d826349e471815becb48e9ddb4460706dec53e7ad009b65cb487443ab",
@@ -222,7 +222,7 @@
       "instance": "EXPLICIT_READ_ONLY_SAME_INSTANCE"
     }
   },
-  "scope_sha256": "3929de714cd7098c76191e59f3b5bad2a12b2af1fcc3560df36af5966734e068",
+  "scope_sha256": "f60662e1f45232cb03fe2b28e5a650dbd930b0755444460949ca724dc8140c0f",
   "old_approvals_accepted": false,
   "real_execution_requires": "CURRENT_PROCESS_WEB_AGENT_OPERATOR_CONSENT"
 }

@@ -94,6 +94,31 @@ class DeviceNoticeTests(unittest.TestCase):
         with self.assertRaisesRegex(BotError,'EVENT_NOTIFICATION_APPROVAL_CHANGED'):
             self.permit.check()
 
+    def test_peak_appearance_preserves_existing_private_notice_only(self):
+        self.compose()
+        result_time=self.now.isoformat()
+        for number in range(1,4):
+            report=self.report(number)
+            report['abnormalities'][0]['count']=report['abnormalities'][0]['targets']
+            report['behavior']=dict(report_id='behavior-file-synthetic',source='slowfast-json',
+                result_timestamp=result_time,new_result=number==1,status='abnormal',is_abnormal=True,
+                aggregation_policy='independent_video_results',result_semantics='snapshot_not_additive',
+                results=[dict(video='synthetic.mp4',label='异常',is_abnormal=True)],
+                report_context=dict(aggregation_policy='peak_frame_v1',abnormality_status='observed',
+                    abnormality_count_semantics='detections_in_one_peak_frame',observed_detection_frames=30,
+                    observed_abnormality_frames=10, detection_timestamp_ms=int(self.now.timestamp()*1000)))
+            self.writer.repository.import_device_report(report,received_at=self.now,inbox_cursor=number,now=self.now)
+            self.notifier.tick()
+            self.now+=timedelta(seconds=60);self.seconds+=60
+        self.assertEqual(len(self.posts),1)
+        self.assertIn('外观异常',json.loads(self.posts[0].content)['content'])
+        self.now+=timedelta(seconds=120);self.seconds+=120
+        self.writer.repository.check_device_report_gap(BOARD,now=self.now)
+        self.assertEqual({event['code'] for event in self.writer.events(device_id=BOARD)},
+            {'DEVICE_REPORT_APPEARANCE','DEVICE_REPORT_BEHAVIOR','DEVICE_REPORT_GAP'})
+        self.notifier.tick()
+        self.assertEqual(len(self.posts),1)
+
     def test_explicit_disclosure_in_check_no_db_or_network(self):
         value=json.loads(self.case.path.read_text());value['event_recipient_file']=str(self.binding)
         path=self.case.root/'bound-request.json';path.write_text(json.dumps(value))

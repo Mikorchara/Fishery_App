@@ -309,6 +309,12 @@ body:has(.video-workspace) main{padding-top:20px}
 .device-report-action{margin:10px 0}
 .device-summary-signal{font-size:12px;line-height:1.7;margin-top:5px;overflow-wrap:anywhere}
 #details-dialog:has(.device-report-wide){width:900px}
-.device-report-wide>.field{margin:12px 0}
-.device-report-wide>.field select{width:100%;min-width:0}
+.device-report-wide{min-width:0;overflow-wrap:anywhere}
+.device-report-wide .field{margin:12px 0}
+.device-report-wide .field select{width:100%;min-width:0}
+.device-report-wide .data-details:not([open])>summary{margin-bottom:0}
 .device-report-wide .device-task th,.device-report-wide .device-task td{font-size:13px;padding:10px;white-space:normal}
+@media(max-width:600px){
+ #details-dialog:has(.device-report-wide){padding:16px}
+ .device-report-wide .details-grid{gap:8px 12px;grid-template-columns:minmax(75px,.85fr) minmax(0,1.15fr)}
+}

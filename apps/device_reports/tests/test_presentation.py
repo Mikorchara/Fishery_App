@@ -203,6 +203,78 @@ class PresentationTests(unittest.TestCase):
         self.assertEqual(projected['measurement']['status'], 'available')
         self.assertEqual(projected['behavior']['status'], 'available')
 
+    def test_peak_frame_video_snapshot_keeps_window_and_result_times_separate(self):
+        value = report()
+        result_time = (NOW - timedelta(hours=2)).isoformat()
+        value['behavior'] = dict(
+            source='slowfast-json', report_id='behavior-file-fixture', result_timestamp=result_time,
+            aggregation_policy='independent_video_results', status='abnormal', is_abnormal=True,
+            new_result=False, result_semantics='snapshot_not_additive',
+            report_context=dict(aggregation_policy='peak_frame_v1', detection_frame_id=10,
+                detection_timestamp_ms=12345, observed_detection_frames=3, abnormality_status='observed',
+                abnormality_timestamp_ms=12340, abnormality_frame_id=9, observed_abnormality_frames=7,
+                abnormality_count_semantics='detections_in_one_peak_frame'),
+            results=[dict(video='fixture-a.mp4', label='异常', is_abnormal=True, rise_z=-0.5, num_clips=4),
+                     dict(video='fixture-b.mp4', label='非异常', is_abnormal=False, rise_z=0),
+                     dict(video='fixture-c.mp4', is_abnormal='false', num_clips=True)])
+        value['measurement'] = dict(report_id='measurement-fixture', created_at=NOW.isoformat(),
+            new_result=True, fishes=[dict(display_id='F1', body_incomplete=True, fish_id=1,
+                length_mm=25, length_mm_raw=10, length_scale_factor=2.5, physical_length_mm=None)])
+        received = item(value)
+        received['received_at'] = (NOW+timedelta(seconds=2)).isoformat()
+        result = project_reports([received])[0]
+        self.assertEqual(result['receive_delay_seconds'], 2)
+        self.assertEqual(result['raw_parts'][0]['sent_at'], value['sent_at'])
+        view = result['presentation']
+        detection = view['detection']
+        self.assertEqual(detection['aggregation_policy'], 'peak_frame_v1')
+        self.assertEqual(detection['count_semantics'], 'detections_in_one_peak_frame')
+        self.assertEqual(detection['report_context'], value['behavior']['report_context'])
+        self.assertEqual(detection['abnormalities'], value['abnormalities'])
+        behavior = view['behavior']
+        self.assertEqual(behavior['kind'], 'videos')
+        self.assertEqual(behavior['report_id'], 'behavior-file-fixture')
+        self.assertEqual(behavior['result_timestamp'], result_time)
+        self.assertIsNone(behavior['captured_at'])
+        self.assertIs(behavior['new_result'], False)
+        self.assertEqual((behavior['video_count'], behavior['anomalous_videos'], behavior['unknown_videos']), (3, 1, 1))
+        self.assertEqual(behavior['videos'][0]['video_name'], 'fixture-a.mp4')
+        self.assertEqual(behavior['videos'][0]['rise_z'], -0.5)
+        self.assertEqual(behavior['videos'][0]['num_clips'], 4)
+        self.assertIsNone(behavior['videos'][2]['num_clips'])
+        fish = view['measurement']['fishes'][0]
+        self.assertEqual(view['measurement']['report_id'], 'measurement-fixture')
+        self.assertEqual((fish['length_mm_raw'], fish['length_scale_factor']), (10, 2.5))
+        self.assertTrue(fish['body_incomplete'])
+        self.assertIsNone(fish['physical_length_mm'])
+
+    def test_peak_context_with_unavailable_behavior_preserves_unknown_counts(self):
+        value = report()
+        value['behavior'] = dict(status='not_received',
+            report_context=dict(aggregation_policy='peak_frame_v1', abnormality_status='not_observed'))
+        view = project_reports([item(value)])[0]['presentation']
+        self.assertEqual(view['detection']['report_context']['abnormality_status'], 'not_observed')
+        behavior = view['behavior']
+        self.assertEqual(behavior['kind'], 'videos')
+        self.assertEqual(behavior['reported_status'], 'not_received')
+        self.assertIsNone(behavior['video_count'])
+        self.assertIsNone(behavior['anomalous_videos'])
+        self.assertIsNone(behavior['new_result'])
+
+    def test_multipart_conflict_keeps_reconstructable_original_packets(self):
+        values = packets()
+        for value in values:
+            value['report']['behavior'] = dict(opaque=True)
+        values[1]['report']['behavior']['opaque'] = 1
+        values[1]['report']['sent_at'] = (NOW+timedelta(seconds=1)).isoformat()
+        result = project_reports(values)[0]
+        self.assertEqual(result['assembly']['status'], 'invalid')
+        self.assertIs(type(result['raw_parts'][1]['context']['behavior']['opaque']), int)
+        for part, value in zip(result['raw_parts'], values, strict=True):
+            actual = {**result['report'], **part.get('context', {}),
+                **{key: part[key] for key in ('report_id', 'report_text', 'sent_at')}}
+            self.assertEqual(actual, value['report'])
+
     def test_null_original_task_does_not_fallback_to_old_envelope(self):
         source = original(); source['inputs']['behavior'] = None
         values = packets(source=source)

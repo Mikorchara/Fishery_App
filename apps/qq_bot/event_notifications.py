@@ -163,7 +163,9 @@ def candidate(event, *, device_id, source_kind='simulator'):
         # A current quality/offline rule HIT is evidence of that quality problem,
         # never evidence that an old water-risk reading is still current.
         if source_kind=='device_report':
-            if (event.get('code')!='DEVICE_REPORT_SIGNAL' or dq.get('freshness')!='fresh'
+            # The existing device approval covers a fresh visual finding. The
+            # versioned appearance event replaces that finding for peak reports.
+            if (event.get('code') not in ('DEVICE_REPORT_SIGNAL','DEVICE_REPORT_APPEARANCE') or dq.get('freshness')!='fresh'
                     or dq.get('quality')!='valid'):return None
         elif event.get('code') not in QUALITY_CODES and (dq.get('freshness')!='fresh' or dq.get('connectivity')!='online'):return None
         transitions=(event.get('risk_family') or {}).get('transitions',[])

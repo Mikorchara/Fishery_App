@@ -26,8 +26,8 @@ def _text(value, maximum=500):
     return value[:maximum] if isinstance(value, str) else None
 
 
-def _number(value):
-    if type(value) not in (int, float) or value < 0:
+def _number(value, *, signed=False):
+    if type(value) not in (int, float) or (not signed and value < 0):
         return None
     try:
         return value if math.isfinite(value) else None
@@ -37,6 +37,10 @@ def _number(value):
 
 def _count(value):
     return value if type(value) is int and _number(value) is not None else None
+
+
+def _boolean(value):
+    return value if type(value) is bool else None
 
 
 def _channel_meta(packet, body=None):
@@ -65,7 +69,17 @@ def _measurement(packet, *, pending=False):
         return result
     result.update(status='available', counts={key: _count(body.get(key)) for key in _COUNT_KEYS},
                   calibration_status=_text(body.get('calibration_status'), 120),
-                  measurement_note=_text(body.get('measurement_note'), 1500))
+                  measurement_note=_text(body.get('measurement_note'), 1500),
+                  report_id=_text(body.get('report_id'), 160),
+                  frame_id=_text(body.get('frame_id'), 160),
+                  created_at=_text(body.get('created_at'), 100),
+                  quality_policy=_text(body.get('quality_policy'), 120),
+                  result_semantics=_text(body.get('result_semantics'), 120),
+                  new_result=_boolean(body.get('new_result')),
+                  track_session=_text(body.get('track_session'), 160),
+                  video_time=_number(body.get('video_time')),
+                  stream_id=_text(body.get('stream_id'), 160),
+                  source_video=_text(body.get('source_video'), 160))
     fishes = body.get('fishes')
     if not isinstance(fishes, list):
         return result
@@ -80,6 +94,12 @@ def _measurement(packet, *, pending=False):
         result['fishes'].append(dict(id=_text(identity, 80), status=_text(fish.get('status'), 120),
             status_text=_text(fish.get('status_text'), 160), length_px=_number(fish.get('length_px')),
             length_mm=_number(fish.get('length_mm')), physical_length_mm=_number(fish.get('physical_length_mm')),
+            length_mm_raw=_number(fish.get('length_mm_raw')),
+            length_scale_factor=_number(fish.get('length_scale_factor')),
+            estimated_length_mm=_number(fish.get('estimated_length_mm')),
+            body_incomplete=_boolean(fish.get('body_incomplete')),
+            fish_id=_count(fish.get('fish_id')), track_id=_count(fish.get('track_id')),
+            track_session=_text(fish.get('track_session'), 160),
             quality_warnings=[text for value in fish.get('quality_warnings', [])[:20]
                               if (text := _text(value, 120)) is not None]
                             if isinstance(fish.get('quality_warnings'), list) else [],
@@ -87,8 +107,36 @@ def _measurement(packet, *, pending=False):
     return result
 
 
+_VIDEO_METRICS = ('rise_rel', 'rise_z', 'late_early_ratio', 'emb_shift',
+                  'split_time', 'activity_early', 'activity_late', 'threshold')
+
+
+def _behavior_videos(body):
+    videos = body.get('results')
+    has_results = isinstance(videos, list)
+    entries = videos if has_results else []
+    return dict(status='available', kind='videos',
+        result_timestamp=_text(body.get('result_timestamp'), 100),
+        report_id=_text(body.get('report_id'), 160), new_result=_boolean(body.get('new_result')),
+        reported_status=_text(body.get('status'), 80),
+        reported_is_abnormal=_boolean(body.get('is_abnormal')),
+        result_file=_text(body.get('result_file'), 160), file_sha256=_text(body.get('file_sha256'), 64),
+        aggregation_policy=_text(body.get('aggregation_policy'), 120),
+        result_semantics=_text(body.get('result_semantics'), 120), error=_text(body.get('error'), 160),
+        video_count=len(entries) if has_results else None,
+        anomalous_videos=sum(isinstance(v, dict) and v.get('is_abnormal') is True for v in entries)
+                        if has_results else None,
+        unknown_videos=sum(not isinstance(v, dict) or _boolean(v.get('is_abnormal')) is None for v in entries)
+                       if has_results else None,
+        videos=[dict(video_name=_text(v.get('video'), 160), label=_text(v.get('label'), 80),
+                     is_abnormal=_boolean(v.get('is_abnormal')), num_clips=_count(v.get('num_clips')),
+                     **{key: _number(v.get(key), signed=True) for key in _VIDEO_METRICS})
+                for v in entries[:MAX_TASK_ITEMS] if isinstance(v, dict)],
+        display_truncated=len(entries) > MAX_TASK_ITEMS)
+
+
 def _behavior(packet, *, pending=False):
-    result = dict(status='pending' if pending else 'missing', source_kind=None, captured_at=None,
+    result = dict(status='pending' if pending else 'missing', kind=None, source_kind=None, captured_at=None,
                   model=None, anomalous_reported=None, clip_count=0, anomalous_clips=0,
                   unknown_clips=0, clips=[], display_truncated=False)
     if pending or packet is None:
@@ -98,10 +146,18 @@ def _behavior(packet, *, pending=False):
         return result
     body = packet.get('behavior', packet)
     result.update(_channel_meta(packet, body))
-    if not isinstance(body, dict) or not isinstance(body.get('clips'), list):
+    if not isinstance(body, dict):
+        return result
+    if (body.get('aggregation_policy') == 'independent_video_results'
+            or (_peak_frame_context(packet) and (isinstance(body.get('results'), list)
+                or body.get('status') in ('unknown', 'not_received')))):
+        result['model'] = _text(body.get('source'), 120)
+        result.update(_behavior_videos(body))
+        return result
+    if not isinstance(body.get('clips'), list):
         return result
     clips = body['clips']
-    result.update(status='available', model=_text(body.get('source'), 120),
+    result.update(status='available', kind='clips', model=_text(body.get('source'), 120),
         anomalous_reported=_count(body.get('anomalous')), clip_count=len(clips),
         anomalous_clips=sum(isinstance(c, dict) and c.get('anomaly') is True for c in clips),
         unknown_clips=sum(not isinstance(c, dict) or type(c.get('anomaly')) is not bool for c in clips),
@@ -124,13 +180,28 @@ def _object_pairs(pairs):
     return result
 
 
+def _peak_frame_context(behavior):
+    source = behavior.get('report_context') if isinstance(behavior, dict) else None
+    if not isinstance(source, dict) or source.get('aggregation_policy') != 'peak_frame_v1':
+        return {}
+    fields = ('detection_frame_id', 'detection_timestamp_ms', 'abnormality_timestamp_ms',
+              'abnormality_frame_id', 'observed_detection_frames', 'observed_abnormality_frames')
+    return dict(aggregation_policy='peak_frame_v1',
+                abnormality_status=_text(source.get('abnormality_status'), 80),
+                abnormality_count_semantics=_text(source.get('abnormality_count_semantics'), 120),
+                **{key: _count(source.get(key)) for key in fields})
+
+
 def _presentation(report, issues, *, pending=False):
+    measurement, behavior = report.get('measurement'), report.get('behavior')
+    context = _peak_frame_context(behavior)
     detection = dict(status='available', **deepcopy(report['detection']),
                      frames_processed=report['window']['frames_processed'],
-                     window=deepcopy(report['window']), abnormalities=deepcopy(report['abnormalities']))
-    measurement, behavior = report.get('measurement'), report.get('behavior')
+                     window=deepcopy(report['window']), abnormalities=deepcopy(report['abnormalities']),
+                     aggregation_policy=context.get('aggregation_policy'),
+                     count_semantics=context.get('abnormality_count_semantics'), report_context=context)
     document = report.get('report_text', '')
-    if not pending and _ORIGINAL_MARKER in document:
+    if not pending and not context and _ORIGINAL_MARKER in document:
         try:
             original = json.loads(document.split(_ORIGINAL_MARKER, 1)[1], object_pairs_hook=_object_pairs,
                                   parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
@@ -154,13 +225,23 @@ def _project_group(items, base_id, multipart):
     first = items[0]
     report = deepcopy(first['report'])
     issues, fragments, expected, digest = [], {}, None, None
-    raw_parts = [dict(report_id=item['report']['report_id'], report_text=item['report']['report_text'],
-                      received_at=item['received_at']) for item in items]
+    shared_context = {key: json.dumps(data, sort_keys=True) for key, data in _context(report).items()} if multipart else {}
+    raw_parts = []
+    for item in items:
+        value = item['report']
+        part = dict(report_id=value['report_id'], report_text=value['report_text'],
+                    sent_at=value['sent_at'], received_at=item['received_at'])
+        if multipart and item is not first:
+            differences = {key: data for key, data in _context(value).items()
+                           if shared_context.get(key) != json.dumps(data, sort_keys=True)}
+            if differences:
+                part['context'] = deepcopy(differences)
+        raw_parts.append(part)
     warnings = list(dict.fromkeys(warning for item in items for warning in item.get('warnings', [])))
     status = 'single'
     if multipart:
         report['report_id'] = base_id
-        for item in items:
+        for item, part in zip(items, raw_parts, strict=True):
             value = item['report']
             header = _HEADER.match(value['report_text'])
             identity = _PART_ID.fullmatch(value['report_id'])
@@ -173,7 +254,7 @@ def _project_group(items, base_id, multipart):
                 continue
             if expected is None:
                 expected, digest = total, header[3]
-            if expected != total or digest != header[3] or _context(value) != _context(report):
+            if expected != total or digest != header[3] or 'context' in part:
                 issues.append('PART_CONTEXT_CONFLICT')
             fragment = value['report_text'][header.end():]
             if index in fragments and fragments[index] != fragment:
@@ -200,7 +281,11 @@ def _project_group(items, base_id, multipart):
     assembly = dict(status=status, received_parts=len(fragments) if multipart else 1,
                     total_parts=expected if expected is not None else (None if multipart else 1), issue_codes=issues)
     projection = _presentation(report, issues, pending=status in ('incomplete', 'invalid'))
-    return dict(report=report, received_at=max(item['received_at'] for item in items),
+    received_at = max(item['received_at'] for item in items)
+    received_time = datetime.fromisoformat(received_at.replace('Z', '+00:00'))
+    observed_time = datetime.fromisoformat(report['window']['end'].replace('Z', '+00:00'))
+    return dict(report=report, received_at=received_at,
+                receive_delay_seconds=(received_time - observed_time).total_seconds(),
                 freshness=first['freshness'], warnings=warnings, assembly=assembly,
                 presentation=projection, raw_parts=raw_parts)
 
