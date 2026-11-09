@@ -16,7 +16,7 @@
 | 子目录 | 内容 |
 |---|---|
 | guides | [详细部署与配置](guides/DEPLOYMENT.md)、[网页使用](guides/USER_GUIDE.md) |
-| development | [监测数据接口与集成合同](development/INTEGRATION.md)、[开发板报文原协议](development/TEXT_PACKAGE_API.md) |
+| development | [监测数据接口与集成合同](development/INTEGRATION.md)、[设备视觉页与事件规则](development/DEVICE_REPORT_REDESIGN.md)、[开发板原始协议](development/TEXT_PACKAGE_API.md) |
 | presentations | [组员技术路线](presentations/TECHNICAL_ROUTE_TEAM.md)、[制作PPT的说明](presentations/TECHNICAL_ROUTE_PPT_BRIEF.md) |
 | deep-dive | 下列专题技术资料；未来规划放在其 plan 子目录 |
 
@@ -24,4 +24,4 @@
 
 历史资格参考：[Streaming](deep-dive/STREAMING_QUALIFICATION.md)、[历史水质Tool](deep-dive/HISTORY_QUALIFICATION.md)。这些记录不授予新代码联网许可。
 
-未来对接见 [真实设备规划](deep-dive/plan/REAL_DEVICE_INTEGRATION.md)。工程约束见 [AGENTS](../AGENTS.md)。
+板端诊断见 [Jetson 联调目录](../../scripts/dev/jetson/README.md)。未来对接见 [真实设备规划](deep-dive/plan/REAL_DEVICE_INTEGRATION.md)。工程约束见 [AGENTS](../AGENTS.md)。

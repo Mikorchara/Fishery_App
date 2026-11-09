@@ -68,7 +68,7 @@ ConversationStore保存在RAM，按App、群、成员、实例、设备、授权
 
 SIMULATOR新异常、升级和可靠消退各提醒一次；连续同级HIT和ACK不刷屏，不重放启动前历史。发送前持久化声明，失败、未知及重启不自动重发。每日100次、10秒最多1条是通知防刷屏规则，与AI会话轮数无关。私聊成功不代表群主动权限。
 
-设备联调显式绑定报告目录和设备ID后，Web桥接新鲜异常到Monitoring，Bot沿用已批准私聊通道。设备报告当前仅提醒新异常，不自动判断恢复或伪造升级。设备不进入水质AI工具设备列表，原Simulator路径保持不变；操作只看[设备连接步骤](../DEVICE_INTERFACE_QUICK.md)。
+设备联调绑定报告目录和设备 ID 后，Web 将有效的设备事件同步到 Monitoring。QQ 沿用已批准的私聊通道提醒新版外观异常（E1），也兼容旧格式视觉异常。行为异常（E2）和报告更新中断（E3）只在网页展示。设备报告与 AI 水质工具分属独立的数据来源。操作见[设备连接步骤](../DEVICE_INTERFACE_QUICK.md)。
 
 ## 排错与验证
 
@@ -80,13 +80,25 @@ SIMULATOR新异常、升级和可靠消退各提醒一次；连续同级HIT和AC
 | `RUN_TURN_LIMIT` / `RUN_BUDGET_EXHAUSTED` / `INVALID_RUN_DURATION` | 旧有限配置限制；在网页确认保存为新持续模式 |
 | `QQ_REPLY_API_ACCEPTED` / `QQ_EVENT_NOTICE_API_ACCEPTED` | 平台接受，客户端显示仍需独立确认 |
 | `DELIVERY_UNKNOWN` | 不重发、不重推理、不追加成功历史 |
-| `MANAGEMENT_SCOPE_REVIEW_REQUIRED` | 源码与配置Scope不一致；维护者审查后网页重新保存，不改旧批准绕过 |
+| `MANAGEMENT_SCOPE_REVIEW_REQUIRED` | 本机配置记录的 Scope 与当前实现不一致。按下节恢复启动 |
 | SDK资源隔离或必要检查点失败 | 停止新AI，保留报告并正常停止，不重置门禁 |
 | `MANAGEMENT_BOT_REPORT_SAVED` | 最终报告落盘，分别核对Backend、SDK、交付与History |
 
 `-Check`不读取密钥、打开Monitoring数据库或联网，不能证明平台权限、真实密钥及网络可达性。页面读取与保存也不会联网；只有显式批准的配对开始/测试和Bot运行才联网。Fake/Mock证明执行与故障边界，不能替代真实Qwen的工具选择、自然语言质量及长期运行验收。
 
 真实验收应分别记录一般概念/季节问题/当前水质/话题切换/连续追问/缺测过期/权限拒绝的实际Tool次数、模型请求、Token、耗时、SDK和交付；不能把Backend完成或API接受当作回答质量正确或客户端自动显示确认。
+
+### 代码指纹与恢复启动
+
+Bot 启动前会对选定的实现文件计算 SHA-256，再把这些摘要与 Prompt、工具、执行限制等一起纳入 Scope。程序会比对当前算出的 Scope、本机配置的 `scope.json` 和启动请求里的 Scope 摘要。设备事件与通知代码在检查范围内，单纯修改网页文案不会改变它。
+
+如果版本升级后遇到 `MANAGEMENT_SCOPE_REVIEW_REQUIRED`，由维护者核对更新涉及的工具、权限和通知规则。然后按以下步骤恢复：
+
+1. 用两终端入口打开同一日常实例，在「系统设置 → QQ 机器人」核对现有 App、群、成员、AI 和事件通知开关。
+2. 点击「保存 QQ 设置」。正常保存会生成当前版本的配置和指纹，并备份旧配置目录。旧模式或自定义权限的配置应先核对生成后的工具与授权范围。
+3. 停止两终端，再执行 QQ 入口的 `-Check` 或启动预检。设备联调时，8780 接收器可继续运行。检查通过后启动 QQ 版，并在 Bot 窗口批准这次运行。
+
+使用纯网页或模拟器时无需 QQ Scope。正式 QQ 入口保留指纹检查，让源码变化后的新运行继续接受人工核对和批准。
 
 ## 前轮持续模式离线核查（2026-11-06，四工具改造前）
 
@@ -102,7 +114,7 @@ SIMULATOR新异常、升级和可靠消退各提醒一次；连续同级HIT和AC
 - 覆盖真实SDK类的Mock HTTP、General、四Tool分别执行、当前+历史的2工具/3请求、混合历史、数据库字节不变、跨成员/设备/实例、BUSY与去重、撤权/Policy/Scope变化、SDK取消与CLOSED、未知交付和清空CAS。网页配对从认证C2C到一次主动测试、绑定、默认通知关闭均在Fake Gateway/Mock HTTP验证，未读取实际密钥或业务实例。
 - 新多轮截断码`MODEL_RESPONSE_TRUNCATED`已有独立固定错误提示：只发送一次，不发残缺正文、不记成功历史、不自动重推理；下一条独立请求仍可运行。旧Web Normal/Streaming、QQ各旧模式、设备事件和三终端停止/故障隔离均在全量覆盖。
 - 首次完整运行940项有3项失败：网页保存测试的旧合同预期已更新并新增schema2兼容用例；Windows状态文件读/替换竞争已确定性复现，修复仅对状态替换错误5/32/33最多等待0.5秒，3个实际句柄测试通过，不重试业务。另一次旧Natural用例的`CHANNEL_AUTHORIZATION_CHANGED`无法从原日志区分deadline、Scope或配置原因；独立两次与启动模块顺序复测均通过，冻结后全量也通过。保留该证据限制，不将补跑通过写成已查明那一次取消的根因；没有提高90秒期限。
-- 新Scope `management-qq-web-agent-run@1` 及三份旧QQ准备资源均保持candidate、qualification为空，已重新计算；没有改变Web发布资格或旧批准/used/回执。默认2048 Token新Scope摘要：`3929de714cd7098c76191e59f3b5bad2a12b2af1fcc3560df36af5966734e068`；不同Token配置须单独生成匹配摘要。
+- 当日 `management-qq-web-agent-run@1` 及三份旧 QQ 准备资源均保持 candidate、qualification 为空。此处记录的是 2026-11-06 的验收版本，当前指纹以启动预检为准。
 - 打包白名单的新模块可在独立暂存目录导入并验证Scope，不依赖Prototype；文档本地链接检查无失效、diff检查通过。依赖版本和原Agent工具循环未改变。启动脚本只有上述状态替换竞争修复。
 - 实际本机QQ配置、身份、凭据和业务数据库本轮未改；已有用户需**停止旧服务 → 重新启动网页 → 保存QQ设置 → 检查并重启Bot、批准新进程**。不要手改旧Scope摘要或复用旧批准。配对可复用已有同App验证人，不要求重复录入密钥。
 

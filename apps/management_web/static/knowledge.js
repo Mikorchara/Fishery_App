@@ -245,7 +245,7 @@ export function createKnowledgeWorkspace(api){
     el('summary',{text:'高级功能 · 检索测试'}),
     el('p',{text:'与 AI Knowledge Tool 查询同一内容，不调用 LLM；只显示有限片段与来源。'}),
     testQuery.node,retrievalButton=action('测试检索',()=>void searchTest(),'secondary',baseControls),hitHost]);
-  root.append(card('知识内容','内置资料与用户知识统一检索。删除可恢复；本机编辑权限不等于生产权限。',[
+  root.append(card('知识内容',null,[
     el('div',{class:'knowledge-toolbar actions'},[
       action('新增知识',e=>{
         const trigger=e.currentTarget;

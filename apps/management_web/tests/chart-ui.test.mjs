@@ -81,7 +81,8 @@ test('actual SVG has spaced time ticks, distinct y labels, recent/all controls a
     assert.equal(markers.length,options.rangeSeconds===null?214:85);
     assert.ok(markers.every(n=>n.attributes.r<=1.35));
     if(options.rangeSeconds===null)assert.ok(markers.every(n=>n.attributes.r<1&&n.attributes.opacity<.5));
-    assert.match(root.textContent,/北京时间 UTC\+8/);assert.match(root.textContent,/最后观测/);
+    assert.match(root.textContent,/北京时间 UTC\+8/);
+    assert.doesNotMatch(root.textContent,/存储窗口|范围以最后观测为终点/);
     assert.ok(nodes.some(n=>n.className==='chart-viewport'));
   }
   const css=fs.readFileSync(new URL('../static/styles.css',import.meta.url),'utf8');

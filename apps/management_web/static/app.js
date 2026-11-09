@@ -193,8 +193,7 @@ function currentAnomalies(data){
   const sources=new Set(overview.items.map(item=>item.source_kind));
   const source=sources.size>1?'mixed':sources.values().next().value||data.data_mode;
   const content=overview.items.length?[
-    el('div',{class:'anomaly-summary'},[badge(`${overview.items.length} 项需关注`,'warning'),badge(sourceName(source),'demo'),
-      el('span',{text:'检测信号用于提示核查，疑似疾病不作为确诊。'})]),
+    el('div',{class:'anomaly-summary'},[badge(`${overview.items.length} 项需关注`,'warning'),badge(sourceName(source),'demo')]),
     el('div',{class:'anomaly-list'},overview.items.map(item=>el('article',{class:'anomaly-item','data-event-id':item.id},[
       el('div',{class:'anomaly-heading'},[el('strong',{text:item.overview_title||item.title}),
         item.risk_family&&!item.family_current_code?badge('当前等级未知','neutral'):severity(item),badge(sourceName(item.source_kind),'demo'),status(item)]),
@@ -211,7 +210,7 @@ function currentAnomalies(data){
 }
 
 function trend(){const options={rangeSeconds:state.trendRange==='all'?null:Number(state.trendRange)};
-  return el('div',{class:'trend-stack'},[card('历史趋势','已存储的窗口均值；不代表连续实时采样。',[trendChart(state.data.monitoring,state.metric,options)],
+  return el('div',{class:'trend-stack'},[card('历史趋势',null,[trendChart(state.data.monitoring,state.metric,options)],
     el('div',{class:'chart-controls'},[
     select('指标',[['dissolved_oxygen_mg_l','溶解氧'],['temperature_c','水温'],['ph','pH']],state.metric,value=>{state.metric=value;render();}),
     select('历史范围',trendRanges,state.trendRange,value=>{state.trendRange=value;render();})])),
@@ -246,7 +245,8 @@ function dashboard(){
     el('div',{class:'strip-number'},[el('strong',{text:String(d.devices.length)}),el('span',{text:'监测区域'})]),
     el('div',{class:'strip-number'},[el('strong',{text:'0'}),el('span',{text:'实测水质设备'})]),
     el('div',{class:'strip-number'},[el('strong',{text:d.ai?.connected?'1':'0'}),el('span',{text:'已启用 AI 服务'})]),badge(sourceName(d.data_mode),'demo')]),
-    el('div',{class:'section-caption'},[el('h2',{text:'水质指标概览'}),link('查看水质监测','monitoring')]),metadata(snapshot),metricCards(snapshot),currentAnomalies(d),
+    el('div',{class:'section-caption'},[el('h2',{text:'水质指标概览'}),link('查看水质监测','monitoring')]),
+    metadata(snapshot,{showSourceDetail:false}),metricCards(snapshot),currentAnomalies(d),
     el('div',{class:'dashboard-grid dashboard-overview'},[trend(),
       el('div',{class:'side-stack dashboard-sidebar'},[
         assistantCard,
@@ -506,7 +506,7 @@ function deviceBehaviorCard(items){
   if(timestamp<Date.parse(latest.report.window.start))hints.push(videos?'行为文件版本早于最新检测窗口。':'采集时间早于最新检测窗口。');
   if(item.freshness!=='fresh')hints.push('来源报告已过期或时效未知。');
   return card('行为分析',subtitle,[
-    badge(deviceTaskSource(task.source_kind),'demo'),
+    ...(task.source_kind?[badge(deviceTaskSource(task.source_kind),'demo')]:[]),
     rows([[videos?'结果文件版本时间':'采集时间',timeText(videos?task.result_timestamp:task.captured_at)],...counts]),
     ...hints.map(text=>el('p',{class:'muted',text}))
   ]);

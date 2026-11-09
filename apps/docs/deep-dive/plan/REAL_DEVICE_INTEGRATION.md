@@ -1,6 +1,6 @@
 # 真实设备接入方案与接口格式要求
 
-> 2026-11-04更新：独立TEXT_PACKAGE_API v1报告接收器和本地MP4播放已实现，操作以 [当前连接步骤](../../DEVICE_INTERFACE_QUICK.md) 为准。下文保留为真实水质/实时视频的规划，不代表所有接口均已上线。
+> 当前已实现独立 TEXT_PACKAGE_API v1 报告接收和本地 MP4 播放，开发板报告已现场验证。实际接入见[当前连接步骤](../../DEVICE_INTERFACE_QUICK.md)。本页保留 2026-10-29 的调查基线与真实水质、实时视频规划。
 
 版本：设计初稿 v0.1，2026-10-29。对象：Fishery Management，源码核查基线 `87f52a7`。面向项目组、设备提供方与后续开发人员。
 
@@ -18,7 +18,7 @@
 
 真实接入需要分别完成“设备能读到”“应用能正确理解来源和时间”“视频能播放”“检测结果有效”四个验收项。只有前两项完成后，才适合讨论将真实事实开放给 AI/QQ。
 
-### 当前能力与缺口
+### 设计初稿时的能力与缺口
 
 | 项目 | 当前已具备 | 真实接入仍需开发 / 验证 |
 |---|---|---|
@@ -268,7 +268,7 @@ Authorization: Bearer <设备接入专用凭据，由私有存储管理>
 
 ### 6.2 媒体网关到浏览器
 
-不要将 `rtsp://...` 直接塞进现有网页播放器。现有页面连播放器都尚未装配；需要选择浏览器媒体路径并验证目标浏览器、编码和鉴权。
+本地 MP4 播放已接入。RTSP 实时源仍需通过媒体网关转换为浏览器可播放的形式，并验证目标浏览器、编码和鉴权。
 
 | 候选 | 对接形式 | 适合何种首版 | 必须补齐 |
 |---|---|---|---|
@@ -393,6 +393,6 @@ Authorization: Bearer <设备接入专用凭据，由私有存储管理>
 - [management_web/__main__.py](../../../management_web/__main__.py)：回环绑定与显式 ingestion 开关。
 - [monitoring/repository.py](../../../monitoring/repository.py)：事务、去重、冲突、乱序与留存范围。
 - [monitoring/service.py](../../../monitoring/service.py)：数据投影、默认时效和 `stream_url=null`。
-- [management_web/static/app.js](../../../management_web/static/app.js)：当前视频占位与模拟统计页面。
+- [management_web/static/app.js](../../../management_web/static/app.js)：视频监控页、模拟统计与设备报告布局。
 - [ai_service/channel.py](../../../ai_service/channel.py)：SourceSummary 的 simulator 限制。
 - [组员技术路线](../../presentations/TECHNICAL_ROUTE_TEAM.md)、[启动指南](../../BUILD_RUN.md)：当前项目能力和使用边界。

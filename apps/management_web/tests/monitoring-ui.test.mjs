@@ -1054,8 +1054,8 @@ test('missing or unknown task objects remain unknown while known unflagged behav
     anomalous_reported:0,clips:[{start_s:0,end_s:1,score:0,anomaly:false}]};
   p.setData(data);await p.run('refresh()');text=p.node('content').textContent;
   const behavior=deviceSummaryCard(p,'行为分析').textContent;
-  assert.match(behavior,/来源未提供.*模型标记异常0.*采集时间未知，按报告顺序显示留存结果/);
-  assert.doesNotMatch(behavior,/全部正常|疾病已经治愈/);
+  assert.match(behavior,/模型标记异常0.*采集时间未知，按报告顺序显示留存结果/);
+  assert.doesNotMatch(behavior,/来源未提供|全部正常|疾病已经治愈/);
 });
 
 

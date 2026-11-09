@@ -2,9 +2,9 @@
 
 # 管理系统 Web
 
-独立管理应用：Flask + 原生 ES Modules / CSS / SVG，复用现有依赖。水质、视觉与事件来自统一 SQLite 存储的模拟器上报；可显式启用 Normal Assistant，共用该监测来源。「资料与知识库」管理单一SQLite中的用户与内置导入文本，并支持Markdown/JSON导出，和 AI 共用原 TF-IDF 检索；文件导入、真实传感器/NPU/视频和生产权限未接入。
+Web 使用 Flask 和原生 ES Modules / CSS / SVG。完整模拟使用模拟器的水质和视觉统计。设备联调保留模拟水质，并通过独立接收器读取开发板视觉报告。视频页可播放本地 MP4。具体操作见[设备连接步骤](../docs/DEVICE_INTERFACE_QUICK.md)。
 
-首次升级须按[统一知识库迁移](../docs/deep-dive/KNOWLEDGE_CONTENT.md)先显式备份迁移；未准备新库会安全拒绝启动，不自动动用户数据。
+「资料与知识库」维护内置导入和用户文本，支持 Markdown / JSON 导出，与 AI 共用 TF-IDF 检索。新部署按[开始使用](../../开始使用.md)初始化，旧库升级按[统一知识库迁移](../docs/deep-dive/KNOWLEDGE_CONTENT.md)处理。
 
 在仓库根目录执行：
 

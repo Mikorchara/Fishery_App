@@ -11,6 +11,7 @@
 | 位置 | 保存内容 |
 |---|---|
 | `outputs/qq-m3-real-test` | 日常Monitoring、Knowledge、Web设置、Tool授权和日志 |
+| `outputs/device-reports` | 8780 接收器保存的原始设备报告库。Web 将事件同步到日常 Monitoring 实例 |
 | `outputs/qq-m3-real-config` | QQ身份、成员、设备绑定及配置引用，不含密钥 |
 | `outputs/management-stack`、`outputs/qq-bot` | 启停状态、批准/执行报告、通知去重与接收人绑定 |
 | `.local-backups` | 操作者保留的旧outputs；不随Git交付 |

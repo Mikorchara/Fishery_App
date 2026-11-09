@@ -6,6 +6,17 @@
 
 **尚未配置QQ时，先用两终端打开网页设置QQ。** 新配置采用持续运行和自然回答，保存后重启Bot生效；不会自动连接或调用模型。步骤只在根目录[开始使用](../../开始使用.md#6-可选开启-qq-机器人)维护，机制与兼容说明只看[QQ专题](deep-dive/QQ_BOT.md)。
 
+
+**需要接受设备发来的数据时**
+首次使用先按[设备连接步骤](DEVICE_INTERFACE_QUICK.md#1-先准备电脑)初始化报告库。日常在项目根目录另开一个 PowerShell 窗口，用 `ipconfig` 查看电脑当前的局域网 IPv4，替换下面的占位符后启动接收器。
+
+```powershell
+.\scripts\dev\Start-DeviceReports.ps1 -Serve -Bind '<电脑局域网IPv4>' -DeviceId fish-monitor-orin-01
+```
+
+看到 `DEVICE_REPORT_LISTENING` 后保留这个窗口。接收器使用 `8780` 端口，已运行时可直接进入下一步。需要停止接收时，在接收器窗口按 Ctrl+C。
+
+
 ## 四个入口
 
 ```powershell
@@ -39,7 +50,7 @@
 
 选项`9`在完整模拟菜单中显示。水质保持正常场景。前两个10秒窗口出现疑似病灶和体表异常信号，之后连续三个完整窗口未检出，约第50秒两条事件消退。事件来源显示为`SIMULATOR`。`0`或`8`退出。
 
-设备联调模式停发模拟视觉；疑似疾病/摄食等视觉参数不生效，水质场景仍生效。**四个cmd选2后自动绑定本项目`outputs/device-reports`和设备`fish-monitor-orin-01`；选1不绑定设备报告。** 首次先按[设备连接步骤](DEVICE_INTERFACE_QUICK.md)创建报告库，并在另一个窗口启动8780接收器；四个cmd不会自动建库或开启接收器。开发板`device_id`须与此ID一致；其他ID或目录仍用下方显式参数，不自动选择已有实例。
+设备联调模式只模拟水质，视觉数据由开发板提供。四个入口选 `2` 后会绑定本项目 `outputs/device-reports` 和设备 `fish-monitor-orin-01`。启动前先按下方[设备联调](#设备联调)打开独立接收器。
 
 ## 数据和AI要点
 
@@ -50,7 +61,7 @@
 - QQ群中真正@机器人，可问“什么是溶解氧？”、“现在水质怎么样？”、“那溶解氧呢？”。`/清空会话`只清自己的记忆。普通自然语言可能收费。
 - 展示时直接发送 `@机器人 /当前水质`、`@机器人 查询水质` 或 `@机器人 查询当前水质`，由系统直接查数据，不调用模型。只有这几个明确指令走直接查询；`/问AI 查询水质`仍调用模型。
 - 网页新配置使用持续模式，不设累计时长、轮数和费用停止；普通自然语言可能持续计费，需人工停止。旧有限配置不自动升级；在网页确认保存后重启。机制和错误码统一见[QQ专题](deep-dive/QQ_BOT.md)。
-- 新配置默认无事件通知。在网页QQ设置完成首次私聊配对并单独启用、运行时另行批准后，只向已验证好友发指定设备的SIMULATOR新异常、升级和可靠消退；私聊通知不是私聊AI问答。详见 [QQ合同](deep-dive/QQ_BOT.md)。
+- 新配置默认关闭事件通知。在网页完成接收人配对、启用通知并批准本次运行后，QQ 向已验证好友发送授权设备的 SIMULATOR 新异常、升级和可靠消退。设备联调可同时批准接收 E1 外观异常提醒。详见[QQ 说明](deep-dive/QQ_BOT.md#事件通知与设备报告)。
 
 ## 检查、指定场景和停止
 
@@ -64,23 +75,25 @@
 
 需要运行模式菜单时加 `-InteractiveMode`；直接指定模式用 `-SimulationMode water-only`（默认full）。四个cmd已带`-AutoDeviceReports`，仅在water-only且未提供绑定时使用上述固定目录/ID；手动启动不加此开关时保持原行为。需要场景菜单时加 `-InteractiveScenario`；需要视频时加 `-DemoVideo "$PWD\sample.mp4"`；Web评分加 `-ScoreTrial` 并去掉 `-NoAssistant`。`-Port 8767`可改端口，不结束未知Python进程。PowerShell接受相对Request路径，JSON内部仍必须是本机正确的绝对路径。
 
-**停止：**三终端在最初编排终端Ctrl+C；两终端可在Web或Simulator窗口Ctrl+C。单独关闭Bot不停止其他两项。优先正常停止以保存结果。独立停止、日志与备份见 [维护说明](deep-dive/OPERATIONS.md)。
+**停止：**三终端在最初编排终端按 Ctrl+C，两终端可在 Web 或 Simulator 窗口按 Ctrl+C。单独停 Bot 时，Web 和 Simulator 继续运行。关闭浏览器标签页后，后台进程仍会运行。独立停止、日志与备份见[维护说明](deep-dive/OPERATIONS.md)。
 
 **事件清理：**已恢复历史可普通删除；任何活动、未知或人工留痕记录也可在列表/详情选择“删除此轮事件”彻底删除。事件页“清空全部事件记录”删除当前实例的全部事件及ACK/人工结束历史，不受筛选和分页影响，确认一次提交。水质数据和原始设备报告保留；异常持续时，下一份新上报仍可能产生新事件。代码更新后重启Web并按Ctrl+F5。完整规则见[事件管理](deep-dive/EVENT_MANAGEMENT.md)。
 
 **Ctrl+F5仅强制重新加载网页资源，不清数据库、事件、水质历史、设置或密钥。** 删除数据必须使用明确的删除/清空入口并确认。
 
-## 已配置QQ的设备联调
+## 设备联调
 
-先按 [连接步骤](DEVICE_INTERFACE_QUICK.md) 初始化并启动独立接收器；再使用普通QQ入口并在运行模式菜单选择`2`：
+首次使用先按[设备连接步骤](DEVICE_INTERFACE_QUICK.md#1-先准备电脑)初始化报告库。日常在项目根目录另开一个 PowerShell 窗口，用 `ipconfig` 查看电脑当前的局域网 IPv4，替换下面的占位符后启动接收器。
 
 ```powershell
-.\scripts\dev\启动QQ演示系统.cmd
+.\scripts\dev\Start-DeviceReports.ps1 -Serve -Bind '<电脑局域网IPv4>' -DeviceId fish-monitor-orin-01
 ```
 
-需要录像时改用`.\scripts\dev\启动QQ视频演示系统.cmd`，同样选`2`。绑定后Web会把新鲜设备异常同步到事件列表；Bot原审批会一并显示该设备的视觉异常通知范围，使用已有已验证私聊接收人。AI仍只查询原授权模拟水质，设备提醒不调用模型。同类报告合并提醒，过期只显示状态待核实，不自动判定恢复。独立接收器是额外的第四个终端，需单独Ctrl+C关闭。非默认设备ID/目录可显式启动`Start-ManagementStack.ps1`并传`-SimulationMode water-only -DeviceReportDirectory <目录> -DeviceReportDeviceId <ID>`。详见[设备连接步骤](DEVICE_INTERFACE_QUICK.md)。
+看到 `DEVICE_REPORT_LISTENING` 后保留这个窗口。接收器使用 `8780` 端口，已运行时可直接进入下一步。需要停止接收时，在接收器窗口按 Ctrl+C。
 
-若提示 `MANAGEMENT_SCOPE_REVIEW_REQUIRED`，按[QQ专题](deep-dive/QQ_BOT.md#排错与验证)核对源码、准备资源和本机配置；不要复用旧批准或手工关闭指纹检查。
+在另一个窗口运行[四个入口](#四个入口)中的一个，选择 **`2`（设备联调）**。Web 会同步外观异常、行为异常和报告更新中断。若使用 QQ 入口且本次审批包含设备视觉通知，E1 会提醒已验证的私聊接收人，E2 和 E3 在网页查看。非默认设备 ID 或目录可通过 `Start-ManagementStack.ps1` 的 `-SimulationMode water-only -DeviceReportDirectory <目录> -DeviceReportDeviceId <ID>` 指定。详见[设备连接步骤](DEVICE_INTERFACE_QUICK.md)。
+
+若提示 `MANAGEMENT_SCOPE_REVIEW_REQUIRED`，按[代码指纹与恢复启动](deep-dive/QQ_BOT.md#代码指纹与恢复启动)核对版本并重新保存现有 QQ 设置，再运行预检和批准新进程。
 
 ## 自动测试当前QQ Agent（可选，模型调用收费）
 

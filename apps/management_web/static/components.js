@@ -109,8 +109,9 @@ export function metricCards(snapshot){return el('div',{class:'metric-grid'},(sna
   el('div',{class:'metric-heading'},[el('span',{text:metric.label}),el('span',{class:`metric-icon tone-${i}`},[icon(i===0?'thermometer':i===1?'wave':'drop')])]),
   el('div',{class:'metric-value'},[metricText(metric),el('span',{text:metric.unit})]),
   el('div',{class:'metric-footer'},[badge(qualityNames[metric.quality]||'未知',metric.quality==='valid'?'success':'warning'),el('span',{text:snapshot.aggregation==='window_mean'?'窗口均值':'Demo 观测'})])])));}
-export function metadata(snapshot){return el('div',{class:'observation-meta'},[
-  badge(sourceName(snapshot?.source_kind),'demo'),el('span',{text:snapshot?.source||'无数据来源'}),badge(connectionName(snapshot?.connectivity),'neutral'),
+export function metadata(snapshot,{showSourceDetail=true}={}){return el('div',{class:'observation-meta'},[
+  badge(sourceName(snapshot?.source_kind),'demo'),
+  ...(showSourceDetail?[el('span',{text:snapshot?.source||'无数据来源'})]:[]),badge(connectionName(snapshot?.connectivity),'neutral'),
   badge(qualityNames[snapshot?.quality]||'不可用',snapshot?.quality==='valid'?'success':'warning'),
   badge(freshnessNames[snapshot?.freshness]||'未知',snapshot?.freshness==='fresh'?'success':'warning'),
   el('span',{text:`观测 ${timeText(snapshot?.observed_at)}`})]);}
@@ -125,14 +126,14 @@ export function trendChart(snapshot,key,{rangeSeconds=1800}={}){
   const data=chartGeometry(snapshot?.trend||[],key,{rangeSeconds});
   if(!data)return empty('暂无可展示的趋势','所选范围至少需要两个不同观测时间的有效窗口；缺失值不会补成正常数据。','wave');
   const metric=trendMetrics.find(item=>item.key===key)||{key,label:key,unit:'',color:'#168c83',dash:''};
-  return drawTrend(snapshot,data,[{...metric,color:'#168c83',dash:'',data}],false,rangeSeconds);
+  return drawTrend(data,[{...metric,color:'#168c83',dash:'',data}],false,rangeSeconds);
 }
 export function normalizedTrendChart(snapshot,{rangeSeconds=1800}={}){
   const data=normalizedChartGeometry(snapshot?.trend||[],{rangeSeconds});
   if(!data)return empty('暂无可比较的趋势','每项指标至少需要两个不同观测时间的有效窗口；缺失/无效值不参与归一化。','wave');
-  return drawTrend(snapshot,data,data.series,true);
+  return drawTrend(data,data.series,true);
 }
-function drawTrend(snapshot,data,series,normalized,rangeSeconds=null){
+function drawTrend(data,series,normalized,rangeSeconds=null){
   const format=value=>new Intl.NumberFormat('zh-CN',{maximumSignificantDigits:8}).format(value);
   const rawValue=(row,metric)=>typeof row[metric.key]==='number'&&Number.isFinite(row[metric.key])
     &&(!row.metric_quality?.[metric.key]||row.metric_quality[metric.key]==='valid')
@@ -215,6 +216,5 @@ function drawTrend(snapshot,data,series,normalized,rangeSeconds=null){
     el('div',{class:'chart-viewport'},[svg]),tooltip,
     ...(normalized?[el('p',{class:'chart-note normalization-note',text:'各指标在所选范围内独立归一化：(原值−最小值)/(最大值−最小值)×100；无变化为50。仅比较趋势，不能比较原始大小、实际变化幅度或水质适宜度；切换范围或新极值会重算刻度。'})]:[]),
     el('p',{class:'chart-note',text:'悬停或点击图中位置查看原始值；键盘聚焦图表后可用 ← / → 查看，Esc 关闭提示。'}),
-    el('p',{class:'chart-note',text:`北京时间 UTC+8 · ${timeText(new Date(data.start).toISOString())} — ${timeText(new Date(data.end).toISOString())}`}),
-    el('p',{class:'chart-note',text:`${snapshot?.source_kind==='simulator'?'模拟上报窗口':'独立 R1 Demo 历史'} · 显示 ${data.displayedCount} / ${data.storedCount} 个存储窗口 · 范围以最后观测为终点，非当前实时数据。会话切换、缺失和中断处不连线。${data.duplicateCount?`同时间记录仅展示最后接收项（${data.duplicateCount} 项折叠）。`:''}${data.invalidTimeCount?`已忽略 ${data.invalidTimeCount} 项无效时间。`:''}`})]);
+    el('p',{class:'chart-note',text:`北京时间 UTC+8 · ${timeText(new Date(data.start).toISOString())} — ${timeText(new Date(data.end).toISOString())}`})]);
 }

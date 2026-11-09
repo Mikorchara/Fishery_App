@@ -14,9 +14,9 @@
 .\scripts\dev\启动QQ视频演示系统.cmd
 ```
 
-新电脑安装依赖后，先执行一次 `.\scripts\dev\Initialize-Management.ps1`，自动创建唯一日常实例和31条初始背景资料，再用上面的入口。两终端不需要QQ配置或模型密钥；三终端另需给同一实例配置QQ，不会重建数据库。全部数据统一在 `outputs/qq-m3-real-test`，不要复制别人的outputs和密钥。
+新电脑安装依赖后，先执行一次 `.\scripts\dev\Initialize-Management.ps1`，自动创建唯一日常实例和31条初始背景资料，再用上面的入口。两终端可直接运行，三终端需为同一实例配置 QQ。日常实例在 `outputs/qq-m3-real-test`，原始设备报告单独存入 `outputs/device-reports`。完整目录见[部署说明](apps/docs/guides/DEPLOYMENT.md)。
 
-- 当前观测和视觉统计为SIMULATOR；本地视频只是录像，不进行NPU推理，不冒充真实采样。
+- 启动时选 `1` 使用完整模拟。选 `2` 时水质继续模拟，视觉统计来自通过 8780 接收的开发板报告。视频入口播放独立的本地录像。见[设备连接步骤](apps/docs/DEVICE_INTERFACE_QUICK.md)。
 - QQ为独立进程；网页新配置可复用当前/历史水质、项目知识与实验评分四个只读Tool，旧模式兼容；默认不联网，不具有事件确认、删除或设备控制权限。
 - QQ可在“系统设置 → QQ机器人”配置，采用持续运行与Web式自然回答；每次模型请求输出Token可调，启动仍需人工批准费用和访问范围。旧有界配置兼容，机制见[QQ专题](apps/docs/deep-dive/QQ_BOT.md)。
 - 两/三终端及带视频版本共用一份日常实例；旧正式/演示目录保留，不自动合并。源码、业务数据和私有凭据分开。
