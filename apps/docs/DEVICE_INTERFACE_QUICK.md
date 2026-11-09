@@ -78,6 +78,8 @@
 
 ## 4. 组员在开发板上填写
 
+用 SSH 登录时填写**板端用户和开发板 IP**。上报目标填写**接收报告的电脑 IP**。板型、进程状态、发送脚本版本及旧版维护步骤集中在 [Jetson 开发板联调](../../scripts/dev/jetson/README.md#到现场先核对)。
+
 ```http
 POST http://<电脑局域网IPv4>:8780/api/fish/reports
 Content-Type: application/json
