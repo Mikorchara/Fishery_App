@@ -1,6 +1,7 @@
 """Static display metadata, never a source of handlers or execution permission."""
 
 from dataclasses import asdict, dataclass
+from ..business_tools.active_events import ACTIVE_EVENTS
 from ..business_tools.current_water_quality import CURRENT_WATER_QUALITY
 from ..business_tools.fishery_knowledge import SEARCH_FISHERY_KNOWLEDGE
 from ..business_tools.registry import WATER_QUALITY_SCORE
@@ -38,6 +39,10 @@ CATALOG = (
         "独立本地实验：最近10/30/60分钟的窗口均值、质量、覆盖和缺口；不证明当前状态、持续低氧或恢复。"
         "NO_DATA表示无完整匹配窗口，PARTIAL保留实际限制；需维护者启动开关及用户授权。",
         parameter_summary="lookback_minutes: 10/30/60；metrics: 可选的水质指标列表"),
+    ToolCatalogEntry(ACTIVE_EVENTS, "活动事件查询",
+        "只读查询活动、待核实与待复核事件",
+        "查询本轮绑定的监测来源与事件状态。若已授权设备报告，也可查询外观异常、行为待复核及报告更新中断。"
+        "事件带来源与时间，无符合条件的事件不代表无风险。"),
 )
 
 

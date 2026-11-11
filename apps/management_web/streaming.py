@@ -5,11 +5,13 @@ from apps.ai_backend.assistant_events import AssistantEventChannel
 from apps.ai_backend.assistant_activity import safe_code
 from apps.ai_backend.model_gateway import GatewayError
 from apps.ai_backend.execution import TERMINAL
+from apps.ai_service.business_tools.active_events import ACTIVE_EVENTS
 
 
 def stream_response(prepared,handle,execute,epoch):
     """The caller has already claimed the handle exactly once, before headers/I/O."""
-    channel=AssistantEventChannel(handle,epoch)
+    channel=AssistantEventChannel(handle,epoch,
+        allow_preview=ACTIVE_EVENTS not in prepared.policy.exposed_tools)
     try:
         handle._event_channel=channel
         decision=prepared.execution

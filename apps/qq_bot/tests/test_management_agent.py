@@ -1,4 +1,4 @@
-"""Four-tool QQ Web Agent: real SDK classes with memory HTTP and new SQLite."""
+"""QQ Web Agent: real SDK classes with memory HTTP and new SQLite."""
 import json
 import unittest
 import httpx
@@ -58,13 +58,14 @@ class ManagementAgentTests(unittest.TestCase):
         return AsyncOpenAI(api_key='fictional',base_url=runtime.base_url,max_retries=0,
             http_client=httpx.AsyncClient(transport=httpx.MockTransport(model),trust_env=False,follow_redirects=False))
 
-    def test_all_four_tools_use_existing_handlers_receipts_and_natural_history(self):
+    def test_all_five_tools_use_existing_handlers_receipts_and_natural_history(self):
         self.compose()
         before={name:(self.root/'instance'/name).read_bytes() for name in ('knowledge.sqlite3','monitoring.sqlite3')}
         cases=(('get_current_water_quality',{},'SIMULATOR'),
                ('get_water_quality_history',{'lookback_minutes':10},'历史窗口'),
                ('search_fishery_knowledge',{'query':'溶解氧'},'项目知识'),
-               ('score_current_water_quality',{},'实验评分'))
+               ('score_current_water_quality',{},'实验评分'),
+               ('get_active_events',{},'事件查询'))
         for name,args,note in cases:
             self.plan=((name,args),)
             self.general_text='这是根据本轮已取得资料给出的简洁答复。'
@@ -73,12 +74,51 @@ class ManagementAgentTests(unittest.TestCase):
             self.assertIn(note,self.posts[-1]['content'])
             self.assertEqual(self.host.turns[-1]['tool_executions'],1)
             self.assertEqual(self.host.turns[-1]['source_kinds'],[name])
-        self.assertEqual(len(self.http),8)
-        self.assertEqual(len(self.posts),4)
+        self.assertEqual(len(self.http),10)
+        self.assertEqual(len(self.posts),5)
         for name,bytes_before in before.items():self.assertEqual((self.root/'instance'/name).read_bytes(),bytes_before)
         for body in self.http:
             self.assertEqual(body['max_tokens'],4096)
             self.assertEqual([d['function']['name'] for d in body['tools']],list(TOOLS))
+
+    def test_current_event_question_requires_new_evidence(self):
+        self.compose(failure_feedback=True)
+        self.general_text='我确认没有任何异常。'
+        done=self.ask('请问现在发生什么事件了吗？')
+        self.assertEqual(done['code'],'ASSISTANT_SOURCE_REQUIREMENT_UNMET')
+        self.assertTrue(done['failure_notice']['api_accepted'])
+        self.assertIn('未取得事件查询结果',self.posts[-1]['content'])
+        self.assertEqual(self.host.store.counts()['turns'],0)
+
+    def test_device_mode_board_is_bound_to_approval_and_query(self):
+        from datetime import datetime, timezone
+        from types import SimpleNamespace
+        from apps.monitoring.repository import MonitoringRepository
+        from apps.monitoring.tests.test_device_events import DeviceEventTests
+        from apps.qq_bot.contracts import BotError
+        now=datetime.now(timezone.utc)
+        fixture=SimpleNamespace(now=now)
+        fixture.report=lambda *a, **kw:DeviceEventTests.report(fixture,*a,**kw)
+        repo=MonitoringRepository(self.root/'instance/monitoring.sqlite3',require_existing=True)
+        for device in ('board-1','other-board'):
+            report=DeviceEventTests.peak_report(fixture,1,appearance=True)
+            repo.import_device_report({**report,'device_id':device},received_at=now,inbox_cursor=1,now=now)
+        self.compose(event_board_device_id='board-1')
+        self.assertEqual(self.host.plan()['agent_event_board_device_id'],'board-1')
+        with self.assertRaisesRegex(BotError,'MONITORING_DEVICE_NOT_APPROVED'):
+            self.host.monitoring.active_event_snapshot('sim-pond-1',board_device_id='other-board')
+        self.plan=(('get_active_events',{}),)
+        self.general_text='设备出现外观检测信号，需要人工核查。'
+        done=self.ask('请问现在发生什么事件了吗？')
+        self.assertEqual(done['history_code'],'HISTORY_COMMITTED')
+        result=json.loads(next(row['content'] for row in self.http[-1]['messages'] if row['role']=='tool'))
+        self.assertEqual([source['device_id'] for source in result['sources']],['sim-pond-1','board-1'])
+        self.assertTrue(any(item['code']=='DEVICE_REPORT_APPEARANCE' for item in result['items']))
+        self.assertIn('设备报告',self.posts[-1]['content'])
+        self.assertNotIn('other-board',self.posts[-1]['content'])
+        self.host._event_board_device_id='other-board'
+        with self.assertRaisesRegex(BotError,'AGENT_EVENT_BOARD_NOT_APPROVED'):
+            self.host.check()
 
     def test_current_and_history_run_original_two_round_three_request_loop(self):
         self.compose()

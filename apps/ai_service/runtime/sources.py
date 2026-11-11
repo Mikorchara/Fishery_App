@@ -12,6 +12,8 @@ from apps.monitoring.water_contracts import Freshness, Quality, WaterQualityRead
 from apps.ai_backend.tool_conversation import ModelExecutionStep, ToolConversationResult, ToolExecutionStep
 from apps.ai_backend.tools.contracts import ToolStatus
 from apps.monitoring.history import MAX_HISTORY_ROWS, LOOKBACK_MINUTES
+from ..business_tools.active_events import (ACTIVE_EVENTS, MAX_ACTIVE_EVENT_CYCLES,
+    result_metadata as active_events_metadata)
 from ..business_tools.current_water_quality import CURRENT_WATER_QUALITY
 from ..business_tools.fishery_knowledge import SEARCH_FISHERY_KNOWLEDGE
 from ..business_tools.registry import WATER_QUALITY_SCORE
@@ -26,6 +28,7 @@ class SourceRequirement(str, Enum):
     CURRENT_SCORE_EVALUATION = "CURRENT_SCORE_EVALUATION"
     PROJECT_KNOWLEDGE_SEARCH = "PROJECT_KNOWLEDGE_SEARCH"
     HISTORICAL_WATER_QUERY = "HISTORICAL_WATER_QUERY"
+    ACTIVE_EVENTS_QUERY = "ACTIVE_EVENTS_QUERY"
 
 
 class TurnSource(str, Enum):
@@ -33,6 +36,11 @@ class TurnSource(str, Enum):
     CURRENT_TOOL_SCORE = "CURRENT_TOOL_SCORE"
     RETRIEVED_PROJECT_EVIDENCE = "RETRIEVED_PROJECT_EVIDENCE"
     HISTORICAL_WATER_OBSERVATIONS = "HISTORICAL_WATER_OBSERVATIONS"
+    ACTIVE_EVENT_SUMMARIES = "ACTIVE_EVENT_SUMMARIES"
+
+
+_ACTIVE_EVENT_STATUSES = {"OK": ToolStatus.OK, "NO_ACTIVE_EVENTS": ToolStatus.NO_MATCH,
+                          "NO_DATA": ToolStatus.NO_DATA}
 
 
 @dataclass(frozen=True)
@@ -62,6 +70,11 @@ class TurnSourceReceipt:
     history_range_end: str | None = None
     history_window_count: int = 0
     history_reliable_windows: tuple[tuple[str, int], ...] = ()
+    active_events_query_completed: bool = False
+    active_events_count: int = 0
+    active_events_source_count: int = 0
+    active_events_omitted_count: int = 0
+    active_events_status: str | None = None
 
     def __post_init__(self):
         object.__setattr__(self, "sources", frozenset(self.sources))
@@ -71,7 +84,8 @@ class TurnSourceReceipt:
                 or any(key not in _WATER_FIELDS for key in self.available_fields)
                 or any(type(value) is not bool for value in (
                     self.observation_query_completed, self.score_evaluation_completed,
-                    self.project_search_completed, self.history_query_completed))
+                    self.project_search_completed, self.history_query_completed,
+                    self.active_events_query_completed))
                 or type(self.evidence_count) is not int or not 0 <= self.evidence_count <= 3):
             raise ValueError("invalid source receipt")
         if (type(self.history_window_count) is not int or not 0 <= self.history_window_count <= MAX_HISTORY_ROWS
@@ -94,6 +108,28 @@ class TurnSourceReceipt:
                 or self.history_window_count or self.history_reliable_windows
                 or TurnSource.HISTORICAL_WATER_OBSERVATIONS in self.sources):
             raise ValueError("historical receipt requires completed query")
+        if (any(type(value) is not int or value < 0 for value in (self.active_events_count,
+                self.active_events_source_count, self.active_events_omitted_count))
+                or self.active_events_count > MAX_ACTIVE_EVENT_CYCLES
+                or self.active_events_omitted_count > self.active_events_count):
+            raise ValueError("invalid active events receipt")
+        if self.active_events_query_completed:
+            expected_sources = (frozenset({TurnSource.ACTIVE_EVENT_SUMMARIES})
+                                if self.active_events_count else frozenset())
+            if (self.tool_name != ACTIVE_EVENTS or self.active_events_source_count not in (1, 2)
+                    or self.active_events_status not in _ACTIVE_EVENT_STATUSES
+                    or self.tool_status != _ACTIVE_EVENT_STATUSES[self.active_events_status]
+                    or (self.active_events_count > 0) != (self.tool_status == ToolStatus.OK)
+                    or self.sources != expected_sources or not isinstance(self.evaluated_at, str)
+                    or self.available_fields or self.quality is not None or self.freshness is not None
+                    or self.observed_at is not None or self.evidence_count
+                    or any((self.observation_query_completed, self.score_evaluation_completed,
+                            self.project_search_completed, self.history_query_completed))):
+                raise ValueError("invalid active events receipt")
+            parse_time(self.evaluated_at)
+        elif (self.active_events_count or self.active_events_source_count or self.active_events_omitted_count
+                or self.active_events_status is not None or TurnSource.ACTIVE_EVENT_SUMMARIES in self.sources):
+            raise ValueError("active events receipt requires completed query")
 
     @property
     def has_observation(self) -> bool:
@@ -133,6 +169,10 @@ class TurnSourceReceipt:
                 history_window_count=self.history_window_count,
                 history_reliable_windows=dict(self.history_reliable_windows),
                 has_historical_observations=self.has_historical_observations)
+        if self.tool_name == ACTIVE_EVENTS:
+            result.update(active_events_query_completed=self.active_events_query_completed,
+                active_events_count=self.active_events_count, active_events_source_count=self.active_events_source_count,
+                active_events_omitted_count=self.active_events_omitted_count, active_events_status=self.active_events_status)
         return result
 
 
@@ -214,7 +254,8 @@ def _receipt_from_step(run: ToolConversationResult, step: ToolExecutionStep) -> 
     model = next((item for item in run.steps if isinstance(item, ModelExecutionStep)
                   and item.request_index == step.model_request_index and item.seq < step.seq), None)
     if (tool is None or model is None or model.result.outcome != "tool_calls"
-            or step.tool_name not in (CURRENT_WATER_QUALITY, WATER_QUALITY_SCORE, SEARCH_FISHERY_KNOWLEDGE, WATER_QUALITY_HISTORY)
+            or step.tool_name not in (CURRENT_WATER_QUALITY, WATER_QUALITY_SCORE, SEARCH_FISHERY_KNOWLEDGE,
+                                      WATER_QUALITY_HISTORY, ACTIVE_EVENTS)
             or tool.tool_name != step.tool_name or tool.tool_call_id != step.tool_call_id):
         return TurnSourceReceipt()
     empty = TurnSourceReceipt(tool_name=step.tool_name, tool_status=tool.status)
@@ -232,6 +273,12 @@ def _receipt_from_step(run: ToolConversationResult, step: ToolExecutionStep) -> 
             return empty
         sources = frozenset({TurnSource.HISTORICAL_WATER_OBSERVATIONS}) if any(
             count for _, count in metadata["history_reliable_windows"]) else frozenset()
+        return TurnSourceReceipt(sources=sources, tool_name=step.tool_name, tool_status=tool.status, **metadata)
+    if step.tool_name == ACTIVE_EVENTS:
+        metadata = active_events_metadata(payload) if step.handler_started and model.request_started else None
+        if metadata is None:
+            return empty
+        sources = frozenset({TurnSource.ACTIVE_EVENT_SUMMARIES}) if metadata["active_events_count"] else frozenset()
         return TurnSourceReceipt(sources=sources, tool_name=step.tool_name, tool_status=tool.status, **metadata)
     if step.tool_name == SEARCH_FISHERY_KNOWLEDGE:
         items, count = payload.get("evidence"), payload.get("result_count")
@@ -353,6 +400,8 @@ def requirement_satisfied(requirement: SourceRequirement, receipt: TurnSourceRec
         return receipt.score_evaluation_completed
     if requirement == SourceRequirement.PROJECT_KNOWLEDGE_SEARCH:
         return receipt.project_search_completed
+    if requirement == SourceRequirement.ACTIVE_EVENTS_QUERY:
+        return receipt.active_events_query_completed
     return receipt.history_query_completed
 
 

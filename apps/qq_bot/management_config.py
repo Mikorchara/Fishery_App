@@ -160,11 +160,19 @@ def check_request(path, *, offline=False, device_report_device_id=None):
     source = read_json(request.inputs.monitoring_config)
     from apps.ai_service.channel_management_continuous import CONTRACT as CONTINUOUS_CONTRACT
     from apps.ai_service.channel_management_agent import CONTRACT as AGENT_CONTRACT
-    selected_access,selected_ai,*_=inputs_snapshot(request.inputs)
-    tools=next(g.tools for g in selected_ai.grants if g.group_id==request.inputs.group_id)
+    from apps.ai_service.business_tools.active_events import ACTIVE_EVENTS
+    _,selected_ai,source_config,grant,_=inputs_snapshot(request.inputs)
+    tools=grant.tools
+    board_device_id=None
+    if request.web_agent and request.ai_enabled and ACTIVE_EVENTS in tools and device_report_device_id is not None:
+        from .contracts import identifier
+        board_device_id=identifier(device_report_device_id)
+        if board_device_id in source_config.devices:
+            raise BotError('DEVICE_EVENT_SOURCE_CONFLICT')
     return request, dict(code='MANAGEMENT_QQ_CHECKED_APPROVAL_REQUIRED', contract=AGENT_CONTRACT if request.web_agent else CONTINUOUS_CONTRACT if request.continuous else CONTRACT,
         enabled=request.enabled, ai_enabled=request.ai_enabled, provider=profile.service_id, model=profile.model, preset=PRESET,
         agent_mode=request.agent_mode,tools=list(tools),max_model_requests_per_turn=3 if request.web_agent else 2,
+        **({'agent_event_board_device_id':board_device_id} if request.web_agent else {}),
         scope_sha256=request.scope_sha256, data_root=source['data_root'], instance_id=source['instance_id'],
         device_id=next(g.device_id for g in inputs_snapshot(request.inputs)[0].groups if g.group_id == request.inputs.group_id),
         group_ref=_hash(request.inputs.group_id)[:12], member_refs=[_hash(m)[:12] for m in request.members],
@@ -172,7 +180,7 @@ def check_request(path, *, offline=False, device_report_device_id=None):
         max_model_requests=None if request.continuous else request.limits.max_turns*2, output_tokens_per_request=request.output_tokens,
         seconds_per_turn=90, retries=0, offline=offline, credential_checked=False,
         database_opened=False, network_requests=0,
-        risk=(CONTINUOUS_RISK+('本轮选用的项目知识、历史统计及必要上下文可能披露给Qwen和QQ；'
+        risk=(CONTINUOUS_RISK+('本轮选用的项目知识、历史统计、事件摘要及必要上下文可能披露给Qwen和批准的QQ群；'
               '最多2次只读工具、3次模型请求，不是专业保证。' if request.web_agent else '') if request.continuous else RISK),
         event_notifications=check_event_recipient(request,device_report_device_id))
 

@@ -4,6 +4,7 @@ import unicodedata
 
 from .channel_chat_presentation import _time, STATES, LABELS
 from .hybrid_presentation import HybridPresentation
+from .business_tools.active_events import ACTIVE_EVENTS
 from .business_tools.current_water_quality import CURRENT_WATER_QUALITY
 from .business_tools.water_quality_history import WATER_QUALITY_HISTORY
 from .business_tools.fishery_knowledge import SEARCH_FISHERY_KNOWLEDGE
@@ -11,6 +12,32 @@ from .business_tools.water_quality_score import WATER_QUALITY_SCORE
 
 CONTRACT = 'management-qq-web-agent-reply@1'
 MAX_REPLY_CHARS = 1500
+_EVENT_LOOKUP_CLAIM = re.compile(
+    r'(?:已经|已)(?:成功)?(?:查询|读取|查到|检索)(?:了)?(?:本轮|当前|实时|现在|现场|鱼塘)?(?:的)?'
+    r'(?:(?:正在|还在)发生的|活跃|活动|异常)?(?:事件|告警|异常)'
+)
+
+
+def _event_note(payload, receipt):
+    summaries = []
+    for source in payload['sources']:
+        label = 'SIMULATOR' if source['source_kind'] == 'simulator' else '设备报告'
+        counts = f"活动 {source['active_count']} 条、待核实 {source['uncertain_count']} 条、待复核 {source['review_count']} 条"
+        observations = source['observations']
+        coverage = '、'.join(('水质' if item['channel'] == 'water' else '视觉') +
+            (f" {_time(item['observed_at'])}（{STATES[item['freshness']]}）" if item['observed_at'] else ' 尚无观测')
+            for item in observations)
+        summaries.append(f"{label} · {source['device_id']}：{counts}；观测 {coverage}。")
+    note = f'事件查询 · 评估 {_time(receipt.evaluated_at)}：' + ''.join(summaries)
+    if receipt.active_events_status == 'NO_DATA':
+        note += '没有可用观测，无法判断当前状态。'
+    elif receipt.active_events_status == 'NO_ACTIVE_EVENTS':
+        note += '已查询范围内未查到符合条件的事件。'
+    else:
+        note += '检测信号需人工核查。'
+    if receipt.active_events_omitted_count:
+        note += f'另有 {receipt.active_events_omitted_count} 条未展开。'
+    return note
 
 
 def source_notes(steps, receipts):
@@ -40,6 +67,8 @@ def source_notes(steps, receipts):
         elif receipt.tool_name==WATER_QUALITY_HISTORY:
             note='历史窗口（SIMULATOR）：'+_time(receipt.history_range_start)+' 至 '+_time(receipt.history_range_end)
             note+='；'+str(receipt.history_window_count)+'个窗口；'+payload['status']+'；历史不代表当前。'
+        elif receipt.tool_name == ACTIVE_EVENTS:
+            note = _event_note(payload, receipt)
         else:
             note='项目知识：'+str(receipt.evidence_count)+'条背景证据'
             if not receipt.has_project_evidence:note+='（无合格命中）'
@@ -57,6 +86,7 @@ def _execution_claim_error(text, receipts):
     current=any(r.observation_query_completed for r in receipts)
     history=any(r.history_query_completed for r in receipts)
     knowledge=any(r.project_search_completed for r in receipts)
+    events=any(r.active_events_query_completed for r in receipts)
     for part in re.split(r'[。！？!?；;，,\n]|但是|然而|不过|但',normalized):
         clause=re.sub(r'\s+','',part)
         if (clause.endswith(('吗','么','呢')) or clause.startswith(('如果','假设','假如','若','例如','是否','你是想问'))
@@ -64,6 +94,10 @@ def _execution_claim_error(text, receipts):
             continue
         if re.search(r'(?:已|已经)(?:成功)?(?:开启|启动|关闭|停止|控制|调节|删除|修改|确认事件|完成处置|执行操作)',clause):
             return 'AGENT_UNSUPPORTED_OPERATION_CLAIM'
+        if _EVENT_LOOKUP_CLAIM.search(clause):
+            if not events:
+                return 'AGENT_EVENT_SOURCE_MISSING'
+            clause = _EVENT_LOOKUP_CLAIM.sub('', clause)
         if not current and re.search(r'(?:我|本助手|系统|本轮)(?:已经|已)(?:查询|读取|检测|采样)(?:了)?(?:现场|当前|实时|鱼塘|水质|传感器)|(?:已|已经)(?:查询|读取)(?:了)?(?:当前|实时|现场)',clause):
             return 'AGENT_CURRENT_SOURCE_MISSING'
         if not history and re.search(r'(?:已|已经)(?:查询|读取|统计)(?:了)?(?:历史|过去\d|最近\d)',clause):
@@ -90,6 +124,7 @@ def present(result):
             'AGENT_INVALID_TEXT':'模型答复包含无法显示的字符，未展示正文。',
             'AGENT_CURRENT_SOURCE_MISSING':'本轮没有取得现场查询依据，不能将这段回答作为当前水质结论。可发送 /当前水质直接查询。',
             'AGENT_HISTORY_SOURCE_MISSING':'本轮没有执行历史查询，未展示声称已经查询历史的答复。',
+            'AGENT_EVENT_SOURCE_MISSING':'本轮没有取得事件查询依据，无法确认当前事件。',
             'AGENT_KNOWLEDGE_SOURCE_MISSING':'本轮没有检索项目资料，未展示声称已检索的答复。',
             'AGENT_UNSUPPORTED_OPERATION_CLAIM':'当前工具只有只读权限，没有执行设备控制、删除或配置修改。',
             'AGENT_REPLY_TOO_LONG':'答复超过QQ单条消息长度，请缩小问题范围；没有自动重新推理。'}

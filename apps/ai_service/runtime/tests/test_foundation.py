@@ -1,9 +1,11 @@
 """Frozen business contracts and deterministic old/new differential. No Provider I/O."""
 from dataclasses import asdict, replace
+from datetime import datetime
 import importlib
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -18,7 +20,7 @@ from apps.ai_backend.tools import ToolDefinition, ToolRegistry
 from apps.ai_backend.tools.policy import ToolPolicy, ToolPolicyError
 from apps.ai_backend.tests.support import ScriptedGateway
 from apps.ai_service.runtime import assistant, sources, activity
-from apps.ai_service.business_tools import current_water_quality, fishery_knowledge
+from apps.ai_service.business_tools import active_events, current_water_quality, fishery_knowledge
 from apps.ai_service.business_tools.registry import WATER_QUALITY_SCORE
 from apps.ai_service.runtime.policy import UserToolPolicyStore
 
@@ -58,7 +60,7 @@ class FoundationTests(unittest.TestCase):
         self.profile = assistant.assistant_profile(QWEN)
         self.runtime = ProfileRegistry([self.profile], CredentialStore(process_env={
             self.profile.credential_ref:'fictional-backend-key'})).snapshot(self.profile.profile_id)
-        self.traces = JsonlTraceSink(self.root/'trace.jsonl',tool_names=(WATER,KNOWLEDGE))
+        self.traces = JsonlTraceSink(self.root/'trace.jsonl',tool_names=(WATER,KNOWLEDGE,active_events.ACTIVE_EVENTS))
         self.called = []
 
     def registry(self, water=None, knowledge=None):
@@ -72,10 +74,11 @@ class FoundationTests(unittest.TestCase):
             ToolDefinition(fishery_knowledge.KNOWLEDGE_DEFINITION,get_knowledge,fishery_knowledge.validate_arguments)))
 
     def send(self, responses, *, registry=None, requirement=sources.SourceRequirement.AUTO,
-             mode=ToolExecutionMode.BOUNDED_MULTI_ROUND, history=(), handle=None, traces=None):
+             mode=ToolExecutionMode.BOUNDED_MULTI_ROUND, history=(), handle=None, traces=None,
+             tool_names=(WATER,KNOWLEDGE)):
         gateway = ScriptedGateway(responses)
         coordinator = ToolCallingService(gateway, registry or self.registry(), traces or self.traces,
-            policy=ToolPolicy('assistant',True,(WATER,KNOWLEDGE)),execution_mode=mode)
+            policy=ToolPolicy('assistant',True,tool_names),execution_mode=mode)
         handle = handle or execution.RequestHandle(summarize_tool=activity.tool_summary)
         handle.start()
         with execution.request_scope(handle):
@@ -117,6 +120,52 @@ class FoundationTests(unittest.TestCase):
             self.assertTrue(result.source_receipt.project_search_completed)
             self.assertEqual(result.source_receipt.has_project_evidence,hit)
             self.assertFalse(result.source_receipt.observation_query_completed)
+
+    def test_event_query_completion_sources_and_public_activity(self):
+        name = active_events.ACTIVE_EVENTS
+        for status, observed, hit in (("NO_DATA", False, False), ("NO_ACTIVE_EVENTS", True, False), ("OK", True, True)):
+            with self.subTest(status=status):
+                observation = dict(observed_at=STAMP if observed else None,
+                    quality="valid" if observed else "missing", freshness="fresh" if observed else "unknown",
+                    connectivity="online" if observed else "never_received")
+                source = dict(source_kind="simulator", device_id="fictional-private-device",
+                    observations=[dict(observation, channel=channel) for channel in ("water", "visual")])
+                cycles = [dict(channel="water", code="OXYGEN_LOW", lifecycle_state="ACTIVE",
+                    severity="warning", occurred_at=STAMP, last_observed_at=STAMP,
+                    current_data_quality={"freshness": "fresh"}, description="fictional-raw-event-text")] if hit else []
+                monitoring = SimpleNamespace(active_event_snapshot=lambda *_a, **_kw: (
+                    datetime.fromisoformat(STAMP), [(source, cycles)]))
+                payload = active_events.active_events_payload(monitoring, source["device_id"])
+                registry = ToolRegistry((ToolDefinition(active_events.ACTIVE_EVENTS_DEFINITION, lambda: payload),))
+                result, _ = self.send([call(name), final()], registry=registry, tool_names=(name,),
+                    requirement=sources.SourceRequirement.ACTIVE_EVENTS_QUERY)
+                self.assertEqual(result.status, Status.COMPLETED)
+                receipt = result.source_receipt
+                self.assertTrue(receipt.active_events_query_completed)
+                self.assertEqual(receipt.active_events_status, status)
+                self.assertEqual(receipt.active_events_count, int(hit))
+                self.assertEqual(receipt.sources, {sources.TurnSource.ACTIVE_EVENT_SUMMARIES} if hit else set())
+                self.assertFalse(receipt.observation_query_completed)
+                self.assertFalse(receipt.history_query_completed)
+                summary = result.to_dict()["activity"]["steps"][1]
+                self.assertEqual(summary["display_name"], "活动事件查询")
+                self.assertEqual(summary["evaluated_at"], STAMP)
+                public = json.dumps(result.to_dict(), ensure_ascii=False)
+                self.assertNotIn("fictional-private-device", public)
+                self.assertNotIn("fictional-raw-event-text", public)
+                self.assertNotIn("OXYGEN_LOW", public)
+
+    def test_malformed_event_tool_payload_cannot_satisfy_source_gate(self):
+        name = active_events.ACTIVE_EVENTS
+        malformed = {"status": "OK", "query_completed": True, "items": []}
+        registry = ToolRegistry((ToolDefinition(active_events.ACTIVE_EVENTS_DEFINITION, lambda: malformed),))
+        result, handle = self.send([call(name), final()], registry=registry, tool_names=(name,),
+            requirement=sources.SourceRequirement.ACTIVE_EVENTS_QUERY)
+        self.assertEqual(result.error_code, "ASSISTANT_SOURCE_REQUIREMENT_UNMET")
+        self.assertEqual(handle.state, "FAILED")
+        self.assertEqual(result.final_text, "")
+        self.assertFalse(result.source_receipt.active_events_query_completed)
+        self.assertFalse(result.source_receipt.sources)
 
     def test_invalid_arguments_never_run_handler_followup_receipt_or_commit(self):
         for args in ('{"device_id":"private-fixture-value"}','{"query":"wrong"}'):

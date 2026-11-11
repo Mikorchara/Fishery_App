@@ -42,9 +42,9 @@ class ChannelAuthorization:
 
     def __post_init__(self):
         from .channel_management_agent import AgentChannelBudget
-        from .score_execution import SCORE_TOOL_NAMES
+        from .active_event_execution import ACTIVE_EVENT_TOOL_NAMES
         permitted=(type(self.tools) is tuple and bool(self.tools) and len(set(self.tools))==len(self.tools)
-                   and all(name in SCORE_TOOL_NAMES for name in self.tools)) if type(self.budget) is AgentChannelBudget else self.tools == (CURRENT_WATER_QUALITY,)
+                   and all(name in ACTIVE_EVENT_TOOL_NAMES for name in self.tools)) if type(self.budget) is AgentChannelBudget else self.tools == (CURRENT_WATER_QUALITY,)
         if (not permitted or not isinstance(self.budget,ChannelBudget)
                 or not callable(self.check) or not all(isinstance(v,str) and v for v in (
                     self.instance_id,self.device_id,self.binding_revision,self.permission_revision,self.preset_id))):

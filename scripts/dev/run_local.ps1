@@ -17,7 +17,9 @@
     [switch]$Detach,
     [switch]$DialogErrors,
     [string]$DemoVideo,
-    [switch]$ScoreTrial
+    [switch]$ScoreTrial,
+    [switch]$EventTrial,
+    [switch]$EventBoardReports
 )
 $ErrorActionPreference = 'Stop'
 try {
@@ -31,7 +33,7 @@ if ($Detach) {
     # Keep only the two service consoles visible. No elevated execution/policy bypass.
     $detachedArgs = @('-NoLogo','-NoProfile','-File',('"{0}"' -f $PSCommandPath),
         '-DialogErrors','-Scenario',$Scenario,'-Port',"$Port",'-Seed',"$Seed")
-    foreach ($name in @('Demo','ShowTerminals','InteractiveScenario','OpenBrowser','NoAssistant','NoStreaming','NoMultiRound','NoHistory','UserData','ScoreTrial','AutoDeviceReports')) {
+    foreach ($name in @('Demo','ShowTerminals','InteractiveScenario','OpenBrowser','NoAssistant','NoStreaming','NoMultiRound','NoHistory','UserData','ScoreTrial','EventTrial','EventBoardReports','AutoDeviceReports')) {
         if (Get-Variable -Name $name -ValueOnly) { $detachedArgs += ('-' + $name) }
     }
     if ($DataRoot) { $detachedArgs += @('-DataRoot',('"{0}"' -f $DataRoot)) }
@@ -59,6 +61,8 @@ if ($InteractiveScenario) { $launchArgs += '--interactive-scenario' }
 if ($OpenBrowser) { $launchArgs += '--open-browser' }
 if ($DemoVideo) { $launchArgs += @('--demo-video',$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DemoVideo)) }
 if ($ScoreTrial) { $launchArgs += '--score-trial' }
+if ($EventTrial) { $launchArgs += '--event-trial' }
+if ($EventBoardReports) { $launchArgs += '--event-board-reports' }
 # Approved Qwen unified trial follows History/transport switches in the supervisor.
 # Foreground supervisor owns only its two children; no Provider call on startup.
 $launchArgs+=@('--simulation-mode',$SimulationMode)

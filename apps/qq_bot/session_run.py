@@ -37,7 +37,7 @@ class SessionRun:
     def _inputs_snapshot(self,inputs,monitoring=None):
         return inputs_snapshot(inputs,monitoring,expected_budget=self.channel_budget)
 
-    def _initialize(self,inputs,directory,*,async_client_factory,limits,members,clock,monotonic):
+    def _initialize(self,inputs,directory,*,async_client_factory,limits,members,clock,monotonic,event_board_device_id=None):
         """Shared run mechanics; public constructors own their distinct authorization gates."""
         self.clock=clock or (lambda:datetime.now(timezone.utc));self.now=monotonic
         self.inputs,self.directory=inputs,local_path(directory)
@@ -49,7 +49,7 @@ class SessionRun:
                 or any(identifier(m)!=m or m not in group.members or m not in grant.members for m in selected)):
             raise BotError('RUN_MEMBERS_NOT_APPROVED')
         self.members=selected;self.device_id=grant.device_id
-        self.monitoring=InstanceMonitoring(source,clock=self.clock)
+        self.monitoring=InstanceMonitoring(source,clock=self.clock,event_board_device_id=event_board_device_id)
         self._prepare_sources(source)
         self.bindings=self._inputs_snapshot(inputs,self.monitoring)[-1]
         self.access=replace(access,groups=(replace(group,members=selected),))

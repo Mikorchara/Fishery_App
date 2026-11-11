@@ -1,15 +1,17 @@
 import {el,button,rows} from './components.js';
 
 const labels={get_current_water_quality:'当前水质',search_fishery_knowledge:'项目养殖知识',
-  get_water_quality_history:'历史水质（本地实验）',score_current_water_quality:'水质实验评分（非专业标准）'};
+  get_water_quality_history:'历史水质（本地实验）',score_current_water_quality:'水质实验评分（非专业标准）',
+  get_active_events:'查询当前事件（只读）'};
 
 function validatePolicy(value){
   if(!value||typeof value.epoch!=='string'||typeof value.revision!=='string'||typeof value.browser_token!=='string'||
     !['INHERITED_SHARED_POLICY','MANAGEMENT_OVERRIDE'].includes(value.source)||
-    !Array.isArray(value.selected_tools)||value.selected_tools.length>4||
+    !Array.isArray(value.selected_tools)||value.selected_tools.length>Object.keys(labels).length||
     !value.selected_tools.every(name=>Object.hasOwn(labels,name))||new Set(value.selected_tools).size!==value.selected_tools.length||
-    !Array.isArray(value.tools)||value.tools.length!==4||!value.tools.every(tool=>tool&&Object.hasOwn(labels,tool.name))||
-    new Set(value.tools.map(tool=>tool.name)).size!==4)throw new Error('INVALID_TOOL_POLICY_RESPONSE');
+    !Array.isArray(value.tools)||![4,5].includes(value.tools.length)||
+    !value.tools.every(tool=>tool&&Object.hasOwn(labels,tool.name))||
+    new Set(value.tools.map(tool=>tool.name)).size!==value.tools.length)throw new Error('INVALID_TOOL_POLICY_RESPONSE');
   return value;
 }
 
@@ -21,7 +23,9 @@ export function createToolPolicySettings(api,{onSaved=()=>{}}={}){
       el('p',{class:'muted',text:'授权、工具装配和模型发布分别校验。服务器启用Qwen三工具本地试用后，模型在已授权工具中自行选择；普通聊天不需要历史查询快捷操作。未启用该试用时，历史不会进入原两工具范围。'}),
       ...(config?[rows([['选择来源',config.source==='MANAGEMENT_OVERRIDE'?'管理端独立配置':'只读继承原有选择'],
         ['三工具本地试用',`Normal：${config.tool_trials?.normal_enabled?'已启用':'未启用'} · Streaming：${config.tool_trials?.streaming_enabled?'已启用':'未启用'}`],
-        ['评分独立试用',config.score_trial?.enabled?'已启用 · Qwen Normal / Streaming':'未启用 · 启动时增加 -ScoreTrial']]),
+        ['评分独立试用',config.score_trial?.enabled?'已启用 · Qwen Normal / Streaming':'未启用 · 启动时增加 -ScoreTrial'],
+        ...(config.active_event_trial?[['当前事件查询',!config.active_event_trial.enabled?'未启用 · 启动时增加 -EventTrial':
+          config.active_event_trial.board_reports?'已启用 · 当前选定设备及已绑定开发板':'已启用 · 当前选定设备']]:[])]),
       el('div',{class:'tool-policy-list',role:'group','aria-label':'允许 Assistant 使用的工具'},config.tools.map(tool=>el('label',{class:'tool-policy-option'},[
         el('input',{type:'checkbox',...(selected.has(tool.name)?{checked:'checked'}:{}),
           ...(busy||tool.compatibility_only||tool.assembled===false||(tool.trial_required&&!tool.trial_enabled)?{disabled:'disabled'}:{}),
@@ -29,6 +33,7 @@ export function createToolPolicySettings(api,{onSaved=()=>{}}={}){
             if(e.target.checked)selected.add(tool.name);else selected.delete(tool.name);}}),
         el('span',{text:labels[tool.name]||tool.name})])))]:[]),
       el('p',{class:'tool-policy-status',role:'status',text:message}),
+      ...(config?.active_event_trial?.enabled?[el('p',{class:'muted',text:'当前事件仅返回摘要。选中授权后，发送问题可能将事件类型、来源和时间提交给 Qwen。'})]:[]),
       el('p',{class:'muted',text:'实验评分由程序依据当前水质规则计算：溶解氧50%、水温25%、pH25%；缺测、无效、过期或上报中断时不给总分。仅供实验参考，不是疾病或养殖适宜性判断。'}),
       el('div',{class:'settings-actions'},[el('button',{class:'button primary',text:'保存 Tool 授权',
         ...(!config||busy?{disabled:'disabled'}:{}),onclick:()=>void save()}),

@@ -174,7 +174,6 @@ class MonitoringService:
         return result
 
     def events(self, *, device_id=None):
-        assessments = {}
         if device_id is None:
             events, current = self.repository.events(), None
         else:
@@ -184,7 +183,10 @@ class MonitoringService:
                 identifier(device_id)
                 if not self.repository.device_report_cursor(device_id):return []
             events, current = self.repository.capture_events(device_id)
-        now = self.clock()
+        return self._project_events(events, current, self.clock())
+
+    def _project_events(self, events, current, now):
+        assessments = {}
         result = []
         for event in events:
             if event.get("lifecycle_state") == "RESOLVED" or event.get("status") == "closed":
@@ -202,6 +204,46 @@ class MonitoringService:
             result.append(self.repository.event_service.project(event, assessments[key]))
         from .manual_end import project
         return project(project_families(result))
+
+    def active_event_snapshot(self, device_id, *, board_device_id=None):
+        """Bounded cycles for server-selected devices at one evaluation instant."""
+        from .device_events import FRESH_SECONDS, stamp
+        from .event_cycles import summarize_cycles
+
+        self._device(device_id)
+        scopes = [(device_id, "simulator", ("water", "visual"))]
+        if board_device_id is not None:
+            identifier(board_device_id)
+            if board_device_id in self.device_names:
+                raise ValueError("EVENT_BOARD_DEVICE_CONFLICT")
+            scopes.append((board_device_id, "device_report", ("visual",)))
+        snapshots = [(*scope, *self.repository.capture_events(scope[0])) for scope in scopes]
+        now = stamp(self.clock())
+        sources = []
+        for scope_device, source_kind, channels, events, current in snapshots:
+            # capture_events is bounded and consistent within each device. A
+            # live write after our timestamp cannot be described as current.
+            if any(stamp(row["received_at"]) > now for row in current.values()):
+                raise ValueError("EVENT_SNAPSHOT_CHANGED")
+            observations = []
+            for channel in channels:
+                row = current.get(channel)
+                observed_at = row["observed_at"] if row else None
+                if source_kind == "simulator":
+                    data_quality = self._assess(scope_device, channel, row, now).data_quality
+                    quality, freshness, connectivity = data_quality.quality, data_quality.freshness, data_quality.connectivity
+                else:
+                    if row and row["payload"].get("source_kind") != source_kind:
+                        raise ValueError("EVENT_BOARD_SOURCE_MISMATCH")
+                    age = (now-stamp(observed_at)).total_seconds() if observed_at else None
+                    quality, connectivity = ("unknown" if row else "missing"), "unknown"
+                    freshness = ("unknown" if age is None or age < 0 else "fresh" if age <= FRESH_SECONDS else "stale")
+                observations.append(dict(channel=channel, observed_at=observed_at, quality=quality,
+                    freshness=freshness, connectivity=connectivity))
+            filtered = [event for event in events if event.get("source_kind") == source_kind and event["channel"] in channels]
+            cycles = summarize_cycles(self._project_events(filtered, current, now))
+            sources.append((dict(source_kind=source_kind, device_id=scope_device, observations=observations), cycles))
+        return now, sources
 
     def preview_manual_end(self, event_id):
         return self.repository.manual_end_event(event_id,assessed=self.events)

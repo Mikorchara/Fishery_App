@@ -51,9 +51,10 @@ class ManagementLiveTests(unittest.TestCase):
             return original(store,*args,**kwargs)
         patch.object(CredentialStore,'resolve',memory_only).start()
 
-    def compose(self,approve=True,*,failure_feedback=False):
+    def compose(self,approve=True,*,failure_feedback=False,event_board_device_id=None):
         directory=self.root/'run';directory.mkdir()
-        self.host=ManagementRun(self.request,directory,async_client_factory=self.factory)
+        self.host=ManagementRun(self.request,directory,async_client_factory=self.factory,
+            event_board_device_id=event_board_device_id)
         self.addCleanup(self.host.close)
         if approve:self.host.approve(self.host.plan(),confirmed=True)
         if not approve:return

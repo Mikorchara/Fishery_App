@@ -20,12 +20,12 @@ class QQAIGrant:
     tools: tuple[str,...] = (CURRENT_WATER_QUALITY,)
 
     def __post_init__(self):
-        from apps.ai_service.score_execution import SCORE_TOOL_NAMES
+        from apps.ai_service.active_event_execution import ACTIVE_EVENT_TOOL_NAMES
         identifier(self.group_id);identifier(self.device_id)
         if (type(self.members) is not tuple or not 1<=len(self.members)<=64
                 or len(set(self.members))!=len(self.members) or type(self.tools) is not tuple
                 or not self.tools or len(set(self.tools))!=len(self.tools)
-                or any(name not in SCORE_TOOL_NAMES for name in self.tools)):
+                or any(name not in ACTIVE_EVENT_TOOL_NAMES for name in self.tools)):
             raise BotError('INVALID_QQ_AI_CONFIG')
         for member in self.members:identifier(member)
 

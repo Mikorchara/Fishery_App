@@ -75,8 +75,11 @@ def _safe_database(path):
 
 class InstanceMonitoring:
     """Only read methods are exposed. Frozen instance and device allowlist per run."""
-    def __init__(self, config, *, clock=None):
+    def __init__(self, config, *, clock=None, event_board_device_id=None):
         self.config = config
+        self._event_board_device_id = None if event_board_device_id is None else identifier(event_board_device_id)
+        if self._event_board_device_id in config.devices:
+            raise BotError('DEVICE_EVENT_SOURCE_CONFLICT')
         self.path = ManagementPaths.resolve(Path(__file__).parents[2], data_root=config.data_root).monitoring
         self.identity = _safe_database(self.path)
         try:
@@ -121,11 +124,18 @@ class InstanceMonitoring:
     def devices(self):
         return [d for d in self._service.devices() if d['id'] in self.config.devices]
 
+    def active_event_snapshot(self, device_id, *, board_device_id=None):
+        if board_device_id != self._event_board_device_id:
+            raise BotError('MONITORING_DEVICE_NOT_APPROVED')
+        return self._read(self._service.active_event_snapshot, device_id, board_device_id=board_device_id)
+
     @property
     def binding_revision(self):
         if _safe_database(self.path) != self.identity:
             raise BotError('MONITORING_DATABASE_REPLACED')
         value = [self.config.instance_id,str(self.path),self.config.devices,self.identity]
+        if self._event_board_device_id is not None:
+            value.append(self._event_board_device_id)
         return hashlib.sha256(json.dumps(value).encode()).hexdigest()
 
     def bind(self, device_id):

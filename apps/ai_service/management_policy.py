@@ -15,7 +15,9 @@ from apps.ai_backend.tools.policy import ToolPolicy, ToolPolicyError
 from .business_tools.registry import KNOWN_TOOL_NAMES
 from .business_tools.water_quality_history import WATER_QUALITY_HISTORY
 
-MANAGEMENT_TOOL_NAMES = (*KNOWN_TOOL_NAMES, WATER_QUALITY_HISTORY)
+from .business_tools.active_events import ACTIVE_EVENTS
+
+MANAGEMENT_TOOL_NAMES = (*KNOWN_TOOL_NAMES, WATER_QUALITY_HISTORY, ACTIVE_EVENTS)
 
 
 def _unique_object(pairs):

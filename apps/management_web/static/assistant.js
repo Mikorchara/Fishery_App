@@ -254,6 +254,8 @@ export function createAssistantWorkspace(api,options={}){
     if(s.configStale||binding()!==displayedBinding){s.configStale=true;
       s.status=unavailable();render();return;}
     const config=s.config,model=preset(),history=historyForRequest(s.turns);
+    if(config.active_event_board_reports&&execution?.tools?.includes('get_active_events')&&
+        !confirm('本轮可能将已绑定开发板的事件摘要发送给 Qwen。继续发送？'))return;
     const captured={device_id:s.device,preset_id:s.preset,revision:execution?.revision||model.revision,epoch:config.epoch,question,history};
     s.pending=true;s.stopRequested=false;s.cancellation=null;s.cancelUnknown=false;s.stopRejected=false;
     s.control=null;s.activity=null;s.status='Preparing';

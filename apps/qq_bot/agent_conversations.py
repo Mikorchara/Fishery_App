@@ -34,7 +34,7 @@ class AgentConversationStore(ConversationStore):
         flags=kwargs.get('source_flags')
         general=flags==('general','model_knowledge','NO_OBSERVATION')
         tools=(type(flags) is tuple and 2<=len(flags)<=3 and flags[0]=='agent'
-               and len(set(flags))==len(flags) and set(flags[1:])<={'current','history','knowledge','score'})
+               and len(set(flags))==len(flags) and set(flags[1:])<={'current','history','knowledge','score','events'})
         if type(snapshot) is not HybridHistorySnapshot or not (general or tools):
             raise GatewayError('INVALID_AGENT_HISTORY_SOURCE')
         return super().commit(snapshot,**kwargs)

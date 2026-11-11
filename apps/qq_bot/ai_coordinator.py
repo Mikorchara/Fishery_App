@@ -111,7 +111,7 @@ class QQAICoordinator:
                                   '有什么功能', '怎么用', '帮助', '/帮助', 'help', '/help'):
                     if getattr(self.session_run,'web_agent',False):
                         return HybridHelp(text=('我是鳗鲡养殖智能体。可以交流一般养殖知识，并按问题查询当前水质、'
-                            '历史水质、项目知识库和实验水质评分（均只读）。工具由Agent选择，范围由本机授权固定。'
+                            '历史水质、项目知识库、实验水质评分和当前事件（均只读）。工具由Agent选择，范围由本机授权固定。'
                             '/当前水质 直接查询，不调用模型；/清空会话 只清除你的记忆。'
                             '其他自然语言可能产生模型费用。不能确认事件、删除数据、修改规则或控制设备。'))
                     return HybridHelp(text=('我是鳗鲡养殖智能体，可以交流养殖知识，并查询当前绑定设备的水质。'
@@ -122,7 +122,7 @@ class QQAICoordinator:
             if getattr(self.session_run,'web_agent',False) and intent.kind=='identity':
                 from .hybrid_intent import HybridIdentity
                 return HybridIdentity(text=('我是鳗鲡养殖智能体，可以交流一般养殖知识，并使用授权的当前水质、'
-                    '历史水质、项目知识和实验评分工具。只读取指定设备，不执行事件修改或设备控制。'
+                    '历史水质、项目知识、实验评分和当前事件。只读取授权设备，不执行事件修改或设备控制。'
                     '现场结论以本轮监测来源为准，模拟数据会明确标记；模型解释不是专业保证。'))
             return intent
         return classify(text, **kwargs)
@@ -325,7 +325,10 @@ class QQAICoordinator:
     @_validation_only
     def validate_failure_notice(self,plan,code):
         """An error is not an AI success or a substitute Source/Commit result."""
-        if code not in ('INVALID_TOOL_ARGUMENTS','ASSISTANT_RESPONSE_TRUNCATED','MODEL_RESPONSE_TRUNCATED'):
+        from apps.ai_service.runtime.sources import SourceRequirement
+        event_missing = (code == 'ASSISTANT_SOURCE_REQUIREMENT_UNMET'
+            and plan.prepared.request.source_requirement == SourceRequirement.ACTIVE_EVENTS_QUERY)
+        if not event_missing and code not in ('INVALID_TOOL_ARGUMENTS','ASSISTANT_RESPONSE_TRUNCATED','MODEL_RESPONSE_TRUNCATED'):
             raise BotError('AI_FAILURE_NOTICE_NOT_ALLOWED')
         with self._lock:
             task=self._tasks.get(plan.id)

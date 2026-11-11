@@ -66,10 +66,17 @@ def require_free_port(port):
 
 
 def commands(python, scenario, port, seed, *, assistant=True, streaming=True, multi_round=True, history=True,
-             data_root=None, user_data=False, demo_video=None, score_trial=False, simulation_mode='full',device_report_directory=None,device_report_device_id=None):
+             data_root=None, user_data=False, demo_video=None, score_trial=False, simulation_mode='full',device_report_directory=None,device_report_device_id=None,
+             event_trial=False, event_board_reports=False):
     from apps.device_reports.binding import validate_binding
     validate_binding(simulation_mode,device_report_directory,device_report_device_id)
     if score_trial and not assistant:raise RuntimeError('SCORE_TRIAL_REQUIRES_ASSISTANT')
+    if event_trial and not assistant:
+        raise RuntimeError('EVENT_TRIAL_REQUIRES_ASSISTANT')
+    if event_trial and (not multi_round or not streaming):
+        raise RuntimeError('EVENT_TRIAL_REQUIRES_NORMAL_AND_STREAMING')
+    if event_board_reports and (not event_trial or device_report_directory is None):
+        raise RuntimeError('EVENT_BOARD_REPORTS_REQUIRE_TRIAL_AND_DEVICE_BINDING')
     server = [python,'-m','apps.management_web','--port',str(port),'--enable-ingestion']
     if data_root is not None:
         server += ['--data-root',str(data_root)]
@@ -84,6 +91,8 @@ def commands(python, scenario, port, seed, *, assistant=True, streaming=True, mu
             (streaming,'--assistant-streaming-trial'),(history,'--assistant-history-trial')) if enabled]
         if history and (multi_round or streaming):server += ['--assistant-tools-trial']
         if score_trial:server+=['--assistant-score-trial']
+        if event_trial:server+=['--assistant-event-trial']
+        if event_board_reports:server+=['--assistant-event-board-reports']
     return (server,[python,'-m','apps.simulator','--scenario',scenario,'--server',f'http://127.0.0.1:{port}',
                     '--seed',str(seed),'--interval','10',*(['--mode',simulation_mode] if simulation_mode!='full' else [])])
 
@@ -104,7 +113,8 @@ def run_local(scenario='normal', port=8766, seed=42, *, root=ROOT, python=None,
               assistant=True, streaming=True, multi_round=True, history=True,
               data_root=None, user_data=False, show_terminals=False, open_browser=False, interactive_scenario=False,
               launch=subprocess.Popen, is_ready=ready, sleep=time.sleep, emit=print,
-              browse=webbrowser.open, demo_video=None, score_trial=False, simulation_mode='full',device_report_directory=None,device_report_device_id=None):
+              browse=webbrowser.open, demo_video=None, score_trial=False, simulation_mode='full',device_report_directory=None,device_report_device_id=None,
+             event_trial=False, event_board_reports=False):
     if interactive_scenario and not show_terminals:
         raise RuntimeError('LOCAL_SCENARIO_MENU_REQUIRES_TERMINALS')
     require_free_port(port)
@@ -117,7 +127,8 @@ def run_local(scenario='normal', port=8766, seed=42, *, root=ROOT, python=None,
     try:
         server,simulator = commands(python or sys.executable,scenario,port,seed,
             assistant=assistant,streaming=streaming,multi_round=multi_round,history=history,
-            data_root=data_root,user_data=user_data,demo_video=demo_video,score_trial=score_trial,simulation_mode=simulation_mode,device_report_directory=device_report_directory,device_report_device_id=device_report_device_id)
+            data_root=data_root,user_data=user_data,demo_video=demo_video,score_trial=score_trial,simulation_mode=simulation_mode,device_report_directory=device_report_directory,device_report_device_id=device_report_device_id,
+            event_trial=event_trial,event_board_reports=event_board_reports)
         options = dict(cwd=root,env=child_env)
         if show_terminals:
             if os.name != 'nt':
@@ -244,6 +255,8 @@ def main(argv=None):
         parser.add_argument('--no-'+name,action='store_true')
     parser.add_argument('--demo-video',type=Path)
     parser.add_argument('--score-trial',action='store_true')
+    parser.add_argument('--event-trial',action='store_true')
+    parser.add_argument('--event-board-reports',action='store_true')
     parser.add_argument('--simulation-mode',choices=('full','water-only'),default='full')
     parser.add_argument('--interactive-mode',action='store_true')
     parser.add_argument('--auto-device-reports',action='store_true')
@@ -287,7 +300,8 @@ def main(argv=None):
                 streaming=not args.no_streaming,multi_round=not args.no_multi_round,history=not args.no_history,
                 data_root=args.data_root,user_data=args.user_data,show_terminals=args.show_terminals,
                 open_browser=args.open_browser,interactive_scenario=args.interactive_scenario,
-                demo_video=args.demo_video,score_trial=args.score_trial,simulation_mode=args.simulation_mode,device_report_directory=args.device_report_directory,device_report_device_id=args.device_report_device_id)
+                demo_video=args.demo_video,score_trial=args.score_trial,simulation_mode=args.simulation_mode,device_report_directory=args.device_report_directory,device_report_device_id=args.device_report_device_id,
+                **({'event_trial':args.event_trial,'event_board_reports':args.event_board_reports} if args.event_trial or args.event_board_reports else {}))
     except (RuntimeError, OSError, ValueError, SecureFileError, KnowledgeError, ToolPolicyError) as error:
         code = str(error) if isinstance(error, (RuntimeError, ValueError)) else getattr(error, 'code', 'LOCAL_STORAGE_OR_PERMISSION_ERROR')
         print(code+' · '+ERROR_HELP.get(code, '启动已停止。请保留现有数据，核对演示实例或手动运行以查看错误。'),file=sys.stderr)

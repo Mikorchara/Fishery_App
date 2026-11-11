@@ -51,8 +51,8 @@ def _configuration_inputs(data_root, config_dir, *, app_id, group_id, members,co
         from apps.ai_service.channel_management_agent import AgentChannelBudget
         if agent_mode not in ('current','web'):raise BotError('INVALID_MANAGEMENT_AGENT_MODE')
         budget=(AgentChannelBudget if agent_mode=='web' else ContinuousChannelBudget)(output_tokens)
-    from apps.ai_service.score_execution import SCORE_TOOL_NAMES
-    tools=SCORE_TOOL_NAMES if agent_mode=='web' and continuous else ('get_current_water_quality',)
+    from apps.ai_service.channel_management_agent import TOOLS
+    tools=TOOLS if agent_mode=='web' and continuous else ('get_current_water_quality',)
     ai = QQAIConfig(ai_enabled,budget=budget,grants=(QQAIGrant(group_id,tuple(members),'sim-pond-1',tools),))
     return root, cfg, access, ai
 
@@ -74,7 +74,7 @@ def _write_configuration(root, cfg, *, access, ai, members, enable,continuous=Fa
         from apps.ai_service.business_tools.registry import bind_tools
         from apps.ai_service.runtime.policy import UserToolPolicyStore
         from apps.ai_service.management_policy import ManagementToolPolicyStore
-        registry=bind_tools(None,'sim-pond-1',None,include_history=True,include_score=True)
+        registry=bind_tools(None,'sim-pond-1',None,include_history=True,include_score=True,include_active_events=True)
         policy=ManagementToolPolicyStore(inputs.policy_directory,UserToolPolicyStore(inputs.policy_directory,registry))
         policy.save(ai.grants[0].tools,expected_revision=policy.snapshot().revision)
     options=ConversationOptions(trigger_mode='mention_ai',memory_enabled=True)
@@ -178,13 +178,17 @@ def run(request_path, directory, *, offline=False, seconds=None, stop_requested=
     with process_lock(locks/('bot-'+key+'.lock')):
         try:
             from .demo_runtime import provider_factory
-            host=ManagementRun(request,directory,async_client_factory=provider_factory if offline else None)
+            host=ManagementRun(request,directory,async_client_factory=provider_factory if offline else None,
+                event_board_device_id=summary.get('agent_event_board_device_id'))
             if summary.get('event_notifications'):
                 if device_report_device_id is not None:host.enable_device_events(device_report_device_id)
                 host.enable_event_notifications(request.event_recipient_file)
             plan=host.plan(); digest=_hash(plan)[:12]
             emit_status('MANAGEMENT_BOT_APPROVAL_REQUIRED',summary=summary,plan_sha256=_hash(plan))
             if not offline:
+                if plan.get('agent_event_board_device_id'):
+                    print('本次设备联调允许将绑定开发板 '+plan['agent_event_board_device_id']+
+                        ' 的事件摘要提交给 Qwen 并回复到当前批准的QQ群。',flush=True)
                 if plan.get('event_notifications'):
                     print('另行批准：向已验证好友（摘要 '+plan['event_notifications']['recipient_ref']+
                         '）主动发送本次指定设备的 SIMULATOR 事件、观测时间。新异常、升级、可靠消退各一次；'

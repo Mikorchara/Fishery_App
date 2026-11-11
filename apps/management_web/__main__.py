@@ -44,6 +44,9 @@ def main(argv=None):
     parser.add_argument("--assistant-history-trial", action="store_true", help="Qwen Normal history-only local trial; exact Scope/Policy required")
     parser.add_argument('--assistant-tools-trial',action='store_true',help='Qwen three-Tool local trial; also enable desired Normal/Streaming trial')
     parser.add_argument('--assistant-score-trial',action='store_true',help='Independent experimental score Scope; Policy and Send approval required')
+    parser.add_argument('--assistant-event-trial', action='store_true', help='Opt in to local read-only event Tool')
+    parser.add_argument('--assistant-event-board-reports', action='store_true',
+                        help='Allow the bound board event summaries in approved Qwen requests')
     args = parser.parse_args(argv)
     try:
         root = args.project_root.resolve() if args.project_root is not None else project_root()
@@ -70,6 +73,10 @@ def main(argv=None):
         try:demo_video=LocalDemoVideo.open(args.demo_video)
         except ValueError as error:parser.error(str(error))
     if args.assistant_score_trial and not args.enable_assistant:parser.error('SCORE_TRIAL_REQUIRES_ASSISTANT')
+    if args.assistant_event_trial and not args.enable_assistant:
+        parser.error('EVENT_TRIAL_REQUIRES_ASSISTANT')
+    if args.assistant_event_board_reports and (not args.assistant_event_trial or report_store is None):
+        parser.error('EVENT_BOARD_REPORTS_REQUIRE_TRIAL_AND_DEVICE_BINDING')
     if args.legacy_demo and args.enable_ingestion:
         parser.error("LEGACY_DEMO_CANNOT_INGEST")
     if args.legacy_demo and args.enable_assistant:
@@ -130,12 +137,17 @@ def main(argv=None):
         from apps.ai_backend.credentials import CredentialFileError
         from apps.ai_backend.tools.policy import ToolPolicyError
         from apps.ai_backend.model_gateway import GatewayError
+        event_options = {}
+        if args.assistant_event_trial:
+            from apps.ai_service.active_event_execution import ActiveEventTrialConfig
+            event_options['active_event_config'] = ActiveEventTrialConfig(enabled=True,
+                device_report_device_id=args.device_report_device_id if args.assistant_event_board_reports else None)
         try:
             ai_options["ai"] = ManagementAssistant.local(data_service, root,
                 multi_round_trial=args.assistant_multi_round_trial,
                 streaming_trial=args.assistant_streaming_trial,
                 history_trial=args.assistant_history_trial,unified_tools_trial=args.assistant_tools_trial,knowledge=knowledge,
-                **({'score_trial':True} if args.assistant_score_trial else {}),
+                **({'score_trial':True} if args.assistant_score_trial else {}), **event_options,
                 **({'data_paths':paths} if paths.data_root is not None else {}))
         except (CredentialLocationError, CredentialFileError, ToolPolicyError, GatewayError):
             parser.error("AI_CONFIGURATION_UNAVAILABLE")

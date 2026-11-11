@@ -2,12 +2,14 @@
 from apps.ai_backend.assistant_activity import _number, _timestamp, project_activity as _project_activity
 from apps.ai_backend.tool_argument_diagnostics import public_argument_diagnostic
 from .catalog import CATALOG, catalog_display
+from ..business_tools.active_events import ACTIVE_EVENTS, result_metadata as active_events_metadata
 from ..business_tools.registry import KNOWN_TOOL_NAMES, HISTORY_CANDIDATE_TOOL_NAMES
 from ..business_tools.water_quality_history import WATER_QUALITY_HISTORY, result_metadata as history_metadata
 
 def tool_summary(step):
     """Only labels and limited business metadata, never query, facts or evidence text."""
-    name = step.tool_name if step.tool_name in (*KNOWN_TOOL_NAMES, *HISTORY_CANDIDATE_TOOL_NAMES) else None
+    known_names = (*KNOWN_TOOL_NAMES, *HISTORY_CANDIDATE_TOOL_NAMES, ACTIVE_EVENTS)
+    name = step.tool_name if step.tool_name in known_names else None
     result = step.result
     summary = {"used_tool": step.handler_started, "tool_name": name,
                "tool_status": result.status.value if result else None,
@@ -19,6 +21,21 @@ def tool_summary(step):
         if diagnostic is not None:
             summary["argument_diagnostic"] = diagnostic
         payload = result.payload
+        if name == ACTIVE_EVENTS:
+            metadata = active_events_metadata(payload) if step.handler_started else None
+            if metadata is not None:
+                count = metadata["active_events_count"]
+                source_count = metadata["active_events_source_count"]
+                omitted = metadata["active_events_omitted_count"]
+                if metadata["active_events_status"] == "NO_DATA":
+                    detail = "暂无观测记录"
+                elif count:
+                    detail = f"{count} 条符合条件的事件，省略 {omitted} 条明细" if omitted else f"{count} 条符合条件的事件"
+                else:
+                    detail = "暂无符合条件的事件"
+                summary.update(evaluated_at=metadata["evaluated_at"],
+                    display_summary=f"活动事件查询 · {source_count} 个来源 · {detail}")
+            return summary
         if name == WATER_QUALITY_HISTORY:
             metadata = history_metadata(payload) if step.handler_started else None
             if metadata is not None:

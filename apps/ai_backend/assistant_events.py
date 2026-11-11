@@ -12,8 +12,9 @@ class AssistantEventChannel:
     MAX_PREVIEWS = 128
     MAX_PREVIEW_BYTES = 16384
 
-    def __init__(self, handle, epoch):
+    def __init__(self, handle, epoch, *, allow_preview=True):
         self.handle, self.epoch = handle, epoch
+        self._allow_preview = allow_preview
         self._condition = threading.Condition()
         self._queue = deque()
         self._sequence = self._previews = 0
@@ -52,7 +53,7 @@ class AssistantEventChannel:
             "activity": deepcopy(activity), "error_code": info.get("error_code")})
 
     def preview(self, text, secret):
-        if not isinstance(text, str) or not text or self._last_request_index is None:
+        if not self._allow_preview or not isinstance(text, str) or not text or self._last_request_index is None:
             return
         now = time.monotonic()
         if self._previews >= self.MAX_PREVIEWS or self._previews and now - self._last_preview_at < 0.05:

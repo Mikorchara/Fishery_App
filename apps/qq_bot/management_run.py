@@ -39,10 +39,15 @@ class ManagementRun(HybridRun):
     channel_budget=CHANNEL_BUDGET
     quota_feedback=True
 
-    def __init__(self, request, directory, *, async_client_factory=None, clock=None, monotonic=None):
+    def __init__(self, request, directory, *, async_client_factory=None, clock=None, monotonic=None,
+                 event_board_device_id=None):
         import time
         self.request, self.permit = request, None
         self.web_agent = request.web_agent
+        if event_board_device_id is not None and not self.web_agent:
+            raise BotError('AGENT_EVENT_BOARD_NOT_APPROVED')
+        self._event_board_device_id = event_board_device_id
+        self._approved_event_board_device_id = None
         if request.continuous:
             from apps.ai_service.channel_management_continuous import ContinuousChannelBudget
             from apps.ai_service.channel_management_agent import AgentChannelBudget
@@ -54,7 +59,8 @@ class ManagementRun(HybridRun):
         self.device_event_device_id=None
         self._issuer = LivePermitIssuer(self.check)
         kwargs = dict(async_client_factory=async_client_factory, limits=request.limits, members=request.members,
-                      clock=clock, monotonic=monotonic or time.monotonic)
+                      clock=clock, monotonic=monotonic or time.monotonic,
+                      event_board_device_id=event_board_device_id)
         # Inherits the existing initialization/ledger/store, not the Fake-only constructor.
         from apps.ai_service.channel_validation import ValidationBoundary
         self.boundary = ValidationBoundary(); self._issuer.boundary = self.boundary
@@ -116,7 +122,8 @@ class ManagementRun(HybridRun):
         return {**SessionRun.plan(self), 'contract': self.scope['contract'], 'offline': self.offline_test,
                 'request_sha256': self.request.digest, 'risk': CONTINUOUS_RISK if self.request.continuous else RISK,
                 **({'tools':list(self.config.grants[0].tools),
-                    'disclosure':'SIMULATOR_CURRENT_HISTORY_PROJECT_KNOWLEDGE_AND_NECESSARY_CONTEXT',
+                    'disclosure':'SIMULATOR_CURRENT_HISTORY_PROJECT_KNOWLEDGE_EVENT_SUMMARIES_AND_NECESSARY_CONTEXT',
+                    'agent_event_board_device_id':self._event_board_device_id,
                     'notice':'普通自然语言可能持续收费；最多2次只读Tool及3次模型请求。'} if self.web_agent else {}),
                 **({'event_notifications':self._notice_summary} if self._notice_summary else {})}
 
@@ -124,12 +131,15 @@ class ManagementRun(HybridRun):
         if not self.request.enabled: raise BotError('AI_DISABLED')
         self.request.check(); self._check_configuration()
         result = SessionRun.approve(self, plan, confirmed=confirmed)
+        self._approved_event_board_device_id = plan.get('agent_event_board_device_id')
         self.permit = self._issuer.issue(scope_sha256=self.scope_sha256, bindings_sha256=self._binding_digest,
             consent_id=self.ledger._id, lease_authority=self.ledger.authority, offline=self.offline_test)
         return result
 
     def _check_configuration(self):
         def verify():
+            if self.permit is not None and self._event_board_device_id != self._approved_event_board_device_id:
+                raise BotError('AGENT_EVENT_BOARD_NOT_APPROVED')
             current = load_request(self.request.path)
             if current.digest != self.request.digest: raise BotError('MANAGEMENT_REQUEST_CHANGED')
             SessionRun._check_configuration(self)
@@ -158,6 +168,8 @@ class ManagementRun(HybridRun):
             from apps.ai_service.channel_management_agent import AgentManagementTurn
             turn=AgentManagementTurn if self.web_agent else ContinuousManagementTurn
             extra['output_tokens']=self.request.output_tokens
+            if self.web_agent:
+                extra['event_board_device_id']=self._approved_event_board_device_id
         return turn(lease, permit=self.permit, authority=self.store.authority,
             conversation_epoch=self.base_service.epoch, options=self.options, snapshot=snapshot,
             validate=validate, claim=lambda: self.ledger.check_lease(lease),

@@ -40,6 +40,9 @@ from apps.ai_backend.tool_conversation import ToolExecutionMode
 
 from .score_execution import ScoreTrialConfig,load_score_config,resolve_score_trial,SCORE_TOOL_NAMES
 from .business_tools.registry import WATER_QUALITY_SCORE
+from .business_tools.active_events import ACTIVE_EVENTS
+from .active_event_execution import (ActiveEventTrialConfig, ACTIVE_EVENT_PROMPT,
+    ACTIVE_EVENT_TOOL_NAMES, requires_active_events, resolve_active_event_trial)
 
 PRESETS = ("dashscope-qwen38-flash-r1", "ollama-qwen35-4b-r1")
 
@@ -47,7 +50,11 @@ PRESETS = ("dashscope-qwen38-flash-r1", "ollama-qwen35-4b-r1")
 class ManagementAssistantService:
     """One epoch and frozen device/policy/mode per turn; single-round by default."""
 
-    def __init__(self, monitoring, *, credentials, traces, policy_directory, gateway_factory=OpenAICompatibleAdapter, execution_config=None, streaming_config=None, history_config=None, unified_config=None, knowledge=None, offline_channel_provider=None, channel_trial=None, _monitoring_only=False, scoring_config=None, _channel_agent=False):
+    def __init__(self, monitoring, *, credentials, traces, policy_directory, gateway_factory=OpenAICompatibleAdapter, execution_config=None, streaming_config=None, history_config=None, unified_config=None, knowledge=None, offline_channel_provider=None, channel_trial=None, _monitoring_only=False, scoring_config=None, _channel_agent=False, active_event_config=None):
+        self._active_event_config = ActiveEventTrialConfig() if active_event_config is None else active_event_config
+        if not isinstance(self._active_event_config, ActiveEventTrialConfig) or (
+                self._active_event_config.enabled and (knowledge is None or _channel_agent or channel_trial is not None)):
+            raise GatewayError('INVALID_ACTIVE_EVENT_TRIAL_CONFIG')
         self._channel_agent = _channel_agent
         if type(_channel_agent) is not bool:raise GatewayError('INVALID_CHANNEL_AGENT_COMPOSITION')
         if _channel_agent and (knowledge is None or getattr(getattr(knowledge,'repository',None),'read_only',False) is not True):
@@ -116,7 +123,7 @@ class ManagementAssistantService:
 
     @classmethod
     def local(cls, monitoring, project_root, *, multi_round_trial=False, streaming_trial=False, history_trial=False,
-              unified_tools_trial=False, knowledge=None, data_paths=None,score_trial=False):
+              unified_tools_trial=False, knowledge=None, data_paths=None,score_trial=False, active_event_config=None):
         from .runtime.locations import private_project_location
         from apps.management_paths import ManagementPaths
         root = Path(project_root).resolve()
@@ -124,14 +131,14 @@ class ManagementAssistantService:
         location = private_project_location(root)
         return cls(monitoring, knowledge=knowledge, credentials=CredentialStore(location.env_path, private_location=location),
             traces=JsonlTraceSink(paths.traces,
-                tool_names=SCORE_TOOL_NAMES),
+                tool_names=ACTIVE_EVENT_TOOL_NAMES),
             policy_directory=paths.policy_directory,
             execution_config=load_execution_config(enable_trial=multi_round_trial),
             streaming_config=load_streaming_config(enable_trial=streaming_trial),
             history_config=load_history_config(enable_trial=history_trial),
             unified_config=load_unified_tool_trials(normal=unified_tools_trial and multi_round_trial,
                                                    streaming=unified_tools_trial and streaming_trial),
-            scoring_config=load_score_config(enable_trial=score_trial))
+            scoring_config=load_score_config(enable_trial=score_trial), active_event_config=active_event_config)
 
     def availability(self):
         if self.knowledge is None:
@@ -139,17 +146,20 @@ class ManagementAssistantService:
         return {'connected': True, 'mode': 'normal', 'thinking': 'off', 'description': 'Assistant Runtime · Normal · 水质查询 / 项目知识（按 Policy 授权）'}
 
     def tool_authorization(self):
-        from .business_tools.registry import WATER_QUALITY_SCORE
         return {**self.management_policy.public(), 'epoch':self.epoch,
+            'active_event_trial': {'enabled': self._active_event_config.enabled,
+                                   'board_reports': self._active_event_config.device_report_device_id is not None},
             'tools':[{'name':name, 'assembled':name in self.history_registry.registered_names() or
-                         (name==WATER_QUALITY_SCORE and self.scoring_registry is not None),
+                         (name==WATER_QUALITY_SCORE and self.scoring_registry is not None) or
+                         (name==ACTIVE_EVENTS and self._active_event_config.enabled),
                       'history_query_only':name == WATER_QUALITY_HISTORY and not (
                           self._unified_config.normal_enabled or self._unified_config.streaming_enabled),
                       'candidate_only':name == WATER_QUALITY_HISTORY and self._history_config.status == 'candidate',
                       'compatibility_only':name==WATER_QUALITY_SCORE and not self._scoring_config.enabled,
-                      'trial_required':name==WATER_QUALITY_SCORE,
-                      'trial_enabled':self._scoring_config.enabled and self.scoring_registry is not None}
-                     for name in (*FORMAL_TOOL_NAMES, WATER_QUALITY_HISTORY, WATER_QUALITY_SCORE)],
+                      'trial_required':name in (WATER_QUALITY_SCORE, ACTIVE_EVENTS),
+                      'trial_enabled':(self._active_event_config.enabled if name==ACTIVE_EVENTS
+                                       else self._scoring_config.enabled and self.scoring_registry is not None)}
+                     for name in (*FORMAL_TOOL_NAMES, WATER_QUALITY_HISTORY, WATER_QUALITY_SCORE, ACTIVE_EVENTS)],
             'tool_trials':{'status':'local_experimental','normal_enabled':self._unified_config.normal_enabled,
                            'streaming_enabled':self._unified_config.streaming_enabled},
             'score_trial':{'enabled':self._scoring_config.enabled,'status':'local_experimental',
@@ -189,21 +199,30 @@ class ManagementAssistantService:
                 epoch=self.epoch,policy_revision=snapshot.revision),registry
         scoring=(not historical and not candidate and self._scoring_config.enabled and
                  WATER_QUALITY_SCORE in snapshot.selected_tools)
-        unified=(not scoring and not historical and not candidate and preset_id==UNIFIED_PRESET
-            and set(snapshot.selected_tools).intersection(HISTORY_CANDIDATE_TOOL_NAMES)!=set(FORMAL_TOOL_NAMES) and (
-                self._unified_config.streaming_enabled if transport==ToolModelTransport.STREAMING
-                else self._unified_config.normal_enabled))
+        active_events=(not historical and not candidate and preset_id==UNIFIED_PRESET
+                       and self._active_event_config.enabled and ACTIVE_EVENTS in snapshot.selected_tools)
+        unified_available = (self._unified_config.streaming_enabled if transport==ToolModelTransport.STREAMING
+                             else self._unified_config.normal_enabled)
+        unified=(not active_events and not scoring and not historical and not candidate and preset_id==UNIFIED_PRESET
+            and set(snapshot.selected_tools).intersection(HISTORY_CANDIDATE_TOOL_NAMES)!=set(FORMAL_TOOL_NAMES) and unified_available)
         registry = bind_tools(self.monitoring, device_id, self.knowledge,
-            formal=self.scoring_registry if scoring else self.history_registry if historical or candidate or unified else self.formal_registry,
-            include_history=historical or candidate or unified or scoring,include_score=scoring)
+            formal=None if active_events else self.scoring_registry if scoring else self.history_registry if historical or candidate or unified else self.formal_registry,
+            include_history=historical or candidate or unified or scoring or (active_events and unified_available),
+            include_score=scoring,
+            include_active_events=active_events,
+            board_device_id=self._active_event_config.device_report_device_id if active_events else None)
         selected = ToolPolicy("assistant", True, snapshot.selected_tools)
         bound = {definition.name for definition in registry.model_definitions()}
-        names = SCORE_TOOL_NAMES if scoring else HISTORY_CANDIDATE_TOOL_NAMES if candidate or unified else selected.exposed_tools
+        names = ACTIVE_EVENT_TOOL_NAMES if active_events else SCORE_TOOL_NAMES if scoring else (
+            HISTORY_CANDIDATE_TOOL_NAMES if candidate or unified else selected.exposed_tools)
         policy = ToolPolicy("assistant", selected.llm_tool_calling,
             tuple(name for name in names if name in bound and name in selected.exposed_tools
                   and (not historical or name == WATER_QUALITY_HISTORY)))
         profile = assistant_profile(preset_id)
-        if scoring:
+        if active_events:
+            execution=resolve_active_event_trial(self._active_event_config,profile,policy,registry,self.knowledge,
+                device_id=device_id,epoch=self.epoch,policy_revision=snapshot.revision,transport=transport)
+        elif scoring:
             execution=resolve_score_trial(self._scoring_config,profile,policy,registry,self.knowledge,
                 device_id=device_id,epoch=self.epoch,policy_revision=snapshot.revision,transport=transport)
         elif candidate:
@@ -255,6 +274,7 @@ class ManagementAssistantService:
                 'history_candidate':{'execution_profile':HISTORY_PROFILE, 'preset_id':PRESETS[0],
                     'enabled':self._history_config.enabled, 'tools':[WATER_QUALITY_HISTORY],**candidate.public()},
                 'policy_revision':snapshot.revision,
+                'active_event_board_reports':self._active_event_config.device_report_device_id is not None,
                 "device_id": device_id, "presets": presets, "default_preset_id": PRESETS[0],
                 "tools": presets[0]['execution']['tools'],
                 **{key:default_execution[key] for key in ('max_model_requests','max_tool_calls','max_tool_rounds')}}
@@ -275,6 +295,8 @@ class ManagementAssistantService:
             policy_snapshot=snapshot,execution_profile=execution_profile)
         if execution_profile == HISTORY_PROFILE:
             turn = replace(turn,source_requirement=SourceRequirement.HISTORICAL_WATER_QUERY)
+        if ACTIVE_EVENTS in policy.exposed_tools and requires_active_events(turn.question):
+            turn = replace(turn, source_requirement=SourceRequirement.ACTIVE_EVENTS_QUERY)
         if value.get("confirm_network") is not True:
             raise GatewayError("NETWORK_CONFIRMATION_REQUIRED")
         if value.get("revision") != execution.profile.revision:
@@ -375,7 +397,9 @@ class ManagementAssistantService:
                     assistant = AssistantService(coordinator, execution_mode=mode, history_projection=DEFAULT_HISTORY_PROJECTION,
                         turn_timeout_s=90, multi_round_prompt=(AGENT_PROMPT,AGENT_INSTRUCTION))
                 else:
-                    assistant = AssistantService(coordinator, execution_mode=mode, history_projection=DEFAULT_HISTORY_PROJECTION, single_round_prompt=prompt)
+                    assistant = AssistantService(coordinator, execution_mode=mode, history_projection=DEFAULT_HISTORY_PROJECTION,
+                        single_round_prompt=prompt,
+                        multi_round_prompt=ACTIVE_EVENT_PROMPT if ACTIVE_EVENTS in policy.exposed_tools else None)
                 result = assistant.send(turn, runtime)
                 if authorization is not None:
                     self._check_channel(authorization, prepared.policy_revision)
@@ -448,7 +472,9 @@ class ManagementAssistantService:
         from .channel_management_continuous import ContinuousManagementTurn
         return type(self._channel_trial) in (HybridQwenTurn, ManagementLiveTurn, ContinuousManagementTurn)
 
-    def _channel_source_requirement(self):
+    def _channel_source_requirement(self, question, tools):
+        if self._channel_agent and ACTIVE_EVENTS in tools and requires_active_events(question):
+            return SourceRequirement.ACTIVE_EVENTS_QUERY
         return SourceRequirement.AUTO if self._channel_agent or self._hybrid_channel() else SourceRequirement.CURRENT_OBSERVATION_QUERY
 
     def prepare_channel_turn(self, question, authorization, *, history_snapshot=None):
@@ -469,15 +495,16 @@ class ManagementAssistantService:
         decision = self._history_decision(profile, policy, registry, authorization, history_snapshot, snapshot.revision) if history_snapshot is not None else self._channel_trial.decision(profile, policy, registry, authorization, epoch=self.epoch, policy_revision=snapshot.revision) if self._channel_trial is not None else candidate_decision(profile, policy, registry, device_id=authorization.device_id, epoch=self.epoch, policy_revision=snapshot.revision, authorization=authorization)
         if history_snapshot is not None and question != history_snapshot.question:
             raise GatewayError('INVALID_CHANNEL_HISTORY')
-        request = AssistantRequest(authorization.preset_id, question, history_snapshot.history if history_snapshot else (), source_requirement=self._channel_source_requirement())
+        request = AssistantRequest(authorization.preset_id, question, history_snapshot.history if history_snapshot else (), source_requirement=self._channel_source_requirement(question, tools))
         return PreparedAssistantTurn(request, authorization.device_id, self.epoch, profile, policy, registry, decision, snapshot.revision, snapshot.source, authorization, history_snapshot)
 
     def _channel_registry(self, authorization, snapshot):
         if self._channel_agent:
             from .channel_management_agent import TOOLS
-            registry=bind_tools(self.monitoring,authorization.device_id,self.knowledge,
-                include_history=True,include_knowledge=True,include_score=True)
             names=tuple(name for name in TOOLS if name in authorization.tools and name in snapshot.selected_tools)
+            registry=bind_tools(self.monitoring,authorization.device_id,self.knowledge,
+                include_history=True,include_knowledge=True,include_score=True,include_active_events=ACTIVE_EVENTS in names,
+                board_device_id=self._channel_trial.event_board_device_id if ACTIVE_EVENTS in names and self._channel_trial else None)
         else:
             registry=bind_tools(self.monitoring,authorization.device_id,None,include_knowledge=False)
             names=tuple(name for name in authorization.tools if name==CURRENT_WATER_QUALITY and name in snapshot.selected_tools)
@@ -510,7 +537,7 @@ class ManagementAssistantService:
         self._check_channel(authorization, prepared.policy_revision)
         history = prepared.channel_history
         expected = self._history_decision(prepared.profile, prepared.policy, prepared.registry, authorization, history, prepared.policy_revision) if history is not None else self._channel_trial.decision(prepared.profile, prepared.policy, prepared.registry, authorization, epoch=self.epoch, policy_revision=prepared.policy_revision) if self._channel_trial is not None else candidate_decision(prepared.profile, prepared.policy, prepared.registry, device_id=prepared.device_id, epoch=self.epoch, policy_revision=prepared.policy_revision, authorization=authorization)
-        if prepared.execution != expected or prepared.profile != assistant_profile(authorization.preset_id) or prepared.device_id != authorization.device_id or (prepared.request.preset_id != authorization.preset_id) or (prepared.request.history if history is None else prepared.request.history != history.history or prepared.request.question != history.question) or (prepared.request.source_requirement != self._channel_source_requirement()) or (not self._channel_agent and prepared.registry.registered_names() != (CURRENT_WATER_QUALITY,)) or (prepared.policy.exposed_tools != prepared.registry.registered_names()):
+        if prepared.execution != expected or prepared.profile != assistant_profile(authorization.preset_id) or prepared.device_id != authorization.device_id or (prepared.request.preset_id != authorization.preset_id) or (prepared.request.history if history is None else prepared.request.history != history.history or prepared.request.question != history.question) or (prepared.request.source_requirement != self._channel_source_requirement(prepared.request.question, prepared.policy.exposed_tools)) or (not self._channel_agent and prepared.registry.registered_names() != (CURRENT_WATER_QUALITY,)) or (prepared.policy.exposed_tools != prepared.registry.registered_names()):
             raise GatewayError('INVALID_CHANNEL_CANDIDATE')
 
     @classmethod
