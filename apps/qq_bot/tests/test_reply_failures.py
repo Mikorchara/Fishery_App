@@ -74,7 +74,7 @@ class ReplyFailureTests(unittest.TestCase):
         self.assertEqual(done['state'],'FAILED');self.assertEqual(done['code'],'INVALID_TOOL_ARGUMENTS')
         self.assertFalse(done['api_accepted']);self.assertTrue(done['failure_notice']['api_accepted'])
         self.assertEqual((len(self.http),len(self.posts),self.host.store.counts()['turns']),(1,1,0))
-        self.assertIn('/当前水质',self.posts[0]['content'])
+        self.assertEqual(self.posts[0]['content'], '这次查询没能发起。你可以把想查的内容说得更具体一些，再问一次。')
         self.assertEqual(original(replay['raw'],**replay['kwargs'])[0],'DUPLICATE')
         self.assertEqual(self.host.ledger.report()['consumed_turns'],1)
         record=json.loads((self.host.directory/'turn-1.failure-notice.json').read_text())

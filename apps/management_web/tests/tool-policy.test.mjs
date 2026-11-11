@@ -6,12 +6,17 @@ import {Element} from './dom-fixture.mjs';
 import {fixture,tick} from './assistant-fixture.mjs';
 
 const WATER='get_current_water_quality',KNOWLEDGE='search_fishery_knowledge',HISTORY='get_water_quality_history';
+const ACTIVE_EVENTS='get_active_events';
 const walk=node=>[node,...node.children.flatMap(walk)];
-function settingsFixture(scoreTrial=false){
+function settingsFixture(scoreTrial=false,eventTrial=null){
   let config={epoch:'epoch',browser_token:'fictional',revision:'r1',source:'INHERITED_SHARED_POLICY',
     selected_tools:[WATER,KNOWLEDGE],tools:[{name:WATER},{name:KNOWLEDGE},{name:HISTORY,candidate_only:true},
       {name:'score_current_water_quality',compatibility_only:true}]};
   if(scoreTrial){config.score_trial={enabled:true};config.tools[3]={name:'score_current_water_quality',assembled:true,trial_required:true,trial_enabled:true};}
+  if(eventTrial!==null){
+    config.active_event_trial={enabled:eventTrial,board_reports:false};
+    config.tools.push({name:ACTIVE_EVENTS,assembled:eventTrial,trial_required:true,trial_enabled:eventTrial});
+  }
   const writes=[];let saved=0;
   const api={toolPolicy:async()=>structuredClone(config),saveToolPolicy:async value=>{
     writes.push(structuredClone(value));config={...config,selected_tools:value.selected_tools,revision:'r2',source:'MANAGEMENT_OVERRIDE'};return config;}};
@@ -62,6 +67,17 @@ test('score opt-in is selectable with an explicit trial, explains evidence limit
   walk(p.root).find(n=>n.textContent==='保存 Tool 授权').events.click();await tick();
   assert.deepEqual(p.writes[0].selected_tools,[WATER,KNOWLEDGE,'score_current_water_quality']);
   assert.equal(p.writes.length,1);assert.equal(p.saved,1);
+});
+
+test('current events can be selected and saved when the Web launcher enables them',async()=>{
+  const eventInput=p=>walk(p.root).find(n=>n.getAttribute('aria-label')==='查询当前事件（只读）');
+  const disabled=settingsFixture(false,false);await tick();
+  assert.equal(eventInput(disabled).getAttribute('disabled'),'disabled');
+  const enabled=settingsFixture(false,true);await tick();
+  assert.equal(eventInput(enabled).getAttribute('disabled'),null);
+  eventInput(enabled).events.change({target:{checked:true}});
+  walk(enabled.root).find(n=>n.textContent==='保存 Tool 授权').events.click();await tick();
+  assert.deepEqual(enabled.writes[0].selected_tools,[WATER,KNOWLEDGE,ACTIVE_EVENTS]);
 });
 
 test('policy save refreshes the send configuration, preserves history and draft, defers refresh in flight',async()=>{

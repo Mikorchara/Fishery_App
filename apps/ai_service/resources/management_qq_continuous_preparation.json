@@ -122,7 +122,7 @@
       "qq_bot/adapter.py": "1a6057beab784dee3e95861d27544c6615b1591444b1b877dfd4e52ede43fcf6",
       "qq_bot/ai_configuration.py": "f0c1c952bc9e2519977c214624655123fa6031e3a6f9d05700a3fac9ea3b1015",
       "qq_bot/ai_coordinator.py": "c0dbd8367b4c800986589165f70b950ae2d8efde5046f9e75d6b4a401bfa558d",
-      "qq_bot/ai_delivery.py": "1b00c120557dbd8d51570becf831177053c01d188c85f24dfb239c308651588e",
+      "qq_bot/ai_delivery.py": "f73e3f78040828bde8b02584ce8c6f9df6b43ed22e7c49a9954bd381a6b207e7",
       "qq_bot/ai_routing.py": "b4afa2c057cb8c7bf07dcc799196ba72e0379f773a0547e1c4dfe2ebcbd8b0ac",
       "qq_bot/ai_scheduler.py": "1f52d67e259f16095b7d7366966f067e973074b661b69b5bc5a4ac0b128b6818",
       "qq_bot/configuration.py": "6921d9967ba233d89ef1f6a72963ca9b9d27187fa3546093507a7ce1e7314666",
@@ -197,7 +197,7 @@
       "apps/qq_bot/management_configuration_bridge.py": "efa42c04e64d475ab94f4c8e337db668cd559dcf2832b70b399705c68d759c1c"
     }
   },
-  "scope_sha256": "1f0ea909a15f2db7a6c368f6a052a918da36d009642b7a6a893e7e3ed74855b9",
+  "scope_sha256": "063d2e4373c1eab3a7c3b8d63a7eda8a604bf8f2c469302fda6e8dc4c593a3aa",
   "old_approvals_accepted": false,
   "real_execution_requires": "CURRENT_PROCESS_CONTINUOUS_OPERATOR_CONSENT"
 }

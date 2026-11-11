@@ -17,7 +17,7 @@ from .transport import QQAPI
 
 FAILURE_MESSAGES={
     'ASSISTANT_SOURCE_REQUIREMENT_UNMET':'本轮未取得事件查询结果，暂时无法确认当前事件。',
-    'INVALID_TOOL_ARGUMENTS':'AI 本次未能正确发起查询，没有自动重试。请发送 /当前水质，直接获取系统读数，不调用模型。',
+    'INVALID_TOOL_ARGUMENTS':'这次查询没能发起。你可以把想查的内容说得更具体一些，再问一次。',
     'ASSISTANT_RESPONSE_TRUNCATED':'本次查询未完成：AI回答达到输出上限而被截断，未发送不完整的水质结论。没有自动重试。',
     'MODEL_RESPONSE_TRUNCATED':'本轮回答达到输出Token上限，未发送不完整正文。可以缩小问题范围，或在网页QQ设置中调整上限后重启Bot。没有自动重试。',
 }

@@ -26,11 +26,15 @@ class VideoScoreStartTests(unittest.TestCase):
             text=(ROOT/'scripts/dev'/name).read_text(encoding='utf8')
             self.assertIn('if not exist',text);self.assertIn('sample.mp4',text)
             self.assertIn('-DemoVideo',text);self.assertIn('-ScoreTrial',text)
+            self.assertIn('-EventTrial',text)
             self.assertIn('-InteractiveScenario',text);self.assertNotIn('-NoAssistant',text)
         for name in ('启动演示系统.cmd','启动QQ演示系统.cmd'):
             text=(ROOT/'scripts/dev'/name).read_text(encoding='utf8')
             self.assertNotIn('-DemoVideo',text);self.assertNotIn('-ScoreTrial',text)
-        self.assertIn('-NoAssistant',(ROOT/'scripts/dev/启动QQ演示系统.cmd').read_text(encoding='utf8'))
+        self.assertIn('-EventTrial',(ROOT/'scripts/dev/启动演示系统.cmd').read_text(encoding='utf8'))
+        qq_without_web_ai=(ROOT/'scripts/dev/启动QQ演示系统.cmd').read_text(encoding='utf8')
+        self.assertIn('-NoAssistant',qq_without_web_ai)
+        self.assertNotIn('-EventTrial',qq_without_web_ai)
 
     def test_stack_forwards_video_and_score_without_starting_services(self):
         with patch.object(stack,'launch_stack',return_value=0) as launch:
@@ -62,6 +66,8 @@ class VideoScoreStartTests(unittest.TestCase):
                 stack.preflight(with_bot=True,demo_video=self.root/'missing.mp4')
             with self.assertRaisesRegex(RuntimeError,'SCORE_TRIAL_REQUIRES_ASSISTANT'):
                 stack.preflight(with_bot=True,score_trial=True,no_assistant=True)
+            with self.assertRaisesRegex(RuntimeError,'EVENT_TRIAL_REQUIRES_ASSISTANT'):
+                stack.preflight(with_bot=True,event_trial=True,no_assistant=True)
 
     def test_powershell_parse_bom_and_detach_argument_relay(self):
         for name in ('run_local.ps1','Start-ManagementStack.ps1'):
@@ -73,5 +79,6 @@ class VideoScoreStartTests(unittest.TestCase):
             self.assertEqual(result.returncode,0,result.stderr)
         text=(ROOT/'scripts/dev/run_local.ps1').read_text(encoding='utf-8-sig')
         self.assertIn("'UserData','ScoreTrial'",text)
+        self.assertIn("'ScoreTrial','EventTrial','EventBoardReports'",text)
         self.assertIn("$detachedArgs += @('-DemoVideo'",text)
         self.assertIn('GetUnresolvedProviderPathFromPSPath($DemoVideo)',text)

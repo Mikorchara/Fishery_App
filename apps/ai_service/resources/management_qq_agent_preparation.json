@@ -27,8 +27,8 @@
       },
       "thinking": "off",
       "response_mode": "normal",
-      "prompt_id": "QQ_MANAGEMENT_WEB_AGENT@2",
-      "prompt_sha256": "4815bf10051d7446d3cef6b9ee27fb6cf84e832794ca86b50ab65e499a089d17",
+      "prompt_id": "QQ_MANAGEMENT_WEB_AGENT@3",
+      "prompt_sha256": "bb816200493845e566e599988bd26439a40e8eea5386b49e1dd897883e0170eb",
       "history_projection": "UNTRUSTED_TRANSCRIPT_V1",
       "history_version": "1",
       "tools": [
@@ -127,7 +127,7 @@
       "qq_bot/adapter.py": "1a6057beab784dee3e95861d27544c6615b1591444b1b877dfd4e52ede43fcf6",
       "qq_bot/ai_configuration.py": "f0c1c952bc9e2519977c214624655123fa6031e3a6f9d05700a3fac9ea3b1015",
       "qq_bot/ai_coordinator.py": "c0dbd8367b4c800986589165f70b950ae2d8efde5046f9e75d6b4a401bfa558d",
-      "qq_bot/ai_delivery.py": "1b00c120557dbd8d51570becf831177053c01d188c85f24dfb239c308651588e",
+      "qq_bot/ai_delivery.py": "f73e3f78040828bde8b02584ce8c6f9df6b43ed22e7c49a9954bd381a6b207e7",
       "qq_bot/ai_routing.py": "b4afa2c057cb8c7bf07dcc799196ba72e0379f773a0547e1c4dfe2ebcbd8b0ac",
       "qq_bot/ai_scheduler.py": "1f52d67e259f16095b7d7366966f067e973074b661b69b5bc5a4ac0b128b6818",
       "qq_bot/configuration.py": "6921d9967ba233d89ef1f6a72963ca9b9d27187fa3546093507a7ce1e7314666",
@@ -201,7 +201,7 @@
       "apps/ai_service/channel_natural_presentation.py": "cbdd8a6cf6dc7a7c4d268163d0ba9174b501b5b163d50b4246c9225141c69cfd",
       "apps/ai_service/qq_settings.py": "dd8924d191e0c73e10449a3f6461c5108ce6cb0140e1ce10b46f21237f5bfe0e",
       "apps/qq_bot/management_configuration_bridge.py": "efa42c04e64d475ab94f4c8e337db668cd559dcf2832b70b399705c68d759c1c",
-      "apps/ai_service/channel_management_agent.py": "0f9025677ee17949d354f76146dc340377ac4343acce5fc95baf78f478ca5bb2",
+      "apps/ai_service/channel_management_agent.py": "975d4e6bdc2989fdd7ef90e480a301fbe43f1f660776a45cdf7b892661ce5796",
       "apps/ai_service/channel_agent_presentation.py": "2dfc62f950f620afc51f82d2b75864f4ab992e20992ef09baac9edb94bf726f2",
       "apps/ai_service/runtime/assistant.py": "5011bec66ce933abd1e7435ac66fbef94b1dee0131d5689ac817cee61547cdd0",
       "apps/ai_service/runtime/sources.py": "3e8cfbd0526c044c4c76de187ac49cee82b0b3d89ec4e3ceacfb532910052f9a",
@@ -233,7 +233,7 @@
       "instance": "EXPLICIT_READ_ONLY_SAME_INSTANCE"
     }
   },
-  "scope_sha256": "8e2a4bc2a155113755be0110841b8d324faff8811ca0438f54990973a5b24990",
+  "scope_sha256": "7f4b0101a4930d0f5ff5079a3aa4189dd38c439f922eec35d3a236d4894e100b",
   "old_approvals_accepted": false,
   "real_execution_requires": "CURRENT_PROCESS_WEB_AGENT_OPERATOR_CONSENT"
 }

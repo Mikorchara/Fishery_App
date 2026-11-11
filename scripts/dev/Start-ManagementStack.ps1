@@ -3,7 +3,7 @@ param([ValidateSet('full','water-only')][string]$SimulationMode='full', [switch]
  [string]$DeviceReportDirectory, [string]$DeviceReportDeviceId, [string]$Request, [string]$DataRoot, [int]$Port=8766,
       [string]$Scenario='normal', [switch]$WithBot, [switch]$NoBot,
       [switch]$OfflineDemo, [switch]$Check, [int]$RunSeconds=0, [switch]$NoAssistant,
-      [switch]$InteractiveScenario, [switch]$OpenBrowser, [string]$DemoVideo, [switch]$ScoreTrial)
+      [switch]$InteractiveScenario, [switch]$OpenBrowser, [string]$DemoVideo, [switch]$ScoreTrial, [switch]$EventTrial)
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'management_stack_common.ps1')
@@ -23,6 +23,7 @@ if ($InteractiveScenario) { $taskArguments+='--interactive-scenario' }
 if ($OpenBrowser) { $taskArguments+='--open-browser' }
 if ($DemoVideo) { $taskArguments+=@('--demo-video',$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DemoVideo)) }
 if ($ScoreTrial) { $taskArguments+='--score-trial' }
+if ($EventTrial) { $taskArguments+='--event-trial' }
 $taskArguments+=@('--simulation-mode',$SimulationMode)
 if ($DeviceReportDirectory) { $taskArguments+=@('--device-report-directory',$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DeviceReportDirectory)) }
 if ($DeviceReportDeviceId) { $taskArguments+=@('--device-report-device-id',$DeviceReportDeviceId) }

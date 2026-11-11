@@ -36,7 +36,7 @@ class ManagementStackTests(unittest.TestCase):
         self.fail('owned stack condition timed out')
 
     def start(self,*,bot=True,only=False,seconds=70,quarantine=False,interactive=False,menu_input=None,demo_video=None,score_trial=False,
-              report_directory=None,report_device=None):
+              report_directory=None,report_device=None,event_trial=False):
         log=self.root/'controller.log'
         output=log.open('wb');self.addCleanup(output.close)
         command=[sys.executable,'-X','utf8','-I','-B','-u',str(ROOT/'scripts/dev/management_stack.py'),
@@ -45,8 +45,9 @@ class ManagementStackTests(unittest.TestCase):
         if report_directory is not None:command+=['--simulation-mode','water-only','--device-report-directory',str(report_directory),
                                                   '--device-report-device-id',report_device]
         if demo_video is not None:command+=['--demo-video',str(demo_video)]
-        if score_trial:
-            command.remove('--no-assistant');command+=['--score-trial']
+        if score_trial or event_trial:command.remove('--no-assistant')
+        if score_trial:command+=['--score-trial']
+        if event_trial:command+=['--event-trial']
         if interactive:command+=['--interactive-scenario']
         if bot:command+=['--with-bot']
         if only:command+=['--bot-only']
@@ -175,13 +176,13 @@ runpy.run_path(script,run_name='__main__')'''
             '"state": "EXITED"' in (directory/'controller.log').read_text())
         self.assertFalse(process_fixture.alive(pid))
 
-    def test_video_and_score_three_consoles_with_fake_bot_stop_independently(self):
+    def test_video_score_and_events_three_consoles_with_fake_bot_stop_independently(self):
         import urllib.request
         value=json.loads(self.request.read_text());value['limits']['seconds']=7200
         self.request.write_text(json.dumps(value))
         video=self.root/'sample.mp4';content=b'\x00\x00\x00\x18ftypisom'+b'fictional-video'*20
         video.write_bytes(content)
-        child,directory=self.start(demo_video=video,score_trial=True,seconds=None)
+        child,directory=self.start(demo_video=video,score_trial=True,event_trial=True,seconds=None)
         self.wait(lambda:self.status(directory,'bot').get('state')=='READY' or child.poll() is not None)
         self.assertIsNone(child.poll(),(directory/'controller.log').read_text())
         records=[self.status(directory,r) for r in ('web','simulator','bot')]
@@ -194,6 +195,9 @@ runpy.run_path(script,run_name='__main__')'''
             policy=json.load(response)
         self.assertTrue(policy['score_trial']['enabled'])
         self.assertIn('score_current_water_quality',[tool['name'] for tool in policy['tools']])
+        self.assertEqual(policy['active_event_trial'], {'enabled': True, 'board_reports': False})
+        event_tool=next(tool for tool in policy['tools'] if tool['name']=='get_active_events')
+        self.assertTrue(event_tool['assembled'] and event_tool['trial_enabled'])
         self.wait(lambda:(directory/'bot-run/turn-1.result.json').exists())
         turn=json.loads((directory/'bot-run/turn-1.result.json').read_text())
         self.assertTrue(turn['verified'])

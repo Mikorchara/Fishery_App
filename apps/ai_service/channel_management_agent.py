@@ -26,14 +26,14 @@ from .runtime.sources import TurnSourceReceipt
 from .channel_agent_presentation import present, CONTRACT as PRESENTATION_CONTRACT
 
 CONTRACT = 'management-qq-web-agent-run@1'
-PROMPT_ID = 'QQ_MANAGEMENT_WEB_AGENT@2'
+PROMPT_ID = 'QQ_MANAGEMENT_WEB_AGENT@3'
 _DEFINITIONS = (WATER_DEFINITION, KNOWLEDGE_DEFINITION, HISTORY_DEFINITION, SCORE_DEFINITION, ACTIVE_EVENTS_DEFINITION)
 TOOLS = tuple(definition.name for definition in _DEFINITIONS)
 INSTRUCTION = ACTIVE_EVENT_PROMPT[1] + (
     '你以鳗鲡养殖智能体的身份在QQ群交流，自然、直接地回答问题，可用简短分段。'
     '不要求JSON、固定报告或General/Water标签。普通概念和养殖解释可直接回答。'
     '当前读数、当前事件、历史统计、项目知识和实验评分各用对应可用工具；参数依其定义，设备由服务器固定。'
-    '当前水质、事件和评分工具参数为{}；历史工具只接受lookback_minutes(10/30/60)和可选metrics；'
+    'get_current_water_quality、get_active_events、score_current_water_quality 的参数对象均严格为 {}。例如查询当前事件时，调用 get_active_events，arguments 传 "{}"。这些工具不接收问题原文、设备 ID、时间范围或其他字段。历史水质工具只接受 lookback_minutes（10、30 或 60）和可选 metrics。'
     '知识工具只接受query，不接受路径、设备或权限。实验评分是程序计算的参考，不是专业标准。'
     '历史窗口统计和项目知识不能证明当前水质，若比较历史与现在应分别查询；'
     '评分工具已包含本轮当前观测，不必为同一评分重复查询当前水质。'

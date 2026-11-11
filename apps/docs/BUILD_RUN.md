@@ -57,7 +57,7 @@
 - **四个日常cmd统一使用 `outputs/qq-m3-real-test`**，以当前QQ三终端的数据为主。两终端显式指定此目录；三终端沿用 `outputs/qq-m3-real-config/request.json` 中同一绑定。水质、事件、知识库、设置和Web工具授权共用一份实例；QQ独立权限和凭据规则不变。目录缺失时拒绝启动，不自动初始化另一份数据。
 - `outputs/demo-instance`、旧 `%LOCALAPPDATA%\FisheryManagement` 和其他测试实例原样保留；四个日常入口不再选择它们，不混合或覆盖旧历史。`run_local.ps1 -Demo`、`--user-data` 和手动 `--data-root` 仍是显式选择其他实例的维护入口，不用于本机日常运行。运行日志、备份、测试夹具和私有密钥不属于第二份日常业务库。
 - 本地录像标为LOCAL VIDEO，与SIMULATOR水质/视觉、事件和时间独立；不做实时检测或NPU推理。
-- 两个视频入口显式启用Web实验评分。还须在设置勾选“水质实验评分”并确认本次模型发送。原无视频三终端关闭Web AI；QQ 网页保存的 Agent 配置包含当前水质、历史水质、项目知识、实验评分和当前事件五个只读工具，沿用原启动审批。已有 QQ 配置升级后在网页重新保存一次，无需填写新字段。
+- 两个视频入口启用 Web 实验评分和当前事件查询。`启动演示系统.cmd` 也启用当前事件查询。在设置里勾选相应工具并保存，发送时确认本次模型请求。无视频的三终端入口关闭 Web AI。QQ 网页保存的 Agent 配置包含当前水质、历史水质、项目知识、实验评分和当前事件五个只读工具，沿用原启动审批。已有 QQ 配置升级后在网页重新保存一次，无需填写新字段。
 - QQ群中真正@机器人，可问“什么是溶解氧？”、“现在水质怎么样？”、“那溶解氧呢？”。`/清空会话`只清自己的记忆。普通自然语言可能收费。
 - 展示时直接发送 `@机器人 /当前水质`、`@机器人 查询水质` 或 `@机器人 查询当前水质`，由系统直接查数据，不调用模型。只有这几个明确指令走直接查询；`/问AI 查询水质`仍调用模型。
 - 网页新配置使用持续模式，不设累计时长、轮数和费用停止；普通自然语言可能持续计费，需人工停止。旧有限配置不自动升级；在网页确认保存后重启。机制和错误码统一见[QQ专题](deep-dive/QQ_BOT.md)。
@@ -95,17 +95,17 @@
 
 若提示 `MANAGEMENT_SCOPE_REVIEW_REQUIRED`，按[代码指纹与恢复启动](deep-dive/QQ_BOT.md#代码指纹与恢复启动)核对版本并重新保存现有 QQ 设置，再运行预检和批准新进程。
 
-## Web AI 查询当前事件（可选）
+## Web AI 查询当前事件
 
-在项目根目录运行以下命令，沿用已有日常实例。需要视频可加 `-DemoVideo "$PWD\sample.mp4"`。
+用 `启动演示系统.cmd`、`启动视频演示系统.cmd` 或 `启动QQ视频演示系统.cmd` 重启后，进入「系统设置 → Assistant Tool 授权」，勾选「查询当前事件（只读）」并保存。已勾选时可直接用 Qwen 问「现在有什么异常？」。Normal 和 Streaming 都支持，发送问题并确认后才会调用模型。
+
+日常入口的 Web AI 查询网页选定设备的事件。如需让 Web AI 同时读取已绑定开发板的事件，请按[设备联调](#设备联调)保持接收器运行，并从项目根目录手动启动。
 
 ```powershell
-.\scripts\dev\run_local.ps1 -DataRoot "$PWD\outputs\qq-m3-real-test" -ShowTerminals -InteractiveScenario -OpenBrowser -ScoreTrial -EventTrial
+.\scripts\dev\run_local.ps1 -DataRoot "$PWD\outputs\qq-m3-real-test" -ShowTerminals -InteractiveScenario -OpenBrowser -ScoreTrial -EventTrial -SimulationMode water-only -AutoDeviceReports -EventBoardReports
 ```
 
-这项试用同时支持 Normal 和 Streaming，启动时保留两个模式。进入「系统设置 → Assistant Tool 授权」，勾选「查询当前事件（只读）」并保存。用 Qwen 发送「现在有什么异常？」。正常显示本轮事件来源和评估时间，手动发送才会调用模型。
-
-如需授权 Web AI 查询已绑定开发板的事件，在上述命令末尾加 `-SimulationMode water-only -AutoDeviceReports -EventBoardReports`，并按[设备联调](#设备联调)保持接收器运行。每次发送前会提示事件摘要可能提交给 Qwen。此开关只作用于 Web。
+需要视频可加 `-DemoVideo "$PWD\sample.mp4"`。发送前会提示事件摘要可能提交给 Qwen。
 
 ## 自动测试当前QQ Agent（可选，模型调用收费）
 
