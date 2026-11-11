@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+<title id="title">系统全景</title><desc id="desc">上半部分展示数据接收、事件记录和提醒，下半部分展示用户提问、助手按需查询和带来源回复。</desc>
+<defs>
+<marker id="a0" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M1,1 L10,6 L1,11" fill="none" stroke="#255ba9" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="a1" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M1,1 L10,6 L1,11" fill="none" stroke="#167166" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="a2" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M1,1 L10,6 L1,11" fill="none" stroke="#694a9e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="a3" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M1,1 L10,6 L1,11" fill="none" stroke="#405773" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+</defs>
+<g font-family="Microsoft YaHei, Noto Sans CJK SC, PingFang SC, sans-serif">
+<rect x="0" y="0" width="1600" height="900" rx="0" fill="#f3f7fc" stroke="none" stroke-width="1.5"/>
+<rect x="0" y="0" width="1600" height="9" rx="0" fill="#167166" stroke="none" stroke-width="1.5"/>
+<text x="56" y="46" font-size="20" fill="#167166" font-weight="700" text-anchor="start" letter-spacing="2">智慧渔业监测系统</text>
+<text x="1544" y="46" font-size="17" fill="#405773" font-weight="700" text-anchor="end" letter-spacing="2">详版  03 / 03</text>
+<text x="55" y="109" font-size="52" fill="#172b43" font-weight="700" text-anchor="start" letter-spacing="0">系统全景</text>
+<text x="57" y="151" font-size="24" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">同一批监测记录，可以看、可以问，也可以按规则发提醒</text>
+<rect x="56" y="180" width="5" height="19" rx="2" fill="#167166" stroke="none" stroke-width="1.5"/>
+<text x="70" y="197" font-size="22" fill="#167166" font-weight="700" text-anchor="start" letter-spacing="0">数据与事件流</text>
+<rect x="56" y="420" width="5" height="19" rx="2" fill="#694a9e" stroke="none" stroke-width="1.5"/>
+<text x="70" y="437" font-size="22" fill="#694a9e" font-weight="700" text-anchor="start" letter-spacing="0">AI 问答流</text>
+<rect x="56" y="217" width="385" height="147" rx="16" fill="#ffffff" stroke="#cad8e8" stroke-width="1.5"/>
+<rect x="57" y="232" width="4" height="117" rx="2" fill="#167166" stroke="none" stroke-width="1.5"/>
+<text x="80" y="258" font-size="29" fill="#172b43" font-weight="700" text-anchor="start" letter-spacing="0">两路数据上报</text>
+<text x="80" y="295" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">水温、pH 和溶解氧读数</text>
+<text x="80" y="326" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">开发板提供鱼群检测报告</text>
+<rect x="536" y="217" width="529" height="147" rx="16" fill="#ffffff" stroke="#cad8e8" stroke-width="1.5"/>
+<rect x="537" y="232" width="4" height="117" rx="2" fill="#255ba9" stroke="none" stroke-width="1.5"/>
+<text x="560" y="258" font-size="29" fill="#172b43" font-weight="700" text-anchor="start" letter-spacing="0">整理观测，登记事件</text>
+<text x="560" y="295" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">标记数据来源、时间和状态</text>
+<text x="560" y="326" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">保存历史，按规则登记异常</text>
+<rect x="1160" y="217" width="384" height="147" rx="16" fill="#ffffff" stroke="#cad8e8" stroke-width="1.5"/>
+<rect x="1161" y="232" width="4" height="117" rx="2" fill="#694a9e" stroke="none" stroke-width="1.5"/>
+<text x="1184" y="258" font-size="29" fill="#172b43" font-weight="700" text-anchor="start" letter-spacing="0">网页查看与 QQ 提醒</text>
+<text x="1184" y="295" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">网页看趋势、报告和事件</text>
+<text x="1184" y="326" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">符合条件时向已配对好友提醒</text>
+<polyline points="451,289 526,289" fill="none" stroke="#167166" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a1)"/>
+<polyline points="1075,289 1150,289" fill="none" stroke="#694a9e" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a2)"/>
+<rect x="56" y="461" width="385" height="147" rx="16" fill="#ffffff" stroke="#cad8e8" stroke-width="1.5"/>
+<rect x="57" y="476" width="4" height="117" rx="2" fill="#694a9e" stroke="none" stroke-width="1.5"/>
+<text x="80" y="502" font-size="29" fill="#172b43" font-weight="700" text-anchor="start" letter-spacing="0">用户主动提问</text>
+<text x="80" y="539" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">网页输入问题</text>
+<text x="80" y="570" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">或在 QQ 群 @机器人</text>
+<rect x="536" y="461" width="529" height="147" rx="16" fill="#ffffff" stroke="#cad8e8" stroke-width="1.5"/>
+<rect x="537" y="476" width="4" height="117" rx="2" fill="#255ba9" stroke="none" stroke-width="1.5"/>
+<text x="560" y="502" font-size="29" fill="#172b43" font-weight="700" text-anchor="start" letter-spacing="0">AI 按需查询</text>
+<text x="560" y="539" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">一般知识可以直接解释</text>
+<text x="560" y="570" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">涉及现场则查监测记录，也可查养殖资料</text>
+<rect x="1160" y="461" width="384" height="147" rx="16" fill="#ffffff" stroke="#cad8e8" stroke-width="1.5"/>
+<rect x="1161" y="476" width="4" height="117" rx="2" fill="#694a9e" stroke="none" stroke-width="1.5"/>
+<text x="1184" y="502" font-size="29" fill="#172b43" font-weight="700" text-anchor="start" letter-spacing="0">在原对话中答复</text>
+<text x="1184" y="539" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">有依据时给出结论和来源</text>
+<text x="1184" y="570" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">数据不足时说明哪些无法确认</text>
+<polyline points="451,535 526,535" fill="none" stroke="#694a9e" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a2)"/>
+<polyline points="1075,535 1150,535" fill="none" stroke="#694a9e" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a2)"/>
+<polyline points="796,374 796,451" fill="none" stroke="#255ba9" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#a0)" marker-end="url(#a0)"/>
+<text x="816" y="417" font-size="17" fill="#255ba9" font-weight="700" text-anchor="start" letter-spacing="0">查询水质、历史与事件记录</text>
+<rect x="56" y="674" width="1488" height="159" rx="16" fill="#e5edf7" stroke="none" stroke-width="1.5"/>
+<text x="81" y="719" font-size="27" fill="#255ba9" font-weight="700" text-anchor="start" letter-spacing="0">用一次低氧事件串起两条流程</text>
+<text x="81" y="762" font-size="23" fill="#172b43" font-weight="400" text-anchor="start" letter-spacing="0">系统发现溶解氧偏低 → 登记事件 → 网页可查，符合条件时发 QQ 私聊提醒</text>
+<text x="81" y="799" font-size="23" fill="#172b43" font-weight="400" text-anchor="start" letter-spacing="0">用户问“最近溶解氧怎么变？” → 助手查询历史 → 回答变化，并说明数据覆盖的时间</text>
+<text x="56" y="866" font-size="17" fill="#405773" font-weight="400">演示说明 · 水质读数由模拟器生成。设备联调时，鱼群检测报告由开发板上报。</text>
+</g></svg>

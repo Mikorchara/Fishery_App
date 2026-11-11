@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+<title id="title">AI 助手架构</title><desc id="desc">网页和授权 QQ 消息进入同一套问答流程。助手按需查询五类只读信息，说明数据来源与状态，并在原渠道回复。</desc>
+<defs>
+<marker id="a0" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M1,1 L10,6 L1,11" fill="none" stroke="#255ba9" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="a1" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M1,1 L10,6 L1,11" fill="none" stroke="#167166" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="a2" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M1,1 L10,6 L1,11" fill="none" stroke="#694a9e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="a3" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M1,1 L10,6 L1,11" fill="none" stroke="#405773" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+</defs>
+<g font-family="Microsoft YaHei, Noto Sans CJK SC, PingFang SC, sans-serif">
+<rect x="0" y="0" width="1600" height="900" rx="0" fill="#f3f7fc" stroke="none" stroke-width="1.5"/>
+<rect x="0" y="0" width="1600" height="9" rx="0" fill="#167166" stroke="none" stroke-width="1.5"/>
+<text x="56" y="46" font-size="20" fill="#167166" font-weight="700" text-anchor="start" letter-spacing="2">智慧渔业监测系统</text>
+<text x="1544" y="46" font-size="17" fill="#405773" font-weight="700" text-anchor="end" letter-spacing="2">详版  02 / 03</text>
+<text x="55" y="109" font-size="52" fill="#172b43" font-weight="700" text-anchor="start" letter-spacing="0">AI 助手架构</text>
+<text x="57" y="151" font-size="24" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">网页与 QQ 共用问答能力，各自管理权限与会话</text>
+<rect x="56" y="183" width="5" height="19" rx="2" fill="#694a9e" stroke="none" stroke-width="1.5"/>
+<text x="70" y="200" font-size="22" fill="#694a9e" font-weight="700" text-anchor="start" letter-spacing="0">用户入口</text>
+<rect x="470" y="183" width="5" height="19" rx="2" fill="#255ba9" stroke="none" stroke-width="1.5"/>
+<text x="484" y="200" font-size="22" fill="#255ba9" font-weight="700" text-anchor="start" letter-spacing="0">一次问答怎么完成</text>
+<rect x="1166" y="183" width="5" height="19" rx="2" fill="#167166" stroke="none" stroke-width="1.5"/>
+<text x="1180" y="200" font-size="22" fill="#167166" font-weight="700" text-anchor="start" letter-spacing="0">模型与可查询内容</text>
+<rect x="56" y="222" width="330" height="119" rx="16" fill="#ffffff" stroke="#cad8e8" stroke-width="1.5"/>
+<rect x="57" y="237" width="4" height="89" rx="2" fill="#694a9e" stroke="none" stroke-width="1.5"/>
+<text x="80" y="263" font-size="29" fill="#172b43" font-weight="700" text-anchor="start" letter-spacing="0">网页提问</text>
+<text x="80" y="300" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">确认后发送问题</text>
+<rect x="56" y="383" width="330" height="143" rx="16" fill="#ffffff" stroke="#cad8e8" stroke-width="1.5"/>
+<rect x="57" y="398" width="4" height="113" rx="2" fill="#694a9e" stroke="none" stroke-width="1.5"/>
+<text x="80" y="424" font-size="29" fill="#172b43" font-weight="700" text-anchor="start" letter-spacing="0">QQ群提问</text>
+<text x="80" y="461" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">授权成员 @机器人</text>
+<text x="80" y="492" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">自然语言交给助手</text>
+<rect x="56" y="558" width="330" height="114" rx="14" fill="#f1ebfb" stroke="none" stroke-width="1.5"/>
+<text x="79" y="599" font-size="26" fill="#694a9e" font-weight="700" text-anchor="start" letter-spacing="0">固定指令直接处理</text>
+<text x="79" y="631" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">问候、帮助、固定查询</text>
+<text x="79" y="658" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">和清空会话</text>
+<rect x="470" y="222" width="593" height="131" rx="16" fill="#ffffff" stroke="#cad8e8" stroke-width="1.5"/>
+<rect x="471" y="237" width="4" height="101" rx="2" fill="#255ba9" stroke="none" stroke-width="1.5"/>
+<text x="494" y="263" font-size="29" fill="#172b43" font-weight="700" text-anchor="start" letter-spacing="0">理解问题与确定查询范围</text>
+<text x="494" y="300" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">按权限确定设备和可用功能</text>
+<text x="494" y="331" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">结合近期对话理解追问</text>
+<rect x="470" y="393" width="593" height="131" rx="16" fill="#ffffff" stroke="#cad8e8" stroke-width="1.5"/>
+<rect x="471" y="408" width="4" height="101" rx="2" fill="#255ba9" stroke="none" stroke-width="1.5"/>
+<text x="494" y="434" font-size="29" fill="#172b43" font-weight="700" text-anchor="start" letter-spacing="0">按需要决定是否查询</text>
+<text x="494" y="471" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">一般知识可以直接解释</text>
+<text x="494" y="502" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">涉及现场状况或项目资料，先查相关记录</text>
+<rect x="470" y="566" width="593" height="131" rx="16" fill="#ffffff" stroke="#cad8e8" stroke-width="1.5"/>
+<rect x="471" y="581" width="4" height="101" rx="2" fill="#255ba9" stroke="none" stroke-width="1.5"/>
+<text x="494" y="607" font-size="29" fill="#172b43" font-weight="700" text-anchor="start" letter-spacing="0">根据结果组织回复</text>
+<text x="494" y="644" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">附上数据来源、观测时间和状态</text>
+<text x="494" y="675" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">数据过期、缺失或无法查询时说明限制</text>
+<rect x="1166" y="222" width="378" height="119" rx="16" fill="#ffffff" stroke="#cad8e8" stroke-width="1.5"/>
+<rect x="1167" y="237" width="4" height="89" rx="2" fill="#167166" stroke="none" stroke-width="1.5"/>
+<text x="1190" y="263" font-size="29" fill="#172b43" font-weight="700" text-anchor="start" letter-spacing="0">通义千问</text>
+<text x="1190" y="300" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">理解问题、组织自然语言回复</text>
+<rect x="1166" y="382" width="378" height="247" rx="16" fill="#ffffff" stroke="#cad8e8" stroke-width="1.5"/>
+<rect x="1167" y="397" width="4" height="217" rx="2" fill="#167166" stroke="none" stroke-width="1.5"/>
+<text x="1190" y="423" font-size="29" fill="#172b43" font-weight="700" text-anchor="start" letter-spacing="0">五项只读查询</text>
+<text x="1190" y="460" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">当前水质</text>
+<text x="1190" y="491" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">近 10 / 30 / 60 分钟的水质</text>
+<text x="1190" y="522" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">实验性水质评分</text>
+<text x="1190" y="553" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">当前异常事件</text>
+<text x="1190" y="584" font-size="22" fill="#405773" font-weight="400" text-anchor="start" letter-spacing="0">项目养殖资料</text>
+<polyline points="396,277 460,277" fill="none" stroke="#694a9e" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a2)"/>
+<polyline points="396,452 428,452 428,320 460,320" fill="none" stroke="#694a9e" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a2)"/>
+<polyline points="220,533 220,549" fill="none" stroke="#694a9e" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a2)"/>
+<polyline points="765,361 765,384" fill="none" stroke="#255ba9" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a0)"/>
+<polyline points="765,532 765,557" fill="none" stroke="#255ba9" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a0)"/>
+<polyline points="1073,425 1101,425 1101,277 1156,277" fill="none" stroke="#167166" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#a1)" marker-end="url(#a1)"/>
+<polyline points="1073,475 1156,475" fill="none" stroke="#167166" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#a1)" marker-end="url(#a1)"/>
+<polyline points="765,705 765,726" fill="none" stroke="#694a9e" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a2)"/>
+<rect x="470" y="735" width="593" height="53" rx="12" fill="#f1ebfb" stroke="none" stroke-width="1.5"/>
+<text x="766" y="769" font-size="23" fill="#694a9e" font-weight="700" text-anchor="middle" letter-spacing="0">原渠道回复  ·  网页普通或流式  /  QQ 群内回复</text>
+<rect x="56" y="809" width="1488" height="58" rx="12" fill="#e5edf7" stroke="none" stroke-width="1.5"/>
+<text x="78" y="846" font-size="20" fill="#255ba9" font-weight="700" text-anchor="start" letter-spacing="0">连续追问</text>
+<text x="251" y="846" font-size="21" fill="#172b43" font-weight="400" text-anchor="start" letter-spacing="0">成功回复后保留近期对话。追问当前水质或事件时，会重新查询记录。</text>
+</g></svg>
