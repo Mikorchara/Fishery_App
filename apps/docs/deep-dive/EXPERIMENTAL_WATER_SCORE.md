@@ -33,7 +33,7 @@ Management 已选择性同步 Prototype 人工认可的评分实现。`score_cur
 - 独立合同 `management-score-tool-trial@1`；算法 `management-water-score@1`，Source `management-water-score-source@1`。
 - 固定 Qwen、Normal／Streaming、原有有界工具循环，最多2 Tool／2轮／3次模型请求，仍受原配置预算与每次发送确认约束。
 - 固定资源默认 `enabled=false`，显式开关才启用 `local_experimental`；`qualification_id`、`validated_at` 均为空，不借用三工具发布资格。
-- 未选评分时走原工具装配；Web 仍要求 Knowledge，旧Monitoring-only QQ不注册评分；新Web-Agent QQ使用独立的四工具装配，不改变Web默认开关。
+- 未选评分时走原工具装配。Web 仍要求 Knowledge，旧 Monitoring-only QQ 不注册评分，新 Web-Agent QQ 独立装配五项只读工具。Web 评分仍由其启动开关决定。
 - Source Gate 验证新评分结果；“已评估但不可评分”不生成已取得分数的 Receipt。旧 payload 的兼容语义保留。
 - 不写新表、不改 Schema 或业务规则，不迁移设置或凭据。停用可在下次启动省略 `-ScoreTrial`。
 

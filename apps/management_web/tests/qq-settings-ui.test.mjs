@@ -8,13 +8,18 @@ import {tick} from './assistant-fixture.mjs';
 const walk=n=>[n,...n.children.flatMap(walk)];
 function setup(workspace=false,pairing=false){
   const data={revision:'synthetic-r1',browser_token:'synthetic-browser',configured:false,
-    settings:{enabled:false,ai_enabled:false,app_id:'',group_id:'',members:[],max_output_tokens:2048,event_notifications_enabled:false},
+    settings:{enabled:false,ai_enabled:false,max_output_tokens:2048,event_notifications_enabled:false},
+    identity:{app_ref:null,group_ref:null,member_refs:[]},
     binding:{data_root:'synthetic/data',instance_id:'synthetic',device_id:'synthetic-pond'},recipient_available:false,
     recipient_ref:null,runtime_status:'NOT_CHECKED',secret_status:'NOT_CHECKED'};
   const writes=[],keys=[],pairingCalls=[],timers=[],cleared=[];let reads=0;
   const pairingState={pairing_id:'synthetic-pair',phase:'IDLE',user_ref:null};
   const api={read:async()=>{reads++;return structuredClone(data);},save:async v=>{writes.push(structuredClone(v));
-    data.settings=v.settings;data.revision='synthetic-r2';return structuredClone(data);},secret:async v=>{keys.push(structuredClone(v));
+    const {app_id,group_id,members,...settings}=v.settings;
+    if(app_id)data.identity.app_ref='000000000001';
+    if(group_id)data.identity.group_ref='000000000002';
+    if(members.length)data.identity.member_refs=members.map((_,i)=>(i+3).toString(16).padStart(12,'0'));
+    data.settings=settings;data.revision='synthetic-r2';return structuredClone(data);},secret:async v=>{keys.push(structuredClone(v));
     data.secret_status='SAVED_FOR_THIS_APP';data.revision='synthetic-r3';return structuredClone(data);}};
   if(pairing)Object.assign(api,{
     pairingStatus:async()=>({pairing:structuredClone(pairingState)}),
@@ -61,6 +66,29 @@ test('identity and member drafts are explicit; secret is separate and cleared',a
   assert.equal(secret.value,'');assert.equal(p.keys[0].revision,'synthetic-r2');
   assert.equal(p.keys[0].app_secret,'fictional-secret');assert.doesNotMatch(p.root.textContent,/fictional-secret/);
   assert.ok(!('app_secret' in p.writes[0].settings));
+});
+
+test('saved identities are summarized and blank fields preserve them when saving other settings',async()=>{
+  const p=setup();await tick();
+  p.data.configured=true;
+  p.data.identity={app_ref:'aaaaaaaaaaaa',group_ref:'bbbbbbbbbbbb',member_refs:['cccccccccccc']};
+  Object.assign(p.data.settings,{app_id:'123456',group_id:'old-group',members:['old-member']});
+  await p.panel.load();
+  const app=p.input('QQ AppID'),group=p.input('测试群 OpenID'),members=p.input('授权成员 OpenID（每行一名，最多4名）');
+  assert.deepEqual([app.value,group.value,members.value],['','','']);
+  assert.doesNotMatch(p.root.textContent,/123456|old-group|old-member/);
+  assert.match(p.root.textContent,/aaaaaaaaaaaa.*bbbbbbbbbbbb.*1 名 · cccccccccccc/);
+  p.input('每次模型请求最大输出 Token').value='4096';
+  p.find('保存 QQ 设置').events.click();await tick();
+  assert.equal(p.writes[0].settings.app_id,'');assert.equal(p.writes[0].settings.group_id,'');
+  assert.deepEqual(p.writes[0].settings.members,[]);
+  assert.match(p.root.textContent,/aaaaaaaaaaaa.*bbbbbbbbbbbb.*1 名 · cccccccccccc/);
+
+  group.value='new-group';members.value='new-member';
+  p.find('保存 QQ 设置').events.click();await tick();
+  assert.equal(p.writes[1].settings.group_id,'new-group');assert.deepEqual(p.writes[1].settings.members,['new-member']);
+  assert.deepEqual([app.value,group.value,members.value],['','','']);
+  assert.match(p.root.textContent,/aaaaaaaaaaaa.*000000000002.*1 名 · 000000000003/);
 });
 
 test('saving QQ settings does not recreate the password field or lose its unsubmitted draft',async()=>{

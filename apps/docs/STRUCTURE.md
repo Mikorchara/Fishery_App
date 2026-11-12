@@ -12,7 +12,7 @@ Fishery_Management/
 │   ├── management_process.py      指定实例的进程所有权保护
 │   ├── management_web/            Flask HTTP/SSE、设置API、静态UI
 │   ├── ai_service/                业务Assistant、装配、资格、来源与Policy
-│   │   ├── business_tools/        当前/历史/知识与可选实验评分
+│   │   ├── business_tools/        当前水质、历史水质、项目知识、实验评分、当前事件
 │   │   ├── runtime/               业务Prompt/History/来源/发布合同
 │   │   └── resources/             固定候选与准备合同，不是用户批准
 │   ├── ai_backend/                通用模型Gateway、SDK、工具循环、取消与资源门禁
@@ -57,6 +57,6 @@ Fishery_Management/
 
 数据根与源码目录分开，凭据又是独立私有Store。四个日常cmd共用 `outputs/qq-m3-real-test`；`apps/management_setup.py` 和 `Initialize-Management.ps1` 负责首次显式初始化，`knowledge/resources` 提供31条初始背景资料。QQ后续通过网页“QQ机器人”设置接入同库，见根目录[开始使用](../../开始使用.md)。不要为了目录整齐挪动实际数据库。
 
-QQ Web-Agent新增装配：`ai_service/channel_management_agent.py` 与 `channel_agent_presentation.py` 复用原四Tool/Receipt和2/2/3循环；`qq_bot/knowledge_source.py` 只读打开同一批准实例的知识库，`agent_conversations.py` 沿用原RAM预算、revision与CAS。原Web默认配置及旧QQ单轮合同不变。
+QQ Web-Agent 由 `ai_service/channel_management_agent.py` 与 `channel_agent_presentation.py` 装配五项只读工具，复用来源回执和 2/2/3 工具循环。`qq_bot/knowledge_source.py` 只读打开同一批准实例的知识库，`agent_conversations.py` 沿用原 RAM 预算、revision 与 CAS。原 Web 默认配置及旧 QQ 单轮合同不变。
 
 开发自动研究入口：`scripts/dev/Test-QQAgent.ps1`、`check_qq_agent.py`和`qq_agent_cases.py`仅用于离线/另行批准的本机真实Qwen测试，不打入生产启动器；复用当前四工具Agent，不连接QQ或读取日常业务库。

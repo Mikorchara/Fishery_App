@@ -96,7 +96,7 @@ class ConfigurationBridgeTests(unittest.TestCase):
         self.assertTrue(request.web_agent);self.assertEqual(summary['agent_mode'],'web')
         self.assertEqual(summary['contract'],'management-qq-web-agent-run@1')
         self.assertCountEqual(summary['tools'],['get_current_water_quality','search_fishery_knowledge',
-            'get_water_quality_history','score_current_water_quality'])
+            'get_water_quality_history','score_current_water_quality','get_active_events'])
         self.assertEqual(summary['max_model_requests_per_turn'],3)
         self.assertEqual(summary['output_tokens_per_request'],4096)
         self.assertTrue(list(self.root.glob('.qq-config-previous-*')))

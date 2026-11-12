@@ -5,6 +5,43 @@ import json
 from flask import jsonify, request
 from apps.ai_service.qq_settings import QQSettingsError
 from apps.ai_service.management_policy import _unique_object
+from apps.ai_service.runtime.release_contracts import _hash
+
+
+def _browser_settings(value):
+    """Give the browser references, while preserving real identities on the server."""
+    settings = value['settings']
+    return {
+        **value,
+        'settings': {key: setting for key, setting in settings.items()
+                     if key not in ('app_id', 'group_id', 'members')},
+        'identity': {
+            'app_ref': _hash(settings['app_id'])[:12] if settings['app_id'] else None,
+            'group_ref': _hash(settings['group_id'])[:12] if settings['group_id'] else None,
+            'member_refs': [_hash(member)[:12] for member in settings['members']],
+        },
+    }
+
+
+def _restore_unchanged_identity(service, value):
+    if not isinstance(value, dict) or not isinstance(value.get('settings'), dict):
+        return value
+    settings = value['settings']
+    app_blank = settings.get('app_id') == ''
+    pair_blank = settings.get('group_id') == '' and settings.get('members') == []
+    if not (app_blank or pair_blank):
+        return value
+    current = service.public()
+    previous = current['settings']
+    if value.get('revision') != current['revision'] or not previous['app_id']:
+        return value
+    # The service checks this same revision again under the write lock.
+    settings = dict(settings)
+    if app_blank:
+        settings['app_id'] = previous['app_id']
+    if pair_blank and settings.get('app_id') == previous['app_id']:
+        settings.update(group_id=previous['group_id'], members=previous['members'])
+    return {**value, 'settings': settings}
 
 
 def register_qq_settings_api(app, service):
@@ -37,15 +74,16 @@ def register_qq_settings_api(app, service):
         failure = checked()
         if failure is not None:
             return failure
-        value = service.public() if request.method == 'GET' else service.save(body())
-        return jsonify(**value, browser_token=service.browser_token)
+        value = (service.public() if request.method == 'GET'
+                 else service.save(_restore_unchanged_identity(service, body())))
+        return jsonify(**_browser_settings(value), browser_token=service.browser_token)
 
     @app.post('/api/settings/qq/secret')
     def qq_secret():
         failure = checked()
         if failure is not None:
             return failure
-        return jsonify(**service.save_secret(body()), browser_token=service.browser_token)
+        return jsonify(**_browser_settings(service.save_secret(body())), browser_token=service.browser_token)
 
     @app.get('/api/settings/qq/pairing')
     def qq_pairing_status():

@@ -63,6 +63,7 @@ class QQSettingsTests(unittest.TestCase):
                 patch('socket.create_connection', side_effect=AssertionError('network forbidden')):
             value = self.get()
         self.assertEqual(value['settings']['max_output_tokens'], 2048)
+        self.assertEqual(value['identity'], dict(app_ref=None, group_ref=None, member_refs=[]))
         self.assertEqual(value['secret_status'], 'NOT_CHECKED')
         self.assertFalse(value['configured'])
         self.assertFalse((self.root/'data').exists())
@@ -80,13 +81,38 @@ class QQSettingsTests(unittest.TestCase):
         self.factory.assert_not_called()
 
     def test_saved_identity_and_ai_are_explicit_and_bounded(self):
+        from apps.ai_service.runtime.release_contracts import _hash
         settings = dict(self.identity(), ai_enabled=True)
         response = self.post(settings)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json()['settings'], settings)
+        expected_identity = dict(app_ref=_hash(settings['app_id'])[:12], group_ref=_hash(settings['group_id'])[:12],
+                                 member_refs=[_hash(settings['members'][0])[:12]])
+        for received in (response, self.client.get('/api/settings/qq')):
+            value = received.get_json()
+            self.assertEqual(value['settings'], {key: item for key, item in settings.items()
+                                                 if key not in ('app_id', 'group_id', 'members')})
+            self.assertEqual(value['identity'], expected_identity)
+            for private_value in (settings['app_id'], settings['group_id'], *settings['members']):
+                self.assertNotIn(json.dumps(private_value), received.get_data(as_text=True))
         self.assertTrue(response.get_json()['restart_required'])
         self.assertEqual(response.get_json()['binding']['device_id'], 'synthetic-device')
+        self.assertEqual(self.bridge.writes, [settings])
+
+    def test_blank_identity_preserves_existing_values_and_partial_replacement_is_rejected(self):
+        initial = self.identity()
+        self.assertEqual(self.post(initial).status_code, 200)
+        retained = dict(default_settings(), enabled=True, max_output_tokens=1024)
+        for incomplete in (dict(retained, app_id='234567'), dict(retained, group_id='new-group'),
+                           dict(retained, members=['new-member'])):
+            self.assertEqual(self.post(incomplete).get_json()['error_code'], 'QQ_IDENTITY_INCOMPLETE')
         self.assertEqual(len(self.bridge.writes), 1)
+        self.assertEqual(self.post(retained).status_code, 200)
+        self.assertEqual(self.bridge.writes[-1], dict(initial, max_output_tokens=1024))
+        replacement = dict(retained, group_id='new-group', members=['new-member'])
+        self.assertEqual(self.post(replacement).status_code, 200)
+        self.assertEqual(self.bridge.writes[-1], dict(replacement, app_id=initial['app_id']))
+        self.assertEqual(self.post(dict(replacement, app_id='234567')).status_code, 200)
+        self.assertEqual(self.bridge.writes[-1], dict(replacement, app_id='234567'))
 
     def test_invalid_token_identity_unknown_fields_paths_and_secret_are_rejected(self):
         for token in (0, 4097, 1.5, True, '2048'):
@@ -119,6 +145,9 @@ class QQSettingsTests(unittest.TestCase):
             app_secret='fictional-secret-only', replace_existing=False), headers={'X-Management-QQ':self.service.browser_token})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()['secret_status'], 'SAVED_FOR_THIS_APP')
+        self.assertEqual(response.get_json()['identity'], self.get()['identity'])
+        self.assertNotIn('synthetic-group', response.get_data(as_text=True))
+        self.assertNotIn('synthetic-member', response.get_data(as_text=True))
         self.assertNotIn('fictional-secret-only', response.get_data(as_text=True))
         self.assertNotIn('fictional-secret-only', (self.root/'data'/'qq-bot-settings.json').read_text())
         self.writer.mutate.assert_called_once()
@@ -295,10 +324,16 @@ class QQSettingsBridgeTests(unittest.TestCase):
                 self.assertEqual(saved['agent_mode'], 'web')
                 self.assertEqual(len(saved['tools']), 5)
                 self.assertIn('get_active_events', saved['tools'])
-                saved = service.save(dict(revision=saved['revision'], settings=dict(saved['settings'], max_output_tokens=1024)))
+                client = create_app(qq_settings_service=service).test_client()
+                response = client.post('/api/settings/qq', headers={'X-Management-QQ': service.browser_token},
+                    json=dict(revision=saved['revision'], settings=dict(default_settings(), enabled=True,
+                        ai_enabled=True, max_output_tokens=1024)))
+                self.assertEqual(response.status_code, 200)
                 request, summary = check_request(config_root/'request.json')
                 self.assertTrue(request.continuous)
                 self.assertEqual(request.output_tokens, 1024)
+                self.assertEqual(request.inputs.group_id, 'synthetic-group')
+                self.assertEqual(request.members, ('synthetic-member',))
                 self.assertFalse(summary['database_opened'])
             self.assertEqual(databases, {p:hashlib.sha256(p.read_bytes()).hexdigest() for p in databases})
             self.assertEqual(service.store.token_snapshot()['max_output_tokens'], 1024)

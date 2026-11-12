@@ -1,7 +1,7 @@
 import {el,card,button,rows} from './components.js';
 
 const qqErrors={QQ_SETTINGS_STALE:'设置已在别处改变，请重新读取后再保存。',
-  QQ_TOKEN_LIMIT_INVALID:'输出 Token 必须是 1–4096 的整数。',QQ_IDENTITY_INCOMPLETE:'请完整填写 AppID、群 OpenID 和至少一名成员。',
+  QQ_TOKEN_LIMIT_INVALID:'输出 Token 必须是 1–4096 的整数。',QQ_IDENTITY_INCOMPLETE:'首次配置请填写 AppID。首次配置或变更身份时，请同时填写群 OpenID 和完整成员名单。',
   QQ_IDENTITY_INVALID:'身份信息格式不正确；OpenID 不是 QQ 号码。',QQ_ENABLE_REQUIRED:'请先启用 QQ 机器人。',
   QQ_VERIFIED_RECIPIENT_REQUIRED:'尚未绑定已验证的私聊接收人，请在本页完成“首次私聊接收人配对”。',
   QQ_SECRET_REPLACE_CONFIRMATION_REQUIRED:'密钥已存在，勾选“确认替换已有密钥”后再保存。',QQ_SECRET_INVALID:'请先保存 AppID，并填写有效的 AppSecret。',
@@ -21,23 +21,34 @@ export function createQQSettingsPanel(api){
     input.checked=value;return {input,node:el('label',{class:'settings-check'},[input,el('span',{text:label})])};}
   function render(){
     const s=config.settings,enabled=checkField('启用 QQ 机器人（仍须单独启动）',s.enabled),ai=checkField('允许 AI 自然语言问答（可能计费）',s.ai_enabled),
-      app=textField('QQ AppID',s.app_id,{maxlength:32}),group=textField('测试群 OpenID',s.group_id,{maxlength:128}),
+      app=textField('QQ AppID','',{maxlength:32,autocomplete:'off'}),group=textField('测试群 OpenID','',{maxlength:128,autocomplete:'off'}),
       token=textField('每次模型请求最大输出 Token',s.max_output_tokens,{type:'number',min:1,max:4096,step:1}),
       notifications=checkField('启用已验证接收人的事件通知',s.event_notifications_enabled);
-    const members=el('textarea',{'aria-label':'授权成员 OpenID（每行一名，最多4名）',rows:4,spellcheck:'false'});
-    members.value=s.members.join('\n');
-    const settingsFeedback=el('p',{role:'status'}),secretFeedback=el('p',{role:'status'}),
+    const members=el('textarea',{'aria-label':'授权成员 OpenID（每行一名，最多4名）',rows:4,spellcheck:'false',autocomplete:'off'});
+    members.value='';
+    const identitySummary=el('div'),settingsFeedback=el('p',{role:'status'}),secretFeedback=el('p',{role:'status'}),
       password=textField('QQ AppSecret','',{type:'password',autocomplete:'new-password',spellcheck:'false',maxlength:4096}),
       replace=checkField('确认替换已有 QQ AppSecret',false);
     const pairing=api.pairingStart?(pairingNode??=pairingWizard()):null;
+    function updateIdentitySummary(){
+      const {app_ref,group_ref,member_refs=[]}=config.identity||{};
+      identitySummary.replaceChildren(rows([['应用摘要',app_ref||'尚未保存'],['群摘要',group_ref||'尚未保存'],
+        ['授权成员摘要',member_refs.length?`${member_refs.length} 名 · ${member_refs.join('、')}`:'尚未保存']]));
+    }
+    updateIdentitySummary();
     async function save(){
       if(busy)return;
       const raw=String(token.input.value||'');
       if(!/^\d+$/.test(raw)||Number(raw)<1||Number(raw)>4096){settingsFeedback.textContent=qqErrors.QQ_TOKEN_LIMIT_INVALID;return;}
+      const appDraft=app.input.value,groupDraft=group.input.value,memberDraft=members.value;
       busy=true;settingsFeedback.textContent='正在保存…';
       try{config=await api.save({revision:config.revision,settings:{enabled:enabled.input.checked,ai_enabled:ai.input.checked,
-        app_id:app.input.value.trim(),group_id:group.input.value.trim(),members:members.value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean),
+        app_id:appDraft.trim(),group_id:groupDraft.trim(),members:memberDraft.split(/\r?\n/).map(v=>v.trim()).filter(Boolean),
         max_output_tokens:Number(raw),event_notifications_enabled:notifications.input.checked}},config);
+        if(app.input.value===appDraft)app.input.value='';
+        if(group.input.value===groupDraft)group.input.value='';
+        if(members.value===memberDraft)members.value='';
+        updateIdentitySummary();
         settingsFeedback.textContent='设置已保存。请停止并重新启动 QQ 机器人；保存不会连接 QQ 或模型。';
       }catch(e){settingsFeedback.textContent=error(e);}finally{busy=false;}
     }
@@ -50,15 +61,16 @@ export function createQQSettingsPanel(api){
     }
     content.replaceChildren(rows([['配置状态',config.configured?'已生成独立 QQ 配置':'尚未配置；可先保存输出 Token'],
       ['固定模型',[config.provider,config.model,config.preset].filter(Boolean).join(' · ')||'由服务器固定 Qwen 预设'],
-      ['AI 调用方式',config.agent_mode==='web'?'复用网页 Agent：当前/历史水质、知识、实验评分':'当前水质专用；保存后按本机新合同装配'],
+      ['AI 调用方式',config.agent_mode==='web'?'复用网页 Agent，支持当前水质、历史水质、当前事件、养殖资料和实验评分':'当前水质专用；保存后按本机新合同装配'],
       ['运行状态',config.runtime_status==='RUNNING'?'运行中':'未检查运行状态（本页不启动机器人）'],
       ['监测实例',config.binding.instance_id||'由服务端现有实例固定'],['绑定设备',config.binding.device_id||'由服务端实例配置固定'],
       ['数据目录',config.binding.data_root],['AppSecret 状态',config.secret_status==='SAVED_FOR_THIS_APP'?'已在本页保存；不读取密钥验证':'未检查（此前保存的密钥可继续使用）'],
       ['事件接收人',config.recipient_available?`已验证 · ${config.recipient_ref||'已绑定'}`:'尚未验证；本页不填写接收人路径']]),
+      identitySummary,el('p',{class:'muted',text:'身份字段留空会保留已保存的配置。首次配置请填写 AppID。更换 AppID、群或成员时，请同时填写群 OpenID 和完整成员名单。'}),
       el('div',{class:'settings-fields'},[app.node,group.node]),
       el('label',{class:'field'},[el('span',{text:'授权成员 OpenID（每行一名，最多4名）'}),members]),enabled.node,ai.node,
       token.node,el('p',{class:'muted',text:'默认 2048，范围 1–4096。一次问答可能包含多次模型请求，此值不是整轮合计 Token。'}),
-      el('p',{class:'muted',text:'新保存配置采用网页 Agent 的四项只读能力；每轮最多 2 次工具调用、3 次模型请求。工具仍受独立 Policy 限制，模型调用可能计费。'}),
+      el('p',{class:'muted',text:'新保存配置采用网页 Agent 的五项只读能力。每轮最多 2 次工具调用、3 次模型请求。工具仍受独立授权限制，模型调用可能计费。'}),
       notifications.node,el('div',{class:'settings-actions'},[button('保存 QQ 设置',()=>void save(),'primary'),button('重新读取 QQ 设置',()=>void load(),'text')]),settingsFeedback,
       el('h3',{text:'QQ AppSecret'}),el('p',{class:'muted',text:'仅保存到当前电脑的私有凭据存储。Qwen / DashScope Key 仍在“API 密钥”页配置；不要粘贴到普通文本字段。'}),
       password.node,replace.node,button('保存 QQ AppSecret',()=>void saveSecret()),secretFeedback,
