@@ -8,6 +8,11 @@ main{max-width:1640px;margin:0 auto;padding:31px 36px 20px}.page-heading{display
 @media(max-width:1200px){.sidebar{width:205px;padding-left:12px;padding-right:12px}.workspace{margin-left:205px}.topbar{padding:0 24px}main{padding:26px 24px}.overview-strip{gap:20px;padding:18px}.strip-number{min-width:65px}.dashboard-grid,.bottom-grid{grid-template-columns:minmax(0,1.5fr) minmax(240px,1fr)}.card{padding:18px}.video-layout,.assistant-layout{grid-template-columns:minmax(0,1fr) 250px}.metric-card{padding:18px}.user-label{display:none}}
 @media(max-width:1000px){.dashboard-grid,.bottom-grid{grid-template-columns:1fr}.bottom-grid .side-stack{display:grid;grid-template-columns:1fr 1fr}.video-placeholder.compact{min-height:185px}.video-layout,.assistant-layout{grid-template-columns:1fr}.assistant-layout>.side-stack,.video-layout>.side-stack{display:grid;grid-template-columns:1fr 1fr}.overview-strip{gap:18px;flex-wrap:wrap}.overview-strip>div:first-child{min-width:100%;margin-bottom:6px}.overview-strip>.badge{margin-left:auto}.page-meta{display:none}}
 @media(max-width:760px){.sidebar{visibility:hidden;transform:translateX(-100%);width:232px;box-shadow:10px 0 40px #102f3c30}.sidebar.open{visibility:visible;transform:translateX(0)}.workspace{margin-left:0}.menu-toggle{display:grid;margin-left:-8px}.topbar{padding:0 18px;height:65px;gap:12px}.breadcrumbs{gap:8px;margin-right:auto}.breadcrumbs>span:first-child{display:none}.crumb-divider{display:none}.topbar-divider,.user-label{display:none}main{padding:23px 18px}.page-heading{margin-bottom:19px}h1{font-size:24px}.demo-notice{align-items:flex-start;padding:12px}.metric-grid{gap:10px}.metric-card{padding:14px 12px}.metric-value{font-size:28px}.metric-value span{font-size:10px;margin-left:4px}.metric-footer{align-items:flex-start;gap:5px;flex-direction:column}.metric-icon{width:25px;height:25px}.observation-meta{font-size:9px;gap:6px}.bottom-grid .side-stack,.assistant-layout>.side-stack,.video-layout>.side-stack{display:flex}.filters{gap:12px}.field input,.field select{width:100%;min-width:0}.field{flex:1;min-width:130px}.search-field{min-width:100%}.filter-hint{margin-left:0;max-width:none}.settings-layout{grid-template-columns:1fr}.settings-nav{display:grid;grid-template-columns:1fr 1fr}.card-heading{gap:10px}.card-heading select{min-width:80px}.card{padding:17px}.chat-shell{padding:0}.chat-messages{min-height:300px;padding:28px 15px}.chat-welcome h2{font-size:17px}.composer-foot{align-items:flex-start}.overview-strip{gap:24px}.strip-number{min-width:50px}.overview-strip>.badge{display:none}footer{flex-direction:column;gap:5px}}
+details.demo-notice{display:block;width:fit-content;max-width:100%;padding:0;margin-bottom:18px}
+.demo-notice>summary{padding:8px 14px;cursor:pointer;font-weight:600}
+.demo-notice>summary .demo-label{margin-inline-end:8px}
+.demo-notice>summary:focus-visible{outline:2px solid var(--teal);outline-offset:-2px;border-radius:7px}
+.demo-notice>p{padding:0 14px 10px;line-height:1.65}
 .current-anomalies{border-left:4px solid #9baeb7}
 .current-anomalies.needs-attention{border-left-color:#c59642}
 .current-anomalies.signals-clear{border-left-color:#398d78}
@@ -212,6 +217,44 @@ body:has(.management-assistant.view-reading) main{padding:18px;max-width:1300px;
 .tool-policy-option span{min-width:0;overflow-wrap:anywhere}.tool-policy-option:has(input:disabled){cursor:default;color:var(--muted)}
 .tool-policy-option:focus-within{outline:2px solid var(--teal);outline-offset:-2px}
 .tool-policy-status{font-size:12px;color:var(--muted)}
+
+/* QQ settings stay compact in both the full layout and a narrow settings column. */
+.qq-settings-panel{max-width:1060px}
+.qq-settings-content,.qq-disclosures{display:grid;gap:12px}
+.qq-overview,.qq-form-grid,.qq-identity-fields{display:grid;gap:12px}
+.qq-overview{grid-template-columns:repeat(auto-fit,minmax(min(100%,142px),1fr));margin:0}
+.qq-overview>div,.qq-form-section,.qq-disclosure{min-width:0;border:1px solid var(--line);border-radius:9px}
+.qq-overview>div{padding:11px 13px;background:var(--panel-raised,#f5f9fa)}
+.qq-overview dt{color:var(--muted);font-size:11px;margin-bottom:4px}
+.qq-overview dd{margin:0;color:var(--ink);font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.qq-form-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));align-items:start}
+.qq-form-section{padding:15px;display:grid;gap:10px}
+.qq-form-section h3{font-size:14px;color:var(--ink)}
+.qq-form-section .settings-check,.qq-disclosure-body .settings-check{margin:3px 0;align-items:flex-start}
+.qq-form-section .settings-check input,.qq-disclosure-body .settings-check input{flex:none;margin-top:.22em}
+.qq-identity-summary .details-grid{grid-template-columns:max-content minmax(0,1fr);gap:5px 10px;margin:0}
+.qq-identity-fields{grid-template-columns:repeat(auto-fit,minmax(min(100%,135px),1fr))}
+.qq-member-heading,.qq-saved-members,.qq-saved-members ul{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.qq-member-heading{justify-content:space-between}
+.qq-member-heading h4{font-size:12px;color:var(--ink)}
+.qq-saved-members{font-size:11px;color:var(--muted)}
+.qq-saved-members ul,.qq-member-list{list-style:none;margin:0;padding:0}
+.qq-member-list{display:grid;gap:8px}
+.qq-member-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
+.qq-member-row>.button{min-height:36px}
+.qq-form-section>.button,.qq-disclosure-body>.button{justify-self:start}
+.qq-save-row .settings-actions{margin:0}
+.qq-feedback{margin-top:6px;font-size:12px;color:var(--muted);line-height:1.6}
+.qq-feedback:empty,.qq-disclosure-status:empty,.qq-disclosure pre:empty{display:none}
+.qq-disclosure>summary{cursor:pointer;padding:11px 14px;color:var(--ink);font-size:13px;font-weight:600}
+.qq-disclosure>summary::marker{color:var(--teal)}
+.qq-disclosure>summary:focus-visible{outline:2px solid var(--teal);outline-offset:-2px;border-radius:8px}
+.qq-disclosure-status{margin-inline-start:8px;color:var(--muted);font-size:11px;font-weight:400}
+.qq-disclosure-body{display:grid;gap:10px;border-top:1px solid var(--line);padding:13px 14px;min-width:0}
+.qq-disclosure-body .details-grid{margin:0}
+.qq-disclosure-body>section{display:grid;gap:10px;min-width:0;font-size:12px;line-height:1.6}
+.qq-disclosure-body .settings-actions{margin:0}
+.qq-disclosure pre{white-space:pre-wrap;overflow-wrap:anywhere}
 
 .local-video-preview[hidden]{display:none}
 .demo-video-player{display:block;width:100%;aspect-ratio:16/9;max-height:68vh;background:#030914;object-fit:contain;border-radius:8px;margin:14px 0}

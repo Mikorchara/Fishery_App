@@ -6,6 +6,14 @@ import {Element} from './dom-fixture.mjs';
 import {tick} from './assistant-fixture.mjs';
 
 const walk=n=>[n,...n.children.flatMap(walk)];
+const memberInputs=root=>walk(root).filter(n=>n.tagName==='input'&&/^成员 \d+ OpenID$/.test(n.getAttribute('aria-label')||''));
+
+function fillMember(p,index,value){
+  const input=p.input(`成员 ${index} OpenID`);
+  input.value=value;
+  input.events.input?.({target:input});
+}
+
 function setup(workspace=false,pairing=false){
   const data={revision:'synthetic-r1',browser_token:'synthetic-browser',configured:false,
     settings:{enabled:false,ai_enabled:false,max_output_tokens:2048,event_notifications_enabled:false},
@@ -19,6 +27,7 @@ function setup(workspace=false,pairing=false){
     if(app_id)data.identity.app_ref='000000000001';
     if(group_id)data.identity.group_ref='000000000002';
     if(members.length)data.identity.member_refs=members.map((_,i)=>(i+3).toString(16).padStart(12,'0'));
+    if(app_id&&group_id&&members.length)data.configured=true;
     data.settings=settings;data.revision='synthetic-r2';return structuredClone(data);},secret:async v=>{keys.push(structuredClone(v));
     data.secret_status='SAVED_FOR_THIS_APP';data.revision='synthetic-r3';return structuredClone(data);}};
   if(pairing)Object.assign(api,{
@@ -26,6 +35,7 @@ function setup(workspace=false,pairing=false){
     pairingStart:async v=>{pairingCalls.push({action:'start',value:structuredClone(v)});pairingState.phase='WAITING_PRIVATE_MESSAGE';
       return {pairing:{...pairingState,challenge_command:'/绑定提醒 synthetic-single-display'}};},
     pairingConfirm:async v=>{pairingCalls.push({action:'confirm',value:structuredClone(v)});pairingState.phase='BOUND';
+      data.recipient_available=true;data.recipient_ref=pairingState.user_ref;data.settings.event_notifications_enabled=false;
       return {pairing:{...pairingState,api_accepted:true,client_display_confirmed:false,cleanup_confirmed:true}};},
     pairingCancel:async v=>{pairingCalls.push({action:'cancel',value:structuredClone(v)});pairingState.phase='CANCELLED';
       return {pairing:{...pairingState,cleanup_confirmed:true}};}});
@@ -59,7 +69,7 @@ test('token draft save uses independent QQ API with exact units and bounds',asyn
 
 test('identity and member drafts are explicit; secret is separate and cleared',async()=>{
   const p=setup();await tick();p.input('QQ AppID').value='123456';p.input('测试群 OpenID').value='synthetic-group';
-  p.input('授权成员 OpenID（每行一名，最多4名）').value='member-a\nmember-b';
+  fillMember(p,1,'member-a');p.find('添加成员').events.click();fillMember(p,2,'member-b');
   p.input('启用 QQ 机器人（仍须单独启动）').checked=true;
   p.find('保存 QQ 设置').events.click();await tick();assert.deepEqual(p.writes[0].settings.members,['member-a','member-b']);
   const secret=p.input('QQ AppSecret');secret.value='fictional-secret';p.find('保存 QQ AppSecret').events.click();await tick();
@@ -68,33 +78,68 @@ test('identity and member drafts are explicit; secret is separate and cleared',a
   assert.ok(!('app_secret' in p.writes[0].settings));
 });
 
+test('member list preserves input order, allows removal, and stops at four members',async()=>{
+  const p=setup();await tick();
+  assert.equal(memberInputs(p.root).length,1);
+  assert.equal(walk(p.root).some(n=>n.tagName==='textarea'),false);
+  fillMember(p,1,' member-a ');
+  for(let index=2;index<=4;index++){
+    p.find('添加成员').events.click();
+    fillMember(p,index,`member-${index}`);
+  }
+  assert.deepEqual(memberInputs(p.root).map(n=>n.value),[' member-a ','member-2','member-3','member-4']);
+  const add=p.find('添加成员');
+  assert.ok(!add||add.disabled||add.getAttribute('disabled')!==null);
+  p.input('移除成员 2').events.click();
+  assert.deepEqual(memberInputs(p.root).map(n=>n.value),[' member-a ','member-3','member-4']);
+  p.find('添加成员').events.click();
+  assert.equal(memberInputs(p.root).length,4);
+  p.input('QQ AppID').value='123456';p.input('测试群 OpenID').value='synthetic-group';
+  p.find('保存 QQ 设置').events.click();await tick();
+  assert.deepEqual(p.writes[0].settings.members,['member-a','member-3','member-4']);
+  assert.deepEqual(memberInputs(p.root).map(n=>n.value),['']);
+  fillMember(p,1,'remove-this-draft');p.input('移除成员 1').events.click();
+  assert.deepEqual(memberInputs(p.root).map(n=>n.value),['']);
+});
+
 test('saved identities are summarized and blank fields preserve them when saving other settings',async()=>{
   const p=setup();await tick();
   p.data.configured=true;
   p.data.identity={app_ref:'aaaaaaaaaaaa',group_ref:'bbbbbbbbbbbb',member_refs:['cccccccccccc']};
   Object.assign(p.data.settings,{app_id:'123456',group_id:'old-group',members:['old-member']});
   await p.panel.load();
-  const app=p.input('QQ AppID'),group=p.input('测试群 OpenID'),members=p.input('授权成员 OpenID（每行一名，最多4名）');
+  const app=p.input('QQ AppID'),group=p.input('测试群 OpenID'),members=p.input('成员 1 OpenID');
   assert.deepEqual([app.value,group.value,members.value],['','','']);
   assert.doesNotMatch(p.root.textContent,/123456|old-group|old-member/);
-  assert.match(p.root.textContent,/aaaaaaaaaaaa.*bbbbbbbbbbbb.*1 名 · cccccccccccc/);
+  for(const ref of ['aaaaaaaaaaaa','bbbbbbbbbbbb','cccccccccccc'])assert.ok(p.root.textContent.includes(ref));
   p.input('每次模型请求最大输出 Token').value='4096';
   p.find('保存 QQ 设置').events.click();await tick();
   assert.equal(p.writes[0].settings.app_id,'');assert.equal(p.writes[0].settings.group_id,'');
   assert.deepEqual(p.writes[0].settings.members,[]);
-  assert.match(p.root.textContent,/aaaaaaaaaaaa.*bbbbbbbbbbbb.*1 名 · cccccccccccc/);
+  for(const ref of ['aaaaaaaaaaaa','bbbbbbbbbbbb','cccccccccccc'])assert.ok(p.root.textContent.includes(ref));
 
-  group.value='new-group';members.value='new-member';
+  p.input('测试群 OpenID').value='new-group';fillMember(p,1,'new-member');
   p.find('保存 QQ 设置').events.click();await tick();
   assert.equal(p.writes[1].settings.group_id,'new-group');assert.deepEqual(p.writes[1].settings.members,['new-member']);
-  assert.deepEqual([app.value,group.value,members.value],['','','']);
-  assert.match(p.root.textContent,/aaaaaaaaaaaa.*000000000002.*1 名 · 000000000003/);
+  assert.deepEqual([p.input('QQ AppID').value,p.input('测试群 OpenID').value,p.input('成员 1 OpenID').value],['','','']);
+  for(const ref of ['aaaaaaaaaaaa','000000000002','000000000003'])assert.ok(p.root.textContent.includes(ref));
 });
 
 test('saving QQ settings does not recreate the password field or lose its unsubmitted draft',async()=>{
   const p=setup();await tick();const key=p.input('QQ AppSecret');key.value='fictional-unsubmitted';
   p.find('保存 QQ 设置').events.click();await tick();assert.equal(p.input('QQ AppSecret'),key);
   assert.equal(key.value,'fictional-unsubmitted');assert.equal(p.keys.length,0);
+});
+
+test('credentials and private pairing are in separate disclosures closed by default',async()=>{
+  const p=setup(false,true);await tick();
+  for(const [title,button] of [['QQ AppSecret','保存 QQ AppSecret'],['首次私聊接收人配对','开始首次私聊配对']]){
+    const section=walk(p.root).find(n=>n.tagName==='details'&&n.children[0]?.tagName==='summary'
+      &&n.children[0].textContent.includes(title));
+    assert.ok(section?.contains(p.find(button)));
+    assert.equal(section.getAttribute('open'),null);
+    assert.ok(!section.open);
+  }
 });
 
 test('QQ HTTP client uses its own local token and preserves bounded API errors',async()=>{
@@ -112,7 +157,10 @@ test('QQ HTTP client uses its own local token and preserves bounded API errors',
 });
 
 test('private pairing requires separate network and active-send confirmation and never persists its challenge',async()=>{
-  const p=setup(false,true);await tick();p.find('开始首次私聊配对').events.click();await tick();assert.equal(p.pairingCalls.length,0);
+  const p=setup(false,true);await tick();p.data.recipient_available=true;p.data.settings.event_notifications_enabled=true;
+  await p.panel.load();
+  const notifications=p.input('启用已验证接收人的事件通知');assert.equal(notifications.checked,true);
+  p.find('开始首次私聊配对').events.click();await tick();assert.equal(p.pairingCalls.length,0);
   p.input('同意本次短时连接 QQ（不调用模型）').checked=true;p.find('开始首次私聊配对').events.click();await tick();
   assert.equal(p.pairingCalls[0].value.confirm_network,true);assert.match(p.root.textContent,/synthetic-single-display/);
   p.pairingState.phase='AWAITING_CONFIRMATION';p.pairingState.user_ref='synthetic-ref';await p.timers[0]();await tick();
@@ -121,6 +169,7 @@ test('private pairing requires separate network and active-send confirmation and
   assert.equal(p.pairingCalls[1].value.confirm_active_test,true);assert.equal(p.pairingCalls[1].value.user_ref,'synthetic-ref');
   assert.match(p.root.textContent,/QQ API 已接受/);assert.match(p.root.textContent,/客户端显示须本人核对/);
   assert.match(p.root.textContent,/通知仍关闭/);assert.equal(p.keys.length,0);
+  assert.equal(notifications.checked,false);
 });
 
 test('cancel clears the one-time command without submitting an active message',async()=>{

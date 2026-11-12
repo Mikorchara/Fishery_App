@@ -82,6 +82,18 @@ test('uniform server state renders dashboard, monitoring and visual summaries wi
   assert.match(p.node('content').textContent,/不代表鱼池存量/);assert.match(p.node('content').textContent,/无视频流/);
 });
 
+test('data source details start collapsed and keep the source badge in the summary',async()=>{
+  const html=fs.readFileSync(new URL('../static/index.html',import.meta.url),'utf8');
+  const disclosure=html.match(/(<details[^>]*id="source-details"[^>]*>)([\s\S]*?)<\/details>/);
+  assert.ok(disclosure);
+  assert.doesNotMatch(disclosure[1],/\bopen\b/);
+  assert.match(disclosure[2],/<summary>[\s\S]*?id="source-label"[\s\S]*?<\/summary>\s*<p id="source-notice">/);
+  assert.ok(disclosure.index<html.indexOf('<div id="content"'));
+  const p=page();await p.ready();
+  assert.match(p.node('source-label').textContent,/SIMULATOR/);
+  assert.match(p.node('source-notice').textContent,/模拟器 HTTP 上报/);
+});
+
 test('EVT-2 homepage collapses risk grades but retains unknown evidence and original detail',async()=>{
   const d=fixture();const common={...d.events[0],device_id:'sim-pond-1',channel:'water',
     risk_family:{episode_id:'same-low-oxygen',label:'溶解氧偏低风险',transitions:[]},family_current_event_id:'critical',family_current_code:'OXYGEN_CRITICAL_LOW'};
