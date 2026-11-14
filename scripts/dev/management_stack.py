@@ -27,10 +27,11 @@ def request_stop(directory,role):
     else:write_new(path,value)
     return {'code':'STACK_STOP_REQUESTED','role':role,'run_directory':str(directory)}
 
-def preflight(*,request=None,data_root=None,port=8766,with_bot=False,offline=False,bot_only=False,demo_video=None,score_trial=False,no_assistant=False,
-              device_report_device_id=None,event_trial=False):
-    from scripts.dev.local_session import require_free_port
+def preflight(*,request=None,data_root=None,port=8766,with_bot=False,offline=False,bot_only=False,demo_video=None,board_video=None,score_trial=False,no_assistant=False,
+              device_report_device_id=None,event_trial=False,simulation_mode='full'):
+    from scripts.dev.local_session import require_free_port,validate_video_options
     if os.name!='nt':raise RuntimeError('STACK_WINDOWS_REQUIRED')
+    validate_video_options(simulation_mode, demo_video, board_video, bot_only=bot_only)
     if score_trial and no_assistant:raise RuntimeError('SCORE_TRIAL_REQUIRES_ASSISTANT')
     if event_trial and (no_assistant or bot_only):raise RuntimeError('EVENT_TRIAL_REQUIRES_ASSISTANT')
     if demo_video is not None:
@@ -63,7 +64,7 @@ def preflight(*,request=None,data_root=None,port=8766,with_bot=False,offline=Fal
 
 def launch_stack(*,request=None,data_root=None,port=8766,scenario='normal',with_bot=False,
                  offline=False,bot_only=False,seconds=None,no_assistant=False,
-                 interactive_scenario=False,open_browser=False,emit=print,demo_video=None,score_trial=False,simulation_mode='full',device_report_directory=None,device_report_device_id=None,event_trial=False):
+                 interactive_scenario=False,open_browser=False,emit=print,demo_video=None,board_video=None,score_trial=False,simulation_mode='full',device_report_directory=None,device_report_device_id=None,event_trial=False):
     from scripts.dev import local_session
     from apps.device_reports.binding import validate_binding
     validate_binding(simulation_mode,device_report_directory,device_report_device_id)
@@ -74,7 +75,8 @@ def launch_stack(*,request=None,data_root=None,port=8766,scenario='normal',with_
     from apps.ai_service.runtime.release_contracts import _hash
     from apps.qq_bot.trial_configuration import write_new
     root,summary=preflight(request=request,data_root=data_root,port=port,with_bot=with_bot,offline=offline,bot_only=bot_only,
-        demo_video=demo_video,score_trial=score_trial,no_assistant=no_assistant,device_report_device_id=device_report_device_id,event_trial=event_trial)
+        demo_video=demo_video,board_video=board_video,score_trial=score_trial,no_assistant=no_assistant,
+        device_report_device_id=device_report_device_id,event_trial=event_trial,simulation_mode=simulation_mode)
     own_process_tree()
     parent=ROOT/'outputs/management-stack';parent.mkdir(parents=True,exist_ok=True)
     directory=parent/('stack-'+uuid.uuid4().hex);directory.mkdir()
@@ -165,7 +167,7 @@ def launch_stack(*,request=None,data_root=None,port=8766,scenario='normal',with_
                     time.sleep(seconds_to_sleep)
                 result=local_session.run_local(scenario,port,assistant=not no_assistant,
                     data_root=root,show_terminals=True,interactive_scenario=interactive_scenario,
-                    demo_video=demo_video,score_trial=score_trial,simulation_mode=simulation_mode,device_report_directory=device_report_directory,device_report_device_id=device_report_device_id,
+                    demo_video=demo_video,board_video=board_video,score_trial=score_trial,simulation_mode=simulation_mode,device_report_directory=device_report_directory,device_report_device_id=device_report_device_id,
                     event_trial=event_trial,open_browser=open_browser,launch=launch,sleep=sleep,
                     emit=lambda text:report(dict(code='STACK_WEB_SIMULATOR',message=text)))
     except KeyboardInterrupt:result=0
@@ -210,7 +212,10 @@ def main(argv=None):
     p.add_argument('--seconds',type=int);p.add_argument('--no-assistant',action='store_true')
     p.add_argument('--interactive-scenario',action='store_true')
     p.add_argument('--open-browser',action='store_true')
-    p.add_argument('--demo-video',type=Path);p.add_argument('--score-trial',action='store_true')
+    video_sources=p.add_mutually_exclusive_group()
+    video_sources.add_argument('--demo-video',type=Path)
+    video_sources.add_argument('--board-video')
+    p.add_argument('--score-trial',action='store_true')
     p.add_argument('--event-trial',action='store_true')
     p.add_argument('--simulation-mode',choices=('full','water-only'),default='full')
     p.add_argument('--interactive-mode',action='store_true')
@@ -228,15 +233,15 @@ def main(argv=None):
         if args.bot_only:args.with_bot=True
         if args.check:
             root,summary=preflight(request=args.request,data_root=args.data_root,port=args.port,with_bot=args.with_bot,offline=args.offline_demo,bot_only=args.bot_only,
-                demo_video=args.demo_video,score_trial=args.score_trial,no_assistant=args.no_assistant,
-                device_report_device_id=args.device_report_device_id,event_trial=args.event_trial)
-            print(json.dumps(dict(code='STACK_PREFLIGHT_OK',data_root=str(root),bot=args.with_bot,summary=summary,video_enabled=args.demo_video is not None,
+                demo_video=args.demo_video,board_video=args.board_video,score_trial=args.score_trial,no_assistant=args.no_assistant,
+                device_report_device_id=args.device_report_device_id,event_trial=args.event_trial,simulation_mode=args.simulation_mode)
+            print(json.dumps(dict(code='STACK_PREFLIGHT_OK',data_root=str(root),bot=args.with_bot,summary=summary,video_enabled=args.demo_video is not None or args.board_video is not None,
                 score_trial_enabled=args.score_trial,event_trial_enabled=args.event_trial,simulation_mode=args.simulation_mode,
                 device_reports_bound=args.device_report_directory is not None),ensure_ascii=False));return 0
         return launch_stack(request=args.request,data_root=args.data_root,port=args.port,scenario=args.scenario,
             with_bot=args.with_bot,offline=args.offline_demo,bot_only=args.bot_only,seconds=args.seconds,no_assistant=args.no_assistant,
             interactive_scenario=args.interactive_scenario,open_browser=args.open_browser,
-            demo_video=args.demo_video,score_trial=args.score_trial,simulation_mode=args.simulation_mode,device_report_directory=args.device_report_directory,device_report_device_id=args.device_report_device_id,event_trial=args.event_trial)
+            demo_video=args.demo_video,board_video=args.board_video,score_trial=args.score_trial,simulation_mode=args.simulation_mode,device_report_directory=args.device_report_directory,device_report_device_id=args.device_report_device_id,event_trial=args.event_trial)
     except Exception as error:
         from apps.qq_bot.management_cli import emit
         emit(getattr(error,'code',str(error) if isinstance(error,RuntimeError) else 'STACK_PREFLIGHT_FAILED'));return 1

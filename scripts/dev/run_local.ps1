@@ -17,6 +17,7 @@
     [switch]$Detach,
     [switch]$DialogErrors,
     [string]$DemoVideo,
+    [string]$BoardVideo,
     [switch]$ScoreTrial,
     [switch]$EventTrial,
     [switch]$EventBoardReports
@@ -29,6 +30,11 @@ if ($InteractiveMode) {
  if ($choice -eq '0') { exit 0 }
  $SimulationMode=if ($choice -eq '2') {'water-only'} else {'full'}
 }
+if ($BoardVideo) {
+    if ($BoardVideo -cnotmatch '\Artsp://[0-9.:]+/[A-Za-z0-9/._~-]+\z') { throw 'BOARD_VIDEO_RTSP_URL_INVALID' }
+    if ($DemoVideo) { throw 'VIDEO_SOURCE_CONFLICT' }
+    if ($SimulationMode -ne 'water-only') { throw 'BOARD_VIDEO_REQUIRES_DEVICE_MODE' }
+}
 if ($Detach) {
     # Keep only the two service consoles visible. No elevated execution/policy bypass.
     $detachedArgs = @('-NoLogo','-NoProfile','-File',('"{0}"' -f $PSCommandPath),
@@ -38,6 +44,7 @@ if ($Detach) {
     }
     if ($DataRoot) { $detachedArgs += @('-DataRoot',('"{0}"' -f $DataRoot)) }
     if ($DemoVideo) { $detachedArgs += @('-DemoVideo',('"{0}"' -f $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DemoVideo))) }
+    if ($BoardVideo) { $detachedArgs += @('-BoardVideo',$BoardVideo) }
     $detachedArgs += @('-SimulationMode',$SimulationMode)
     if ($DeviceReportDirectory) { $detachedArgs += @('-DeviceReportDirectory',('"{0}"' -f $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DeviceReportDirectory))) }
     if ($DeviceReportDeviceId) { $detachedArgs += @('-DeviceReportDeviceId',$DeviceReportDeviceId) }
@@ -60,6 +67,7 @@ if ($ShowTerminals) { $launchArgs += '--show-terminals' }
 if ($InteractiveScenario) { $launchArgs += '--interactive-scenario' }
 if ($OpenBrowser) { $launchArgs += '--open-browser' }
 if ($DemoVideo) { $launchArgs += @('--demo-video',$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DemoVideo)) }
+if ($BoardVideo) { $launchArgs += @('--board-video',$BoardVideo) }
 if ($ScoreTrial) { $launchArgs += '--score-trial' }
 if ($EventTrial) { $launchArgs += '--event-trial' }
 if ($EventBoardReports) { $launchArgs += '--event-board-reports' }

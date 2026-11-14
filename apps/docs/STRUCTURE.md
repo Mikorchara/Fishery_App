@@ -55,7 +55,7 @@ Fishery_Management/
 | QQ配置、网页配对和启动 | ai_service/qq_settings.py、management_web/qq_settings_api.py、qq_bot/private_pairing.py、management_configuration_bridge.py、management_run.py；scripts/dev/Start-*.ps1 |
 | 数据库升级 | monitoring/migrate.py；只显式维护，不在启动中调用 |
 
-数据根与源码目录分开，凭据又是独立私有Store。四个日常cmd共用 `outputs/qq-m3-real-test`；`apps/management_setup.py` 和 `Initialize-Management.ps1` 负责首次显式初始化，`knowledge/resources` 提供31条初始背景资料。QQ后续通过网页“QQ机器人”设置接入同库，见根目录[开始使用](../../开始使用.md)。不要为了目录整齐挪动实际数据库。
+数据根与源码目录分开，凭据又是独立私有Store。五个日常cmd共用 `outputs/qq-m3-real-test`；`apps/management_setup.py` 和 `Initialize-Management.ps1` 负责首次显式初始化，`knowledge/resources` 提供31条初始背景资料。QQ后续通过网页“QQ机器人”设置接入同库，见根目录[开始使用](../../开始使用.md)。不要为了目录整齐挪动实际数据库。
 
 QQ Web-Agent 由 `ai_service/channel_management_agent.py` 与 `channel_agent_presentation.py` 装配五项只读工具，复用来源回执和 2/2/3 工具循环。`qq_bot/knowledge_source.py` 只读打开同一批准实例的知识库，`agent_conversations.py` 沿用原 RAM 预算、revision 与 CAS。原 Web 默认配置及旧 QQ 单轮合同不变。
 

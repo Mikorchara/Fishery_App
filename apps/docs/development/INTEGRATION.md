@@ -153,7 +153,7 @@ result = monitoring.query_water_history(
 
 ## 独立设备报告接入（2026-11-04）
 
-> 本节是 11 月 4 日首版实现与测试记录。当前接收器默认局域网免令牌，四个日常入口选 `2` 会自动绑定默认设备。新版单包、旧分包与现场验收见[设备连接步骤](../DEVICE_INTERFACE_QUICK.md)。
+> 本节是 11 月 4 日首版实现与测试记录。当前接收器默认局域网免令牌，原有四个入口选 `2` 会自动绑定默认设备，板端视频入口直接绑定。新版单包、旧分包与现场验收见[设备连接步骤](../DEVICE_INTERFACE_QUICK.md)。
 
 - `apps.device_reports` 选择性复用 Prototype 的 TEXT_PACKAGE_API v1接收机制；端点 `/api/fish/reports`，必须绑定设备ID和专用令牌，默认只监听回环，局域网须显式绑定私网IPv4。
 - 独立 `device-reports.sqlite3` 为报告Schema v1；仅显式初始化、已有文件拒绝覆盖。不更改Monitoring v2、Settings、Policy、规则和事件生命周期。Web使用mode=ro/query_only读取最近20条。

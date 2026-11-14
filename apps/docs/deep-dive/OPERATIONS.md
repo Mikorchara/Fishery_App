@@ -8,7 +8,7 @@
 
 | 用途 | 数据根 | 说明 |
 |---|---|---|
-| 本机唯一日常实例 | `outputs/qq-m3-real-test` | 四个cmd均使用当前QQ实例；未搬库、未合并历史 |
+| 本机唯一日常实例 | `outputs/qq-m3-real-test` | 五个 cmd 均使用当前 QQ 实例 |
 | 旧正式 Web-only | `%LOCALAPPDATA%\FisheryManagement` | 原样保留；仅显式 `--user-data` 选择，日常cmd不使用 |
 | 原两终端演示 | `outputs/demo-instance` | 原样保留；仅显式 `-Demo` 选择，日常cmd不使用 |
 | 自建隔离演示 | 显式 `--data-root` | 新建一次；以后只复用 |

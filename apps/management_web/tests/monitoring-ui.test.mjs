@@ -777,6 +777,46 @@ test('actual polling page retains local video node and playback position indepen
   assert.match(p.node('content').textContent,/无视频流/);
 });
 
+test('the board video connects only on its page and retries only on request',async()=>{
+  const data=fixture();
+  const url='/media/board-video.mjpg';
+  data.video_preview={kind:'board_stream',source_kind:'DEVICE_RTSP',label:'开发板视频',url};
+  const p=page(data);await p.ready();
+  const host=p.node('local-video-preview');
+  const walk=n=>[n,...n.children.flatMap(walk)];
+  const image=()=>walk(host).find(n=>n.tagName==='img');
+  const retry=()=>walk(host).find(n=>n.tagName==='button'&&n.textContent==='重试视频');
+  assert.equal(image(),undefined);
+  p.run("location.hash='#video';render()");
+  const first=image();
+  assert.equal(first.getAttribute('src'),url);
+  assert.equal(retry(),undefined);
+  assert.ok(walk(host).some(n=>n.tagName==='button'&&n.textContent==='重新连接'));
+  assert.match(host.textContent,/DEVICE RTSP · 开发板视频/);
+  assert.equal(walk(host).some(n=>n.tagName==='video'),false);
+  await p.run('refresh()');
+  assert.equal(image(),first);
+
+  first.events.error();
+  assert.equal(first.getAttribute('src'),null);
+  assert.equal(image(),undefined);
+  assert.ok(retry());
+  assert.match(host.textContent,/暂时收不到开发板画面/);
+  await p.run('refresh()');
+  assert.equal(image(),undefined);
+  retry().events.click();
+  const second=image();
+  assert.notEqual(second,first);
+  assert.equal(second.getAttribute('src'),`${url}?view=2`);
+
+  p.run("location.hash='#events';render()");
+  assert.equal(second.getAttribute('src'),null);
+  assert.equal(host.hidden,true);
+  assert.equal(host.children.length,0);
+  p.run("location.hash='#video';render()");
+  assert.equal(image().getAttribute('src'),`${url}?view=3`);
+});
+
 
 test('video panels collapse independently, persist across polling and never remount playing media',async()=>{
   const data=fixture();data.video_preview={kind:'local_file',url:'/media/local-demo.mp4'};

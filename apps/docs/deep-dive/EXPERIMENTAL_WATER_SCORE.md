@@ -4,7 +4,7 @@ Management 已选择性同步 Prototype 人工认可的评分实现。`score_cur
 
 ## 使用
 
-在 Management 根目录启动 `scripts/dev/启动视频演示系统.cmd` 或 `scripts/dev/启动QQ视频演示系统.cmd`。这两个新入口显式携带评分开关；原来的两个无视频入口不改默认行为。手动使用 `run_local.ps1`／`Start-ManagementStack.ps1` 可加 `-ScoreTrial`，不能同时加 `-NoAssistant`。
+在 Management 根目录运行[三个视频入口](../BUILD_RUN.md#五个入口)之一，它们显式启用网页评分。手动使用 `run_local.ps1` 或 `Start-ManagementStack.ps1` 可加 `-ScoreTrial`，不能同时加 `-NoAssistant`。
 
 进入「系统设置 → Assistant Tool 授权」，勾选「水质实验评分（非专业标准）」并保存。使用 Web 固定 Qwen Preset，核对本次发送后提问“请给当前水质实验评分，并解释依据”。页面、授权保存和启动开关本身不调用模型。旧QQ模式不增加评分；新网页保存的Web-Agent配置可在独立Bot Policy、Scope和运行批准下使用同一只读评分工具，详见[QQ说明](QQ_BOT.md)。
 

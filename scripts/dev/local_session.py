@@ -65,11 +65,25 @@ def require_free_port(port):
             raise RuntimeError('LOCAL_PORT_IN_USE') from None
 
 
+def validate_video_options(simulation_mode, demo_video, board_video, *, bot_only=False):
+    if board_video is None:
+        return
+    if demo_video is not None:
+        raise RuntimeError('VIDEO_SOURCE_CONFLICT')
+    if bot_only:
+        raise RuntimeError('BOARD_VIDEO_REQUIRES_WEB')
+    if simulation_mode != 'water-only':
+        raise RuntimeError('BOARD_VIDEO_REQUIRES_DEVICE_MODE')
+    from apps.management_web.board_video import validate_board_video_url
+    validate_board_video_url(board_video)
+
+
 def commands(python, scenario, port, seed, *, assistant=True, streaming=True, multi_round=True, history=True,
-             data_root=None, user_data=False, demo_video=None, score_trial=False, simulation_mode='full',device_report_directory=None,device_report_device_id=None,
+             data_root=None, user_data=False, demo_video=None, board_video=None, score_trial=False, simulation_mode='full',device_report_directory=None,device_report_device_id=None,
              event_trial=False, event_board_reports=False):
     from apps.device_reports.binding import validate_binding
     validate_binding(simulation_mode,device_report_directory,device_report_device_id)
+    validate_video_options(simulation_mode, demo_video, board_video)
     if score_trial and not assistant:raise RuntimeError('SCORE_TRIAL_REQUIRES_ASSISTANT')
     if event_trial and not assistant:
         raise RuntimeError('EVENT_TRIAL_REQUIRES_ASSISTANT')
@@ -77,12 +91,14 @@ def commands(python, scenario, port, seed, *, assistant=True, streaming=True, mu
         raise RuntimeError('EVENT_TRIAL_REQUIRES_NORMAL_AND_STREAMING')
     if event_board_reports and (not event_trial or device_report_directory is None):
         raise RuntimeError('EVENT_BOARD_REPORTS_REQUIRE_TRIAL_AND_DEVICE_BINDING')
-    server = [python,'-m','apps.management_web','--port',str(port),'--enable-ingestion']
+    web_module = 'apps.management_web.board_video_entry' if board_video is not None else 'apps.management_web'
+    server = [python,'-m',web_module,'--port',str(port),'--enable-ingestion']
     if data_root is not None:
         server += ['--data-root',str(data_root)]
     if user_data:
         server += ['--user-data']
     if demo_video is not None:server+=['--demo-video',str(Path(demo_video).absolute())]
+    if board_video is not None:server+=['--board-video',board_video]
     if simulation_mode!='full':server+=['--simulation-mode',simulation_mode]
     if device_report_directory is not None:server+=['--device-report-directory',str(Path(device_report_directory).absolute()),'--device-report-device-id',device_report_device_id]
     if assistant:
@@ -113,7 +129,7 @@ def run_local(scenario='normal', port=8766, seed=42, *, root=ROOT, python=None,
               assistant=True, streaming=True, multi_round=True, history=True,
               data_root=None, user_data=False, show_terminals=False, open_browser=False, interactive_scenario=False,
               launch=subprocess.Popen, is_ready=ready, sleep=time.sleep, emit=print,
-              browse=webbrowser.open, demo_video=None, score_trial=False, simulation_mode='full',device_report_directory=None,device_report_device_id=None,
+              browse=webbrowser.open, demo_video=None, board_video=None, score_trial=False, simulation_mode='full',device_report_directory=None,device_report_device_id=None,
              event_trial=False, event_board_reports=False):
     if interactive_scenario and not show_terminals:
         raise RuntimeError('LOCAL_SCENARIO_MENU_REQUIRES_TERMINALS')
@@ -127,7 +143,7 @@ def run_local(scenario='normal', port=8766, seed=42, *, root=ROOT, python=None,
     try:
         server,simulator = commands(python or sys.executable,scenario,port,seed,
             assistant=assistant,streaming=streaming,multi_round=multi_round,history=history,
-            data_root=data_root,user_data=user_data,demo_video=demo_video,score_trial=score_trial,simulation_mode=simulation_mode,device_report_directory=device_report_directory,device_report_device_id=device_report_device_id,
+            data_root=data_root,user_data=user_data,demo_video=demo_video,board_video=board_video,score_trial=score_trial,simulation_mode=simulation_mode,device_report_directory=device_report_directory,device_report_device_id=device_report_device_id,
             event_trial=event_trial,event_board_reports=event_board_reports)
         options = dict(cwd=root,env=child_env)
         if show_terminals:
@@ -199,8 +215,8 @@ def console_role(argv):
     separator, *arguments = remaining
     if role not in ('web', 'simulator') or interactive and role != 'simulator':
         raise RuntimeError('INVALID_LOCAL_CONSOLE')
-    if separator != '--' or arguments[:1] != ['-m'] or arguments[1:2] != [
-            'apps.management_web' if role == 'web' else 'apps.simulator']:
+    allowed_modules = ('apps.management_web', 'apps.management_web.board_video_entry') if role == 'web' else ('apps.simulator',)
+    if separator != '--' or len(arguments) < 2 or arguments[0] != '-m' or arguments[1] not in allowed_modules:
         raise RuntimeError('INVALID_LOCAL_CONSOLE')
     port = arguments[arguments.index('--port')+1] if role == 'web' else arguments[arguments.index('--server')+1].rsplit(':',1)[1]
     ctypes.windll.kernel32.SetConsoleTitleW('AI 监测系统 · '+('Web' if role == 'web' else 'Simulator')+' · '+port)
@@ -233,6 +249,9 @@ ERROR_HELP = {
     'DEMO_SOURCE_BUSY_CLOSE_FORMAL_WEB': '正式知识库正在使用或存在 SQLite 日志。请正常关闭正式 Web/编辑器后重试。',
     'DEMO_SOURCE_KNOWLEDGE_MISSING': '找不到正式知识库，未建立空白演示库。请核对当前 Windows 用户的数据目录。',
     'LOCAL_JOB_UNAVAILABLE': '无法启用 Windows 进程回收保护，未启动服务。',
+    'VIDEO_SOURCE_CONFLICT': '请选择开发板视频或本地录像其中一种来源。',
+    'BOARD_VIDEO_REQUIRES_DEVICE_MODE': '开发板视频仅在设备联调模式下可用。',
+    'BOARD_VIDEO_RTSP_URL_INVALID': '请指定私网或本机 IPv4 的 RTSP 视频地址。',
 }
 
 
@@ -253,7 +272,9 @@ def main(argv=None):
     parser.add_argument('--interactive-scenario',action='store_true',help='在 Simulator 终端先选择场景；仅与 --show-terminals 使用')
     for name in ('assistant','streaming','multi-round','history'):
         parser.add_argument('--no-'+name,action='store_true')
-    parser.add_argument('--demo-video',type=Path)
+    video_sources=parser.add_mutually_exclusive_group()
+    video_sources.add_argument('--demo-video',type=Path)
+    video_sources.add_argument('--board-video')
     parser.add_argument('--score-trial',action='store_true')
     parser.add_argument('--event-trial',action='store_true')
     parser.add_argument('--event-board-reports',action='store_true')
@@ -279,6 +300,7 @@ def main(argv=None):
         from apps.ai_backend.secure_files import SecureFileError
         from apps.knowledge.repository import KnowledgeError
         from apps.ai_backend.tools.policy import ToolPolicyError
+        validate_video_options(args.simulation_mode, args.demo_video, args.board_video)
         require_free_port(args.port)
         # Only the standalone CLI joins the job; its handle lives until this
         # supervisor exits. Forced termination therefore also removes descendants.
@@ -300,7 +322,7 @@ def main(argv=None):
                 streaming=not args.no_streaming,multi_round=not args.no_multi_round,history=not args.no_history,
                 data_root=args.data_root,user_data=args.user_data,show_terminals=args.show_terminals,
                 open_browser=args.open_browser,interactive_scenario=args.interactive_scenario,
-                demo_video=args.demo_video,score_trial=args.score_trial,simulation_mode=args.simulation_mode,device_report_directory=args.device_report_directory,device_report_device_id=args.device_report_device_id,
+                demo_video=args.demo_video,board_video=args.board_video,score_trial=args.score_trial,simulation_mode=args.simulation_mode,device_report_directory=args.device_report_directory,device_report_device_id=args.device_report_device_id,
                 **({'event_trial':args.event_trial,'event_board_reports':args.event_board_reports} if args.event_trial or args.event_board_reports else {}))
     except (RuntimeError, OSError, ValueError, SecureFileError, KnowledgeError, ToolPolicyError) as error:
         code = str(error) if isinstance(error, (RuntimeError, ValueError)) else getattr(error, 'code', 'LOCAL_STORAGE_OR_PERMISSION_ERROR')

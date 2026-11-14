@@ -139,7 +139,7 @@ runpy.run_path(script,run_name='__main__')'''
         self.addCleanup(lambda:(sentinel.terminate(),sentinel.wait(timeout=5)) if sentinel.poll() is None else None)
         child,directory=self.start()
         self.wait(lambda:self.status(directory,'bot').get('state')=='READY' or child.poll() is not None)
-        self.assertIsNone(child.poll(),(directory/'controller.log').read_text())
+        self.assertIsNone(child.poll(),(directory/'controller.log').read_text(encoding='utf8'))
         records=[self.status(directory,r) for r in ('web','simulator','bot')]
         self.assertEqual(len({r['pid'] for r in records}),3)
         self.assertEqual(len({r['console_hwnd'] for r in records}),3)
@@ -172,8 +172,10 @@ runpy.run_path(script,run_name='__main__')'''
         process_fixture.WindowsDemoLifecycleTests.kill_owned(pid)
         before=self.count();self.wait(lambda:self.count()>before,timeout=15)
         self.assertIsNone(child.poll())
-        self.wait(lambda:'"role": "bot"' in (directory/'controller.log').read_text() and
-            '"state": "EXITED"' in (directory/'controller.log').read_text())
+        def bot_exit_logged():
+            log = (directory/'controller.log').read_text(encoding='utf8', errors='replace')
+            return '"role": "bot"' in log and '"state": "EXITED"' in log
+        self.wait(bot_exit_logged)
         self.assertFalse(process_fixture.alive(pid))
 
     def test_video_score_and_events_three_consoles_with_fake_bot_stop_independently(self):
@@ -184,7 +186,7 @@ runpy.run_path(script,run_name='__main__')'''
         video.write_bytes(content)
         child,directory=self.start(demo_video=video,score_trial=True,event_trial=True,seconds=None)
         self.wait(lambda:self.status(directory,'bot').get('state')=='READY' or child.poll() is not None)
-        self.assertIsNone(child.poll(),(directory/'controller.log').read_text())
+        self.assertIsNone(child.poll(),(directory/'controller.log').read_text(encoding='utf8'))
         records=[self.status(directory,r) for r in ('web','simulator','bot')]
         self.assertEqual(len({r['pid'] for r in records}),3)
         self.assertEqual(len({r['console_hwnd'] for r in records}),3)
@@ -216,7 +218,7 @@ runpy.run_path(script,run_name='__main__')'''
         request_stop(directory,'all');child.wait(timeout=30)
         solo,solo_directory=self.start(only=True,seconds=5)
         solo.wait(timeout=25)
-        self.assertEqual(solo.returncode,0,(solo_directory/'controller.log').read_text())
+        self.assertEqual(solo.returncode,0,(solo_directory/'controller.log').read_text(encoding='utf8'))
         self.assertFalse((solo_directory/'web.status.json').exists())
         self.assertFalse((solo_directory/'simulator.status.json').exists())
 
@@ -233,7 +235,7 @@ runpy.run_path(script,run_name='__main__')'''
         board='stack-board-1';store=ReportStore.initialize(self.root/'reports')
         child,directory=self.start(report_directory=self.root/'reports',report_device=board)
         self.wait(lambda:self.status(directory,'bot').get('state')=='READY' or child.poll() is not None)
-        self.assertIsNone(child.poll(),(directory/'controller.log').read_text())
+        self.assertIsNone(child.poll(),(directory/'controller.log').read_text(encoding='utf8'))
         now=datetime.now(timezone.utc);report=reports.report()
         report.update(device_id=board,report_id='stack-report-1',sent_at=now.isoformat())
         report['window'].update(start=(now-timedelta(seconds=39)).isoformat(),end=now.isoformat())
@@ -275,7 +277,7 @@ runpy.run_path(script,run_name='__main__')'''
         request_stop(directory,'all');child.wait(timeout=30)
         cancelled,cancel_directory=self.start(interactive=True,menu_input='0\n')
         cancelled.wait(timeout=30)
-        self.assertEqual(cancelled.returncode,0,(cancel_directory/'controller.log').read_text())
+        self.assertEqual(cancelled.returncode,0,(cancel_directory/'controller.log').read_text(encoding='utf8'))
         self.assertEqual(self.count(),before)
         self.assertFalse(any(process_fixture.alive(self.status(cancel_directory,r).get('pid',0))
                              for r in ('web','simulator','bot')))

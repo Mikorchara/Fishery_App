@@ -3,6 +3,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 import json
 from pathlib import Path
+import shutil
 import socket
 import subprocess
 import sys
@@ -42,9 +43,73 @@ class VideoScoreStartTests(unittest.TestCase):
         self.assertEqual(launch.call_args.kwargs['demo_video'],self.video)
         self.assertTrue(launch.call_args.kwargs['score_trial'])
         web,sim=local_session.commands('python','normal',8766,42,demo_video=self.video,score_trial=True)
+        self.assertEqual(web[1:3], ['-m', 'apps.management_web'])
         self.assertEqual(web[web.index('--demo-video')+1],str(self.video))
         self.assertIn('--assistant-score-trial',web)
         self.assertNotIn('--demo-video',sim);self.assertNotIn('--assistant-score-trial',sim)
+
+    def test_board_video_launch_targets_only_web_in_device_mode(self):
+        source='rtsp://127.0.0.1:8554/test.264'
+        with patch.object(stack,'launch_stack',return_value=0) as launch:
+            self.assertEqual(stack.main(['--simulation-mode','water-only','--board-video',source]),0)
+        self.assertEqual(launch.call_args.kwargs['board_video'],source)
+        self.assertEqual(launch.call_args.kwargs['simulation_mode'],'water-only')
+        web,sim=local_session.commands('python','normal',8766,42,simulation_mode='water-only',board_video=source)
+        self.assertEqual(web[1:3], ['-m', 'apps.management_web.board_video_entry'])
+        self.assertEqual(web[web.index('--board-video')+1],source)
+        self.assertNotIn('--demo-video',web)
+        self.assertNotIn('--board-video',sim)
+        self.assertNotIn(source,sim)
+
+    def test_visible_web_console_dispatches_the_opt_in_board_module(self):
+        args = ['--port', '8767', '--simulation-mode', 'water-only',
+                '--board-video', 'rtsp://127.0.0.1:8554/test.264']
+        with patch('ctypes.windll'), patch('runpy.run_module') as run, patch.object(sys, 'argv', []):
+            self.assertEqual(local_session.console_role([
+                'web', '--', '-m', 'apps.management_web.board_video_entry', *args,
+            ]), 0)
+            run.assert_called_once_with('apps.management_web.board_video_entry', run_name='__main__', alter_sys=True)
+            self.assertEqual(sys.argv, ['apps.management_web.board_video_entry', *args])
+
+    def test_fifth_shortcut_asks_for_the_current_board_address_and_launches_the_qq_stack(self):
+        scripts=self.root/'scripts/dev'
+        scripts.mkdir(parents=True)
+        name='启动QQ板端视频演示系统.cmd'
+        for filename in (name,'Start-BoardVideoDemo.ps1'):
+            shutil.copyfile(ROOT/'scripts/dev'/filename,scripts/filename)
+        # Exercise the actual CMD and its prompt without opening consoles or using QQ.
+        (scripts/'Start-ManagementStack.ps1').write_text(
+            "param($Request,[switch]$WithBot,$SimulationMode,[switch]$AutoDeviceReports,"
+            "$BoardVideo,[switch]$InteractiveScenario,[switch]$OpenBrowser,[switch]$ScoreTrial,[switch]$EventTrial)\n"
+            "ConvertTo-Json -Compress -InputObject $PSBoundParameters\n", encoding='ascii')
+        (scripts/'ffmpeg.cmd').write_text('@exit /b 0\n',encoding='ascii')
+        command=['cmd.exe','/d','/c',name]
+        for text, expected in (
+            (b'\r\n192.168.2.220\r\n','rtsp://192.168.2.220:554/normal.264'),
+            (b'rtsp://192.168.68.178:8554/other.264\r\n','rtsp://192.168.68.178:8554/other.264'),
+        ):
+            with self.subTest(source=expected):
+                result=subprocess.run(command,cwd=scripts,input=text,capture_output=True,timeout=15)
+                self.assertEqual(result.returncode,0,result.stderr)
+                flags=json.loads(result.stdout.splitlines()[-1])
+                self.assertEqual(flags['BoardVideo'],expected)
+                self.assertEqual(flags['SimulationMode'],'water-only')
+                self.assertEqual(Path(flags['Request']),self.root/'outputs/qq-m3-real-config/request.json')
+                for flag in ('WithBot','AutoDeviceReports','InteractiveScenario','OpenBrowser','ScoreTrial','EventTrial'):
+                    self.assertTrue(flags[flag])
+        cancelled=subprocess.run(command,cwd=scripts,input=b'0\r\n',capture_output=True,timeout=15)
+        self.assertEqual(cancelled.returncode,0,cancelled.stderr)
+        self.assertNotIn(b'"WithBot"',cancelled.stdout)
+
+    def test_board_video_rejects_unusable_startup_combinations(self):
+        source='rtsp://127.0.0.1:8554/test.264'
+        with self.assertRaisesRegex(RuntimeError,'BOARD_VIDEO_REQUIRES_DEVICE_MODE'):
+            local_session.commands('python','normal',8766,42,board_video=source)
+        with self.assertRaisesRegex(RuntimeError,'VIDEO_SOURCE_CONFLICT'):
+            local_session.commands('python','normal',8766,42,simulation_mode='water-only',
+                                   board_video=source,demo_video=self.video)
+        with self.assertRaisesRegex(RuntimeError,'BOARD_VIDEO_REQUIRES_WEB'):
+            stack.preflight(simulation_mode='water-only',board_video=source,bot_only=True)
 
     def test_check_uses_explicit_synthetic_request_without_db_keys_network(self):
         request=initialize_demo(self.root/'instance',self.root/'config',app_id='123456789',

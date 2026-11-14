@@ -45,18 +45,68 @@ export function createVideoWorkspace(mediaHost){
   }};
 }
 
-// A separate, stable media region. Polling statistics never recreates the player.
-export function createLocalVideoPreview(host){
-  let player=null,shown=false,key=null;
-  function update(metadata,visible=false){
-    const valid=metadata?.kind==='local_file'&&metadata.url==='/media/local-demo.mp4';
-    if(!valid){
-      if(player){player.pause?.();player.removeAttribute('src');player.load?.();}
-      player=null;key=null;shown=false;host.hidden=true;host.replaceChildren();return;
+const localVideoUrl='/media/local-demo.mp4';
+const boardVideoUrl='/media/board-video.mjpg';
+
+// Polling statistics never recreates an active player or retries a failed stream.
+export function createVideoPreview(host){
+  let player=null,shown=false,board=null,boardRequest=0;
+  const isLocal=metadata=>metadata?.kind==='local_file'&&metadata.url===localVideoUrl;
+  const isBoard=metadata=>metadata?.kind==='board_stream'&&metadata.source_kind==='DEVICE_RTSP'&&metadata.url===boardVideoUrl;
+  function clearLocal(){
+    if(!player)return;
+    player.pause?.();player.removeAttribute('src');player.load?.();
+    player=null;shown=false;host.replaceChildren();
+  }
+  function clearBoard(){
+    if(!board)return;
+    const previous=board;
+    board=null;previous.disconnect();host.replaceChildren();
+  }
+  function mountBoard(){
+    const frame=el('div',{class:'board-video-frame'});
+    const sourceText='画面来自开发板，检测结果按设备报告更新。';
+    const status=el('p',{class:'muted',role:'status',text:sourceText});
+    const retry=button('重新连接',()=>{disconnect();connect();});
+    let image=null;
+    const view={disconnect};
+    board=view;
+    function disconnect(){
+      const previous=image;
+      image=null;
+      previous?.removeAttribute('src');previous?.remove();
     }
+    function connect(){
+      if(board!==view||image)return;
+      const next=el('img',{alt:'开发板视频画面'});
+      image=next;retry.textContent='重新连接';status.textContent=sourceText;
+      next.addEventListener('error',()=>{
+        if(image!==next)return;
+        disconnect();status.textContent='暂时收不到开发板画面。请检查板端视频服务后重试。';
+        retry.textContent='重试视频';
+      });
+      frame.replaceChildren(next);
+      boardRequest+=1;
+      next.setAttribute('src',boardRequest===1?boardVideoUrl:`${boardVideoUrl}?view=${boardRequest}`);
+    }
+    host.replaceChildren(card('开发板视频',null,[
+      badge('DEVICE RTSP · 开发板视频','demo'),frame,
+      el('div',{class:'board-video-feedback'},[status,retry]),
+    ]));
+    connect();
+  }
+  function update(metadata,visible=false){
+    if(isBoard(metadata)){
+      clearLocal();host.hidden=!visible;
+      if(!visible)clearBoard();
+      else if(!board)mountBoard();
+      return;
+    }
+    clearBoard();
+    if(!isLocal(metadata)){clearLocal();host.hidden=true;return;}
     host.hidden=!visible;
     if(!visible){player?.pause?.();shown=false;return;}
-    if(key!==metadata.url||!player){
+    if(!player){
       const notice=el('p',{class:'muted',role:'status',text:'本地录制素材，支持暂停、拖动和循环播放。'});
       player=el('video',{class:'demo-video-player',src:metadata.url,controls:'',autoplay:'',muted:'',loop:'',playsinline:'',preload:'metadata','aria-label':'本地演示视频（非实时设备）'});
       player.muted=true;
@@ -64,12 +114,14 @@ export function createLocalVideoPreview(host){
       host.replaceChildren(card('本地演示视频（非实时设备）','仅用于展示播放效果，不代表当前鱼塘状态。',[
         badge('LOCAL VIDEO · 录制素材','demo'),player,notice,
         el('p',{class:'muted',text:'画面与观测统计、事件及时间戳独立；未执行实时视频分析，不生成观测或事件。'})]));
-      key=metadata.url;
     }
     if(!shown){const pending=player.play?.();pending?.catch(()=>{});}
     shown=true;
   }
-  return {update,suspend(){player?.pause?.();shown=false;}};
+  return {update,available:metadata=>isLocal(metadata)||isBoard(metadata),suspend(){
+    if(board){clearBoard();host.hidden=true;}
+    player?.pause?.();shown=false;
+  }};
 }
 
 export function el(tag,attrs={},children=[]) {

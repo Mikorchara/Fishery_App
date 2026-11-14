@@ -36,6 +36,28 @@ sha256sum website_publish.py
 
 先缩小报文，再用现场数据测量窗口结束到完整接收的耗时。需要调频时分别测量窗口、队列和任务调度，每次只调整一项。改动 C++ 调度需核对源码和运行二进制对应关系。
 
+## 启动回放检测并复用已有行为结果
+
+先在电脑启动[接收器和网页](../../../apps/docs/DEVICE_INTERFACE_QUICK.md)。如板端检测已在运行，沿用该进程。需要启动时，在开发板 SSH 窗口执行下面的命令。若接收报告的电脑地址变化，先将 `PC_IP` 的值替换为电脑当前的局域网 IPv4，再执行地址设置行。
+
+```bash
+cd /home/lxw/fish_cpp_agent_integration
+# 仅电脑上报目标改变时执行以下两行，先替换实际地址
+PC_IP='<电脑当前局域网IPv4>'
+python3 configure_website.py --url "http://${PC_IP}:8780/api/fish/reports" --no-token
+```
+
+需要跳过 SlowFast 推理、继续附带已有行为 JSON 时，在板端项目目录下创建临时配置，执行预检后启动。原配置保留。
+
+```bash
+settings=$(mktemp "$PWD/.start_all.publish-test.XXXXXX") &&
+python3 -c 'import json,sys; from pathlib import Path; p=Path("start_all.local.json"); c=json.loads(p.read_bytes()) if p.is_file() else {}; c["behavior"]=None; Path(sys.argv[1]).write_text(json.dumps(c),encoding="utf-8")' "$settings" &&
+python3 start_all.py --settings "$settings" --check &&
+python3 start_all.py --settings "$settings"
+```
+
+在网页看到「窗口结束」晚于本次检测启动时间，即收到本轮新报告。收工时，在板端检测终端按 Ctrl+C。
+
 ## 旧版精简报文候选
 
 候选仅适用于下列归档源码指纹，供旧版复核。一次性直发、旧队列切换记录及验证结果已归入本机忽略目录 `outputs/hardware-checks/archive-legacy-lab`。

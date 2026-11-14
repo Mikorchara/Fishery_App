@@ -17,7 +17,7 @@
 看到 `DEVICE_REPORT_LISTENING` 后保留这个窗口。接收器使用 `8780` 端口，已运行时可直接进入下一步。需要停止接收时，在接收器窗口按 Ctrl+C。
 
 
-## 四个入口
+## 五个入口
 
 ```powershell
 # 两终端：Simulator + Web
@@ -31,11 +31,16 @@
 
 # 三终端，播放 sample.mp4
 .\scripts\dev\启动QQ视频演示系统.cmd
+
+# 三终端，设备联调，播放开发板提供的画面
+.\scripts\dev\启动QQ板端视频演示系统.cmd
 ```
 
-1. 先选运行模式：`1`完整模拟（默认）；`2`设备联调（仅模拟水质）；`0`退出。再在 **Simulator窗口**选场景，Enter默认正常，0退出；选择前不发送新数据，首个完整窗口约10秒。
+1. 前四个入口先选运行模式：`1`完整模拟（默认）、`2`设备联调（仅模拟水质）、`0`退出。第五个入口固定为设备联调，启动时填开发板当前 IPv4 或完整 RTSP 地址。再在 **Simulator 窗口**选择水质场景，回车默认正常，`0` 退出。首个完整水质窗口约 10 秒。
 2. 打开 http://127.0.0.1:8766 。视频在“视频监控”，两侧数据可收起。右上角切换浅色/深蓝主题。
 3. 三终端需在 **Bot窗口**核对本次模型、群/成员摘要、实例、设备、Token和持续调用费用，输入本次 `APPROVE MANAGEMENT <摘要>`。未批准不联网。
+
+板端视频通过第五个入口单独启用，可以沿用现有 QQ 设置。电脑需能运行 `ffmpeg`。只填开发板 IPv4 时，使用 `rtsp://<开发板IPv4>:554/normal.264`。板端换了端口或视频流时，填完整地址。接收器使用电脑自己的 IPv4，两种地址换网后都应重新核对。完整步骤见[设备连接说明](DEVICE_INTERFACE_QUICK.md#2-启动网页只模拟水质)。
 
 | 输入 | 场景 | 直接指定时的参数 |
 |---|---|---|
@@ -50,14 +55,14 @@
 
 选项`9`在完整模拟菜单中显示。水质保持正常场景。前两个10秒窗口出现疑似病灶和体表异常信号，之后连续三个完整窗口未检出，约第50秒两条事件消退。事件来源显示为`SIMULATOR`。`0`或`8`退出。
 
-设备联调模式只模拟水质，视觉数据由开发板提供。四个入口选 `2` 后会绑定本项目 `outputs/device-reports` 和设备 `fish-monitor-orin-01`。启动前先按下方[设备联调](#设备联调)打开独立接收器。
+设备联调模式只模拟水质。前四个入口选 `2`，第五个入口直接联调，都会绑定本项目 `outputs/device-reports` 和设备 `fish-monitor-orin-01`。启动前先按下方[设备联调](#设备联调)打开独立接收器。
 
 ## 数据和AI要点
 
-- **四个日常cmd统一使用 `outputs/qq-m3-real-test`**，以当前QQ三终端的数据为主。两终端显式指定此目录；三终端沿用 `outputs/qq-m3-real-config/request.json` 中同一绑定。水质、事件、知识库、设置和Web工具授权共用一份实例；QQ独立权限和凭据规则不变。目录缺失时拒绝启动，不自动初始化另一份数据。
-- `outputs/demo-instance`、旧 `%LOCALAPPDATA%\FisheryManagement` 和其他测试实例原样保留；四个日常入口不再选择它们，不混合或覆盖旧历史。`run_local.ps1 -Demo`、`--user-data` 和手动 `--data-root` 仍是显式选择其他实例的维护入口，不用于本机日常运行。运行日志、备份、测试夹具和私有密钥不属于第二份日常业务库。
+- **五个日常 cmd 统一使用 `outputs/qq-m3-real-test`**。两终端显式指定此目录；三终端沿用 `outputs/qq-m3-real-config/request.json` 中同一绑定。水质、事件、知识库、设置和 Web 工具授权共用一份实例，QQ 使用原有权限和凭据。目录缺失时拒绝启动，不自动初始化另一份数据。
+- `outputs/demo-instance`、旧 `%LOCALAPPDATA%\FisheryManagement` 和其他测试实例原样保留；日常入口不选择它们。`run_local.ps1 -Demo`、`--user-data` 和手动 `--data-root` 仍可显式选择其他实例。运行日志、备份、测试夹具和私有密钥不属于第二份日常业务库。
 - 本地录像标为LOCAL VIDEO，与SIMULATOR水质/视觉、事件和时间独立；不做实时检测或NPU推理。
-- 两个视频入口启用 Web 实验评分和当前事件查询。`启动演示系统.cmd` 也启用当前事件查询。在设置里勾选相应工具并保存，发送时确认本次模型请求。无视频的三终端入口关闭 Web AI。QQ 网页保存的 Agent 配置包含当前水质、历史水质、项目知识、实验评分和当前事件五个只读工具，沿用原启动审批。已有 QQ 配置升级后在网页重新保存一次，无需填写新字段。
+- 三个视频入口启用 Web 实验评分和当前事件查询。`启动演示系统.cmd` 也启用当前事件查询。在设置里勾选相应工具并保存，发送时确认本次模型请求。无视频的三终端入口关闭 Web AI。QQ 网页保存的 Agent 配置包含当前水质、历史水质、项目知识、实验评分和当前事件五个只读工具，沿用原启动审批。已有 QQ 配置升级后在网页重新保存一次，无需填写新字段。
 - QQ群中真正@机器人，可问“什么是溶解氧？”、“现在水质怎么样？”、“那溶解氧呢？”。`/清空会话`只清自己的记忆。普通自然语言可能收费。
 - 展示时直接发送 `@机器人 /当前水质`、`@机器人 查询水质` 或 `@机器人 查询当前水质`，由系统直接查数据，不调用模型。只有这几个明确指令走直接查询；`/问AI 查询水质`仍调用模型。
 - 网页新配置使用持续模式，不设累计时长、轮数和费用停止；普通自然语言可能持续计费，需人工停止。旧有限配置不自动升级；在网页确认保存后重启。机制和错误码统一见[QQ专题](deep-dive/QQ_BOT.md)。
@@ -73,7 +78,7 @@
 .\scripts\dev\Start-ManagementStack.ps1 -Request "$PWD\outputs\qq-m3-real-config\request.json" -WithBot -NoAssistant -Scenario low_oxygen -OpenBrowser
 ```
 
-需要运行模式菜单时加 `-InteractiveMode`；直接指定模式用 `-SimulationMode water-only`（默认full）。四个cmd已带`-AutoDeviceReports`，仅在water-only且未提供绑定时使用上述固定目录/ID；手动启动不加此开关时保持原行为。需要场景菜单时加 `-InteractiveScenario`；需要视频时加 `-DemoVideo "$PWD\sample.mp4"`；Web评分加 `-ScoreTrial` 并去掉 `-NoAssistant`。`-Port 8767`可改端口，不结束未知Python进程。PowerShell接受相对Request路径，JSON内部仍必须是本机正确的绝对路径。
+需要运行模式菜单时加 `-InteractiveMode`，直接指定设备联调用 `-SimulationMode water-only`（默认 `full`）。五个 cmd 均带 `-AutoDeviceReports`，仅在设备联调且未显式提供绑定时使用上述报告目录和 ID。需要场景菜单时加 `-InteractiveScenario`。本地录像用 `-DemoVideo "$PWD\sample.mp4"`，开发板预览用 `-BoardVideo '<板端 RTSP 地址>'`。Web 评分用 `-ScoreTrial` 并去掉 `-NoAssistant`。`-Port 8767` 可改端口。PowerShell 接受相对 Request 路径，JSON 内部仍必须是本机正确的绝对路径。
 
 **停止：**三终端在最初编排终端按 Ctrl+C，两终端可在 Web 或 Simulator 窗口按 Ctrl+C。单独停 Bot 时，Web 和 Simulator 继续运行。关闭浏览器标签页后，后台进程仍会运行。独立停止、日志与备份见[维护说明](deep-dive/OPERATIONS.md)。
 
@@ -91,13 +96,13 @@
 
 看到 `DEVICE_REPORT_LISTENING` 后保留这个窗口。接收器使用 `8780` 端口，已运行时可直接进入下一步。需要停止接收时，在接收器窗口按 Ctrl+C。
 
-在另一个窗口运行[四个入口](#四个入口)中的一个，选择 **`2`（设备联调）**。Web 会同步外观异常、行为异常和报告更新中断。若使用 QQ 入口且本次审批包含设备视觉通知，E1 会提醒已验证的私聊接收人，E2 和 E3 在网页查看。非默认设备 ID 或目录可通过 `Start-ManagementStack.ps1` 的 `-SimulationMode water-only -DeviceReportDirectory <目录> -DeviceReportDeviceId <ID>` 指定。详见[设备连接步骤](DEVICE_INTERFACE_QUICK.md)。
+在另一个窗口运行[五个入口](#五个入口)中的一个。要同时用 QQ 和开发板画面，选 `启动QQ板端视频演示系统.cmd`；其余入口通过菜单选 **`2`（设备联调）**。Web 会同步外观异常、行为异常和报告更新中断。若使用 QQ 入口且本次审批包含设备视觉通知，E1 会提醒已验证的私聊接收人，E2 和 E3 在网页查看。非默认设备 ID 或目录可通过 `Start-ManagementStack.ps1` 的 `-SimulationMode water-only -DeviceReportDirectory <目录> -DeviceReportDeviceId <ID>` 指定。详见[设备连接步骤](DEVICE_INTERFACE_QUICK.md)。
 
 若提示 `MANAGEMENT_SCOPE_REVIEW_REQUIRED`，按[代码指纹与恢复启动](deep-dive/QQ_BOT.md#代码指纹与恢复启动)核对版本并重新保存现有 QQ 设置，再运行预检和批准新进程。
 
 ## Web AI 查询当前事件
 
-用 `启动演示系统.cmd`、`启动视频演示系统.cmd` 或 `启动QQ视频演示系统.cmd` 重启后，进入「系统设置 → Assistant Tool 授权」，勾选「查询当前事件（只读）」并保存。已勾选时可直接用 Qwen 问「现在有什么异常？」。Normal 和 Streaming 都支持，发送问题并确认后才会调用模型。
+用 `启动演示系统.cmd` 或三个视频入口之一重启后，进入「系统设置 → Assistant Tool 授权」，勾选「查询当前事件（只读）」并保存。已勾选时可直接用 Qwen 问「现在有什么异常？」。Normal 和 Streaming 都支持，发送问题并确认后才会调用模型。
 
 日常入口的 Web AI 查询网页选定设备的事件。如需让 Web AI 同时读取已绑定开发板的事件，请按[设备联调](#设备联调)保持接收器运行，并从项目根目录手动启动。
 

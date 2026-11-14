@@ -1,5 +1,6 @@
 """Independent presentation API and explicitly enabled local device ingestion."""
 
+from contextvars import ContextVar
 from dataclasses import asdict
 from hmac import compare_digest
 from ipaddress import ip_address
@@ -12,11 +13,14 @@ from apps.monitoring.event_records import EventRecordError
 from .event_api import register_event_api
 
 
+board_video_for_startup = ContextVar('board_video_for_startup', default=None)
+
+
 def create_app(*, monitoring=None, ai=None, video=None, files=None, events=None,
                allowed_hosts=("127.0.0.1:8766", "localhost:8766", "localhost"),
                data_service=None, ingestion_token=None, knowledge_service=None, settings_service=None, demo_video=None,
                simulation_mode='full',device_report_store=None,device_report_device_id=None,
-               device_event_bridge=None, qq_settings_service=None):
+               device_event_bridge=None, qq_settings_service=None, board_video=None):
     if simulation_mode not in ('full','water-only'):raise ValueError('INVALID_SIMULATION_MODE')
     if device_report_store is not None:
         from apps.device_reports.storage import ReportStore
@@ -24,7 +28,14 @@ def create_app(*, monitoring=None, ai=None, video=None, files=None, events=None,
         if simulation_mode!='water-only' or type(device_report_store) is not ReportStore or not device_report_store.read_only:
             raise ValueError('DEVICE_REPORT_READ_ONLY_BINDING_REQUIRED')
         identifier(device_report_device_id)
+    if board_video is None:
+        board_video = board_video_for_startup.get()
     app = Flask(__name__, static_folder="static", static_url_path="/static")
+    if board_video is not None:
+        if simulation_mode != 'water-only' or demo_video is not None:
+            raise ValueError('BOARD_VIDEO_REQUIRES_DEVICE_MODE_WITHOUT_DEMO')
+        from .board_video import register_board_video
+        register_board_video(app, board_video)
     if demo_video is not None:
         from .demo_video import register_demo_video
         register_demo_video(app,demo_video)
@@ -102,7 +113,8 @@ def create_app(*, monitoring=None, ai=None, video=None, files=None, events=None,
             try:device_reports=recent_view(device_report_store,device_report_device_id,now=datetime.now(timezone.utc))
             except ReportError:device_reports=dict(device_id=device_report_device_id,items=[],error_code='DEVICE_REPORT_READ_UNAVAILABLE')
         from apps.monitoring.event_cycles import summarize_cycles
-        return jsonify(**({'video_preview':demo_video.metadata()} if demo_video is not None else {}),
+        preview = board_video if board_video is not None else demo_video
+        return jsonify(**({'video_preview':preview.metadata()} if preview is not None else {}),
             schema_version=1, application="management-web-r1", data_mode=mode, preferences=preferences,
             **({'integration':dict(simulation_mode=simulation_mode,device_reports=device_reports,
                 **({'device_events':dict(enabled=True,error_code=device_event_bridge.code)}

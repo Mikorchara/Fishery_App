@@ -1,4 +1,4 @@
-import {el,icon,card,badge,empty,button,link,rows,metricCards,metadata,table,trendChart,normalizedTrendChart,createLocalVideoPreview,createVideoWorkspace} from './components.js';
+import {el,icon,card,badge,empty,button,link,rows,metricCards,metadata,table,trendChart,normalizedTrendChart,createVideoPreview,createVideoWorkspace} from './components.js';
 import {routes,routeFor,timeText,filterItems,validateBootstrap,qualityNames,freshnessNames,sourceName,managedEvent,connectionName,eventState,eventStateName,eventStateReasonName,eventHandlingName,cycleConfirmationName,eventSeverityName,trendRanges,activeEventOverview} from './view-model.js';
 import {services} from './services.js';
 import {createAssistantWorkspace} from './assistant.js';
@@ -14,7 +14,7 @@ const assistantWorkspace=createAssistantWorkspace(services.ai,{onDevice:id=>{sta
 const toolPolicySettings=createToolPolicySettings(services.ai,{onSaved:()=>assistantWorkspace.policyChanged()});
 const knowledgeWorkspace=createKnowledgeWorkspace(services.knowledge);
 const settingsWorkspace=createSettingsWorkspace(services.settings,toolPolicySettings,{onBudgetSaved:()=>assistantWorkspace.policyChanged()});
-const localVideoPreview=createLocalVideoPreview($('local-video-preview'));
+const videoPreview=createVideoPreview($('local-video-preview'));
 const videoWorkspace=createVideoWorkspace($('local-video-preview'));
 const severity=item=>badge(eventSeverityName(item),item.severity==='critical'?'critical':item.severity==='warning'?'warning':'neutral');
 const status=item=>el('div',{class:'event-status'},[
@@ -566,7 +566,7 @@ function video(){
         ['画面平均可见数',summary.visible_fish_count??'缺失'],['模型版本',summary.model_version],['窗口开始',timeText(camera.window?.start)],
         ['窗口结束',timeText(camera.window?.end)],['关联批次',camera.batch_id]])])]
       :[card('视觉窗口汇总','没有补造另一通道数据。',[empty('NO_DATA · 暂无视觉上报','启动模拟器后显示窗口统计；不会生成假录像。','camera')])])];
-  return [videoWorkspace.update({left,right,empty:state.data.video_preview?null:videoPlaceholder()})];}
+  return [videoWorkspace.update({left,right,empty:videoPreview.available(state.data.video_preview)?null:videoPlaceholder()})];}
 
 async function requestEventDeletion(scope,item=null){
   if(eventDeletionBusy)return;
@@ -660,10 +660,10 @@ function knowledge(){return [knowledgeWorkspace.mount()];}
 function settings(){return [settingsWorkspace.mount()];}
 
 const pages={dashboard,monitoring,assistant,video,events,knowledge,settings};
-function render(passive=false){if(!state.data)return;if(state.readFailed){localVideoPreview.update(null);$('content').replaceChildren(empty('读取失败 · 上次显示已失效','请恢复服务器连接，不将缓存当作当前数据。'));return;}const route=routeFor(location.hash);$('page-title').textContent=route.title;$('page-eyebrow').textContent=route.eyebrow;$('page-description').textContent=route.description;$('breadcrumb').textContent=route.title;
+function render(passive=false){if(!state.data)return;if(state.readFailed){videoPreview.update(null);$('content').replaceChildren(empty('读取失败 · 上次显示已失效','请恢复服务器连接，不将缓存当作当前数据。'));return;}const route=routeFor(location.hash);$('page-title').textContent=route.title;$('page-eyebrow').textContent=route.eyebrow;$('page-description').textContent=route.description;$('breadcrumb').textContent=route.title;
   document.title=`${route.title} · AI 监测系统`;const content=pages[route.id]();
   if(route.id!=='video'||!$('content').contains(videoWorkspace.node))$('content').replaceChildren(...content);
-  localVideoPreview.update(state.data.video_preview,route.id==='video');
+  videoPreview.update(state.data.video_preview,route.id==='video');
   document.querySelectorAll('#navigation a').forEach(a=>{const active=a.hash===`#${route.id}`;a.classList.toggle('active',active);if(active)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
   if(!passive){$('sidebar').classList.remove('open');$('menu-toggle').setAttribute('aria-expanded','false');}}
 let refreshing=false;
@@ -695,7 +695,7 @@ async function refresh(force=false){
     }
   }catch(_){
     if(revision!==state.revision)return;
-    localVideoPreview.update(null);
+    videoPreview.update(null);
     state.readFailed=true;$('refresh-status').textContent='读取失败 · 上次显示已失效';
     if(force||!state.data)$('content').replaceChildren(card('工作区暂不可用','不使用假数据掩盖服务错误。',[empty('服务加载失败','请检查管理服务。'),button('重新加载',bootstrap)]));
     else $('content').replaceChildren(empty('读取失败 · 上次显示已失效','请恢复服务器连接，不将缓存当作当前数据。'));
@@ -715,5 +715,5 @@ bootstrap();
 let poll;
 function startPolling(){if(!poll)poll=setInterval(()=>{if(!document.hidden)refresh();},5000);}
 startPolling();
-window.addEventListener('pagehide',()=>{clearInterval(poll);poll=null;assistantWorkspace.suspend();localVideoPreview.suspend();});
+window.addEventListener('pagehide',()=>{clearInterval(poll);poll=null;assistantWorkspace.suspend();videoPreview.suspend();});
 window.addEventListener('pageshow',()=>{startPolling();});

@@ -3,7 +3,7 @@ param([ValidateSet('full','water-only')][string]$SimulationMode='full', [switch]
  [string]$DeviceReportDirectory, [string]$DeviceReportDeviceId, [string]$Request, [string]$DataRoot, [int]$Port=8766,
       [string]$Scenario='normal', [switch]$WithBot, [switch]$NoBot,
       [switch]$OfflineDemo, [switch]$Check, [int]$RunSeconds=0, [switch]$NoAssistant,
-      [switch]$InteractiveScenario, [switch]$OpenBrowser, [string]$DemoVideo, [switch]$ScoreTrial, [switch]$EventTrial)
+      [switch]$InteractiveScenario, [switch]$OpenBrowser, [string]$DemoVideo, [string]$BoardVideo, [switch]$ScoreTrial, [switch]$EventTrial)
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'management_stack_common.ps1')
@@ -22,6 +22,10 @@ if ($NoAssistant) { $taskArguments+='--no-assistant' }
 if ($InteractiveScenario) { $taskArguments+='--interactive-scenario' }
 if ($OpenBrowser) { $taskArguments+='--open-browser' }
 if ($DemoVideo) { $taskArguments+=@('--demo-video',$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DemoVideo)) }
+if ($BoardVideo) {
+    if ($BoardVideo -cnotmatch '\Artsp://[0-9.:]+/[A-Za-z0-9/._~-]+\z') { throw 'BOARD_VIDEO_RTSP_URL_INVALID' }
+    $taskArguments+=@('--board-video',$BoardVideo)
+}
 if ($ScoreTrial) { $taskArguments+='--score-trial' }
 if ($EventTrial) { $taskArguments+='--event-trial' }
 $taskArguments+=@('--simulation-mode',$SimulationMode)

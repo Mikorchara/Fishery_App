@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createLocalVideoPreview} from '../static/components.js';
+import {createVideoPreview} from '../static/components.js';
 import {Element} from './dom-fixture.mjs';
 
 function installDOM(){
@@ -14,7 +14,7 @@ const walk=n=>[n,...n.children.flatMap(walk)];
 test('local player is stable across polling and independent of camera selection',()=>{
   const restore=installDOM();
   try{
-    const host=new Element(),preview=createLocalVideoPreview(host),meta={kind:'local_file',url:'/media/local-demo.mp4'};
+    const host=new Element(),preview=createVideoPreview(host),meta={kind:'local_file',url:'/media/local-demo.mp4'};
     preview.update(meta,false);assert.equal(host.children.length,0);
     preview.update(meta,true);
     const video=walk(host).find(n=>n.tagName==='video');assert.ok(video);
@@ -29,11 +29,20 @@ test('local player is stable across polling and independent of camera selection'
   }finally{restore();}
 });
 
-test('media URLs from arbitrary external metadata cannot create a player',()=>{
+test('media metadata is restricted to the two same-origin video routes',()=>{
   const restore=installDOM();
   try{
-    for(const url of ['https://evil.invalid/v.mp4','file:///private.mp4','/media/other.mp4']){
-      const host=new Element();createLocalVideoPreview(host).update({kind:'local_file',url},true);
+    for(const meta of [
+      {kind:'local_file',url:'https://evil.invalid/v.mp4'},
+      {kind:'local_file',url:'file:///private.mp4'},
+      {kind:'local_file',url:'/media/board-video.mjpg'},
+      {kind:'board_stream',source_kind:'DEVICE_RTSP',url:'https://evil.invalid/v.mjpg'},
+      {kind:'board_stream',source_kind:'DEVICE_RTSP',url:'/media/local-demo.mp4'},
+      {kind:'board_stream',source_kind:'SIMULATOR',url:'/media/board-video.mjpg'},
+    ]){
+      const host=new Element(),preview=createVideoPreview(host);
+      assert.equal(preview.available(meta),false);
+      preview.update(meta,true);
       assert.equal(host.hidden,true);assert.equal(host.children.length,0);
     }
   }finally{restore();}
