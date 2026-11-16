@@ -20,7 +20,7 @@ function setup(workspace=false,pairing=false){
     identity:{app_ref:null,group_ref:null,member_refs:[]},
     binding:{data_root:'synthetic/data',instance_id:'synthetic',device_id:'synthetic-pond'},recipient_available:false,
     recipient_ref:null,runtime_status:'NOT_CHECKED',secret_status:'NOT_CHECKED'};
-  const writes=[],keys=[],pairingCalls=[],timers=[],cleared=[];let reads=0;
+  const writes=[],keys=[],pairingCalls=[],removed=[],timers=[],cleared=[];let reads=0;
   const pairingState={pairing_id:'synthetic-pair',phase:'IDLE',user_ref:null};
   const api={read:async()=>{reads++;return structuredClone(data);},save:async v=>{writes.push(structuredClone(v));
     const {app_id,group_id,members,...settings}=v.settings;
@@ -31,11 +31,16 @@ function setup(workspace=false,pairing=false){
     data.settings=settings;data.revision='synthetic-r2';return structuredClone(data);},secret:async v=>{keys.push(structuredClone(v));
     data.secret_status='SAVED_FOR_THIS_APP';data.revision='synthetic-r3';return structuredClone(data);}};
   if(pairing)Object.assign(api,{
+    removeRecipient:async v=>{removed.push(structuredClone(v));
+      data.recipient_refs=data.recipient_refs.filter(ref=>ref!==v.user_ref);
+      data.recipient_ref=data.recipient_refs[0]||null;data.recipient_available=data.recipient_refs.length>0;
+      data.settings.event_notifications_enabled=false;data.revision='synthetic-r4';return structuredClone(data);},
     pairingStatus:async()=>({pairing:structuredClone(pairingState)}),
     pairingStart:async v=>{pairingCalls.push({action:'start',value:structuredClone(v)});pairingState.phase='WAITING_PRIVATE_MESSAGE';
       return {pairing:{...pairingState,challenge_command:'/绑定提醒 synthetic-single-display'}};},
     pairingConfirm:async v=>{pairingCalls.push({action:'confirm',value:structuredClone(v)});pairingState.phase='BOUND';
-      data.recipient_available=true;data.recipient_ref=pairingState.user_ref;data.settings.event_notifications_enabled=false;
+      data.recipient_refs=[...new Set([...(data.recipient_refs||[]),pairingState.user_ref])];
+      data.recipient_available=true;data.recipient_ref=data.recipient_refs[0];data.settings.event_notifications_enabled=false;
       return {pairing:{...pairingState,api_accepted:true,client_display_confirmed:false,cleanup_confirmed:true}};},
     pairingCancel:async v=>{pairingCalls.push({action:'cancel',value:structuredClone(v)});pairingState.phase='CANCELLED';
       return {pairing:{...pairingState,cleanup_confirmed:true}};}});
@@ -49,7 +54,7 @@ function setup(workspace=false,pairing=false){
   const root=workspace?panel.mount():panel.node;if(!workspace)void panel.load();
   const find=text=>walk(root).find(n=>n.tagName==='button'&&n.textContent===text);
   const input=label=>walk(root).find(n=>n.getAttribute('aria-label')===label);
-  return {panel,root,find,input,api,writes,keys,data,pairingCalls,pairingState,timers,cleared,get reads(){return reads;}};
+  return {panel,root,find,input,api,writes,keys,data,pairingCalls,pairingState,removed,timers,cleared,get reads(){return reads;}};
 }
 
 test('QQ settings remain usable when Web Assistant is disabled',async()=>{
@@ -133,7 +138,7 @@ test('saving QQ settings does not recreate the password field or lose its unsubm
 
 test('credentials and private pairing are in separate disclosures closed by default',async()=>{
   const p=setup(false,true);await tick();
-  for(const [title,button] of [['QQ AppSecret','保存 QQ AppSecret'],['首次私聊接收人配对','开始首次私聊配对']]){
+  for(const [title,button] of [['QQ AppSecret','保存 QQ AppSecret'],['私聊接收人','添加接收人']]){
     const section=walk(p.root).find(n=>n.tagName==='details'&&n.children[0]?.tagName==='summary'
       &&n.children[0].textContent.includes(title));
     assert.ok(section?.contains(p.find(button)));
@@ -150,9 +155,12 @@ test('QQ HTTP client uses its own local token and preserves bounded API errors',
     .replace(/^import .*;\s*$/gm,'').replace(/\bexport /g,''),context);
   await vm.runInContext('services.settings.qq.read()',context);
   await vm.runInContext("services.settings.qq.save({revision:'r',settings:{}},{browser_token:'fictional-local-token'})",context);
+  await vm.runInContext("services.settings.qq.removeRecipient({revision:'r',user_ref:'000000000001',confirm_remove:true},{browser_token:'fictional-local-token'})",context);
   assert.equal(calls[0].path,'/api/settings/qq');assert.equal(calls[1].options.method,'POST');
   assert.equal(calls[1].options.headers['X-Management-QQ'],'fictional-local-token');
   assert.ok(!('X-Management-AI' in calls[1].options.headers));
+  assert.equal(calls[2].path,'/api/settings/qq/recipients/remove');
+  assert.equal(calls[2].options.headers['X-Management-QQ'],'fictional-local-token');
   fail=true;await assert.rejects(vm.runInContext('services.settings.qq.read()',context),/QQ_SETTINGS_NOT_CONNECTED/);
 });
 
@@ -160,8 +168,8 @@ test('private pairing requires separate network and active-send confirmation and
   const p=setup(false,true);await tick();p.data.recipient_available=true;p.data.settings.event_notifications_enabled=true;
   await p.panel.load();
   const notifications=p.input('启用已验证接收人的事件通知');assert.equal(notifications.checked,true);
-  p.find('开始首次私聊配对').events.click();await tick();assert.equal(p.pairingCalls.length,0);
-  p.input('同意本次短时连接 QQ（不调用模型）').checked=true;p.find('开始首次私聊配对').events.click();await tick();
+  p.find('添加接收人').events.click();await tick();assert.equal(p.pairingCalls.length,0);
+  p.input('同意本次短时连接 QQ（不调用模型）').checked=true;p.find('添加接收人').events.click();await tick();
   assert.equal(p.pairingCalls[0].value.confirm_network,true);assert.match(p.root.textContent,/synthetic-single-display/);
   p.pairingState.phase='AWAITING_CONFIRMATION';p.pairingState.user_ref='synthetic-ref';await p.timers[0]();await tick();
   assert.doesNotMatch(p.root.textContent,/synthetic-single-display/);assert.equal(p.pairingCalls.length,1);
@@ -174,7 +182,7 @@ test('private pairing requires separate network and active-send confirmation and
 
 test('cancel clears the one-time command without submitting an active message',async()=>{
   const p=setup(false,true);await tick();p.input('同意本次短时连接 QQ（不调用模型）').checked=true;
-  p.find('开始首次私聊配对').events.click();await tick();p.find('取消配对').events.click();await tick();
+  p.find('添加接收人').events.click();await tick();p.find('取消配对').events.click();await tick();
   assert.deepEqual(p.pairingCalls.map(v=>v.action),['start','cancel']);
   assert.doesNotMatch(p.root.textContent,/synthetic-single-display/);assert.ok(p.cleared.length);
 });
@@ -183,9 +191,33 @@ test('recipient guidance points to this page and failed pairing never claims no 
   const p=setup(false,true);await tick();
   p.api.save=async()=>{throw new Error('QQ_VERIFIED_RECIPIENT_REQUIRED');};
   p.find('保存 QQ 设置').events.click();await tick();
-  assert.match(p.root.textContent,/请在本页完成“首次私聊接收人配对”/);assert.doesNotMatch(p.root.textContent,/负责人提供/);
+  assert.match(p.root.textContent,/请在本页完成私聊配对/);assert.doesNotMatch(p.root.textContent,/负责人提供/);
   p.api.pairingStart=async()=>{throw new Error('SENSITIVE_INTERNAL_DETAIL');};
-  p.input('同意本次短时连接 QQ（不调用模型）').checked=true;p.find('开始首次私聊配对').events.click();await tick();
+  p.input('同意本次短时连接 QQ（不调用模型）').checked=true;p.find('添加接收人').events.click();await tick();
   assert.match(p.root.textContent,/配对失败不会自动重发/);
   assert.doesNotMatch(p.root.textContent,/未进行联网测试|SENSITIVE_INTERNAL_DETAIL/);
+});
+
+test('verified recipient list supports confirmed removal without discarding independent drafts',async()=>{
+  const p=setup(false,true);await tick();
+  const refs=['000000000011','000000000012','000000000013','000000000014'];
+  p.data.recipient_refs=refs;
+  p.data.recipient_limit=4;
+  p.data.recipient_available=true;
+  p.data.settings.event_notifications_enabled=true;
+  await p.panel.load();
+  assert.equal(p.find('添加接收人').disabled,true);
+  for(const ref of refs)assert.ok(p.input(`移除接收人 ${ref}`));
+  const token=p.input('每次模型请求最大输出 Token');token.value='3456';
+  const app=p.input('QQ AppID');app.value='123456';
+  p.input(`移除接收人 ${refs[0]}`).events.click();
+  p.find('取消').events.click();await tick();assert.equal(p.removed.length,0);
+  p.input(`移除接收人 ${refs[0]}`).events.click();
+  p.find('确认移除').events.click();await tick();
+  assert.deepEqual(p.removed,[{revision:'synthetic-r1',user_ref:refs[0],confirm_remove:true}]);
+  assert.equal(p.input(`移除接收人 ${refs[0]}`),undefined);
+  assert.ok(p.input(`移除接收人 ${refs[1]}`));
+  assert.equal(token.value,'3456');assert.equal(app.value,'123456');
+  assert.equal(p.input('启用已验证接收人的事件通知').checked,false);
+  assert.equal(p.find('添加接收人').disabled,false);
 });

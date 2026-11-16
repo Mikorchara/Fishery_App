@@ -138,12 +138,12 @@ def load_request(path):
     if read_json(record_path) != record or value['scope_sha256'] != _hash(scope):
         raise BotError('MANAGEMENT_SCOPE_REVIEW_REQUIRED')
     recipient_path = local_path(value['event_recipient_file']) if 'event_recipient_file' in value else None
-    if 'verified_recipient_file' in value:
-        from .event_recipients import load_recipient
-        load_recipient(local_path(value['verified_recipient_file']),access.app_id)
-    if recipient_path:
-        from .event_recipients import load_recipient
-        load_recipient(recipient_path,access.app_id)
+    if 'verified_recipient_file' in value or recipient_path:
+        from .event_recipients import load_recipients
+        if 'verified_recipient_file' in value:
+            load_recipients(local_path(value['verified_recipient_file']),access.app_id)
+        if recipient_path:
+            load_recipients(recipient_path,access.app_id)
     if limits.continuous and value['ai_enabled'] is not ai.enabled:raise BotError('MANAGEMENT_AI_SWITCH_MISMATCH')
     return ManagementRequest(path, inputs, limits, selected, _hash(scope), value['enabled'], _hash(value),recipient_path,
         ai.budget.max_output_tokens,value.get('ai_enabled',value['enabled']),'web' if web_agent else 'current')
@@ -194,7 +194,7 @@ def check_event_recipient(request,device_report_device_id=None):
     # Explicit request binding; other instances never inherit a global destination.
     path=request.event_recipient_file
     if path is None:return None
-    from .event_recipients import load_recipient
+    from .event_recipients import load_recipients
     from .event_notifications import approval_summary
     access=inputs_snapshot(request.inputs)[0]
     if device_report_device_id is not None:
@@ -202,4 +202,4 @@ def check_event_recipient(request,device_report_device_id=None):
         identifier(device_report_device_id)
         water=next(g.device_id for g in access.groups if g.group_id==request.inputs.group_id)
         if device_report_device_id==water:raise BotError('DEVICE_EVENT_SOURCE_CONFLICT')
-    return approval_summary(load_recipient(path,access.app_id),device_report_device_id)
+    return approval_summary(load_recipients(path,access.app_id),device_report_device_id)

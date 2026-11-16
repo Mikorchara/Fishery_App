@@ -3,7 +3,10 @@ import {el,card,button,rows} from './components.js';
 const qqErrors={QQ_SETTINGS_STALE:'设置已在别处改变，请重新读取后再保存。',
   QQ_TOKEN_LIMIT_INVALID:'输出 Token 必须是 1–4096 的整数。',QQ_IDENTITY_INCOMPLETE:'首次配置请填写 AppID。首次配置或变更身份时，请同时填写群 OpenID 和完整成员名单。',
   QQ_IDENTITY_INVALID:'身份信息格式不正确；OpenID 不是 QQ 号码。',QQ_ENABLE_REQUIRED:'请先启用 QQ 机器人。',
-  QQ_VERIFIED_RECIPIENT_REQUIRED:'尚未绑定已验证的私聊接收人，请在本页完成“首次私聊接收人配对”。',
+  QQ_VERIFIED_RECIPIENT_REQUIRED:'尚未绑定已验证的私聊接收人，请在本页完成私聊配对。',
+  EVENT_RECIPIENT_LIMIT:'接收人名单已满。请先移除一名接收人。',
+  EVENT_RECIPIENT_NOT_FOUND:'这名接收人已不在名单中，请重新读取设置。',
+  QQ_RECIPIENT_REMOVE_FAILED:'接收人未移除，请重新读取设置后再试。',
   QQ_SECRET_REPLACE_CONFIRMATION_REQUIRED:'密钥已存在，勾选“确认替换已有密钥”后再保存。',QQ_SECRET_INVALID:'请先保存 AppID，并填写有效的 AppSecret。',
   QQ_SETTINGS_NOT_CONNECTED:'请使用已初始化的数据实例启动网页。',
   MANAGEMENT_INSTANCE_OR_BOT_ALREADY_RUNNING:'请先停止当前 QQ Bot，再开始私聊配对；网页和模拟器可继续运行。',
@@ -14,8 +17,10 @@ export function createQQSettingsPanel(api){
   const node=card('QQ 机器人','保存后，重启机器人使身份、权限和输出设置生效。'),
     content=el('div',{class:'qq-settings-content'}),notice=el('p',{class:'qq-feedback',role:'status','aria-live':'polite'});
   node.classList.add('qq-settings-panel');
-  node.append(content,notice);let config=null,busy=false,pairingNode=null,refreshStatus=()=>{};
+  node.append(content,notice);let config=null,busy=false,pairingNode=null,refreshStatus=()=>{},refreshPairing=()=>{};
   const error=e=>qqErrors[e?.message]||'操作未完成，请检查状态并重新读取配置。配对失败不会自动重发测试消息。';
+  const recipients=()=>config.recipient_refs??(config.recipient_ref?[config.recipient_ref]:[]);
+  const recipientLimit=()=>config.recipient_limit??4;
   function textField(label,value,attrs={}){const input=el('input',{type:'text',value,'aria-label':label,...attrs});
     return {input,node:el('label',{class:'field'},[el('span',{text:label}),input])};}
   function checkField(label,value){const input=el('input',{type:'checkbox','aria-label':label,...(value?{checked:'checked'}:{})});
@@ -58,14 +63,51 @@ export function createQQSettingsPanel(api){
       savedMembers=el('div',{class:'qq-saved-members'}),runDetails=el('div'),
       secretStatus=el('small',{class:'qq-disclosure-status'}),recipientStatus=el('small',{class:'qq-disclosure-status'}),
       settingsFeedback=el('p',{class:'qq-feedback',role:'status'}),secretFeedback=el('p',{class:'qq-feedback',role:'status'}),
+      recipientList=el('ul',{class:'qq-member-list','aria-label':'已配对的事件通知接收人'}),
+      recipientFeedback=el('p',{class:'qq-feedback',role:'status'}),
       password=textField('QQ AppSecret','',{type:'password',autocomplete:'new-password',spellcheck:'false',maxlength:4096}),
       replace=checkField('确认替换已有 QQ AppSecret',false);
-    refreshStatus=({pairingBound=false}={})=>{
-      if(pairingBound)notifications.input.checked=config.settings.event_notifications_enabled;
+    let pendingRemoval=null;
+    function updateRecipients(focus=false){
+      const refs=recipients();
+      let confirmation;
+      recipientList.replaceChildren(...refs.map(ref=>{
+        const label=el('span',{text:ref});
+        if(!api.removeRecipient)return el('li',{},[label]);
+        if(pendingRemoval===ref){
+          confirmation=button('确认移除',()=>void removeRecipient(ref));
+          return el('li',{},[label,
+            el('p',{class:'muted',text:'移除此人会关闭事件通知。修改完成后可重新启用。'}),
+            el('div',{class:'settings-actions'},[confirmation,button('取消',()=>{
+              if(!busy){pendingRemoval=null;updateRecipients();}
+            },'text')])]);
+        }
+        const remove=button('移除',()=>{
+          if(!busy){pendingRemoval=ref;recipientFeedback.textContent='';updateRecipients(true);}
+        },'text');
+        remove.setAttribute('aria-label',`移除接收人 ${ref}`);
+        return el('li',{class:'qq-member-row'},[label,remove]);
+      }));
+      recipientList.hidden=!refs.length;
+      if(focus)confirmation?.focus();
+    }
+    async function removeRecipient(ref){
+      if(busy||pendingRemoval!==ref)return;
+      busy=true;
+      try{config=await api.removeRecipient({revision:config.revision,user_ref:ref,confirm_remove:true},config);
+        pendingRemoval=null;refreshStatus({syncNotifications:true});
+        recipientFeedback.textContent=recipients().length
+          ?'已移除接收人。要继续通知其余接收人，请重新启用并保存，再启动机器人。'
+          :'已移除最后一名接收人。事件通知已关闭。';
+      }catch(e){recipientFeedback.textContent=error(e);}finally{busy=false;}
+    }
+    refreshStatus=({syncNotifications=false}={})=>{
+      if(syncNotifications)notifications.input.checked=config.settings.event_notifications_enabled;
       const {app_ref,group_ref,member_refs=[]}=config.identity||{};
-      const recipient=config.recipient_available?'已配对':'未配对';
+      const count=recipients().length;
+      const recipient=count?`已配对 ${count} 名`:'未配对';
       overview.replaceChildren(...[['配置',config.configured?'已保存':'尚未配置'],['模型',config.model||'Qwen'],
-        ['事件通知',config.settings.event_notifications_enabled?'已启用':recipient==='已配对'?'已配对，未启用':'未配对']]
+        ['事件通知',config.settings.event_notifications_enabled?'已启用':count?`${recipient}，未启用`:'未配对']]
         .map(([label,value])=>el('div',{},[el('dt',{text:label}),el('dd',{text:value})])));
       identitySummary.replaceChildren(rows([['应用摘要',app_ref||'尚未保存'],['群摘要',group_ref||'尚未保存']]));
       savedMembers.replaceChildren(el('span',{text:member_refs.length?`已保存 ${member_refs.length} 名`:'尚未保存成员'}),
@@ -77,7 +119,8 @@ export function createQQSettingsPanel(api){
         ['固定模型',[config.provider,config.model,config.preset].filter(Boolean).join(' · ')||'Qwen'],
         ['AI 能力',config.agent_mode==='web'?'当前水质、历史水质、当前事件、养殖资料和实验评分':'当前水质查询'],
         ['监测实例',config.binding.instance_id],['绑定设备',config.binding.device_id],['数据目录',config.binding.data_root],
-        ['事件接收人',config.recipient_ref||recipient]]));
+        ['事件接收人',recipient]]));
+      updateRecipients();refreshPairing();
     };
     refreshStatus();
     const pairing=api.pairingStart?(pairingNode??=pairingWizard()):null;
@@ -120,46 +163,48 @@ export function createQQSettingsPanel(api){
       el('div',{class:'qq-disclosures'},[
         disclosure('QQ AppSecret',[el('p',{class:'muted',text:'请先保存身份。AppSecret 存入本机私有存储。模型 Key 在「API 密钥」页配置。'}),
           password.node,replace.node,button('保存 QQ AppSecret',()=>void saveSecret()),secretFeedback],secretStatus),
-        ...(pairing?[disclosure('首次私聊接收人配对',[pairing],recipientStatus)]:[]),
+        ...(pairing?[disclosure('私聊接收人',[recipientList,recipientFeedback,pairing],recipientStatus)]:[]),
         disclosure('查看运行详情',[runDetails]),
       ]));
   }
 
   function pairingWizard(){
-    const host=el('section',{'aria-label':'首次私聊接收人配对'}),status=el('p',{role:'status','aria-live':'polite'}),
+    const host=el('section',{'aria-label':'私聊接收人配对'}),status=el('p',{role:'status','aria-live':'polite'}),
       challenge=el('pre',{'aria-label':'一次性私聊口令'}),actions=el('div',{class:'settings-actions'}),
       network=el('input',{type:'checkbox','aria-label':'同意本次短时连接 QQ（不调用模型）'});
     let current=null,timer=null,working=false;
     const terminal=new Set(['BOUND','FAILED','CANCELLED','EXPIRED']);
     const names={CONNECTING:'正在连接 QQ…',WAITING_PRIVATE_MESSAGE:'请复制下方整行，在与当前机器人的私聊中发送。',
       AWAITING_CONFIRMATION:'已识别接收人，请核对摘要，再单独确认发送一条主动测试消息。',
-      SENDING_TEST:'正在提交唯一一条主动测试消息，请勿重复操作。',BOUND:'接收人已保存，通知仍关闭。请检查手机是否显示测试消息，再按需勾选上方事件通知并保存。',
-      CANCELLED:'已取消；没有启用事件通知。',EXPIRED:'配对已超时，请重新开始。',FAILED:'配对未完成；不自动重发测试消息。',IDLE:'先停止 QQ Bot。一次绑定一名私聊接收人；新配对会替换原绑定并关闭事件通知。群聊提问不需要此步骤。'};
+      SENDING_TEST:'正在提交唯一一条主动测试消息，请勿重复操作。',BOUND:'接收人已保存。请检查手机是否显示测试消息。',
+      CANCELLED:'已取消配对。',EXPIRED:'配对已超时，请重新开始。',FAILED:'配对未完成；不自动重发测试消息。',IDLE:'先停止 QQ Bot，再逐人配对。新增接收人后，重新启用事件通知并保存。'};
     function stopPolling(){if(timer!==null){clearInterval(timer);timer=null;}}
     async function refresh(){
       try{const result=await api.pairingStatus();current=result.pairing;update();
-        if(terminal.has(current.phase)){stopPolling();if(current.phase==='BOUND'){config=await api.read();refreshStatus({pairingBound:true});}}}
+        if(terminal.has(current.phase)){stopPolling();if(current.phase==='BOUND'){config=await api.read();refreshStatus({syncNotifications:true});}}}
       catch(e){status.textContent=error(e);stopPolling();}
     }
     function update(){
       status.textContent=(names[current?.phase]||names.IDLE)+(current?.user_ref?` 接收人摘要：${current.user_ref}。`:'')+
         (current?.api_accepted?' QQ API 已接受；客户端显示须本人核对。':'')+
+        (current?.phase==='BOUND'&&!config.settings.event_notifications_enabled?' 通知仍关闭。需要通知时，请勾选事件通知并保存。':'')+
         (current?.phase==='FAILED'?` 状态：${current.code}。`:'');
       if(current?.phase==='WAITING_PRIVATE_MESSAGE'&&!challenge.textContent)status.textContent='配对仍在进行，但本页没有口令。请取消后重新开始，口令不会从服务器再次返回。';
       if(current?.phase==='AWAITING_CONFIRMATION'||terminal.has(current?.phase))challenge.textContent='';
-      const start=button('开始首次私聊配对',async()=>{
-        if(working||!network.checked)return;working=true;status.textContent='正在开始…';
+      const atLimit=recipients().length>=recipientLimit();
+      const start=button('添加接收人',async()=>{
+        if(working||busy||atLimit||!network.checked)return;working=true;status.textContent='正在开始…';
         try{const result=await api.pairingStart({revision:config.revision,confirm_network:true},config);
           current=result.pairing;challenge.textContent=current.challenge_command||'';delete current.challenge_command;
           stopPolling();timer=setInterval(()=>void refresh(),2000);network.checked=false;update();}
         catch(e){status.textContent=error(e);}finally{working=false;}
       });
-      start.disabled=!!current&&!terminal.has(current.phase)&&current.phase!=='IDLE';
+      start.disabled=atLimit||!!current&&!terminal.has(current.phase)&&current.phase!=='IDLE';
       const controls=[start];
       if(current?.phase==='AWAITING_CONFIRMATION')controls.push(button('确认此接收人，并发送 1 条主动测试消息',async()=>{
         if(working)return;working=true;challenge.textContent='';status.textContent='正在提交测试…';
         try{const result=await api.pairingConfirm({pairing_id:current.pairing_id,user_ref:current.user_ref,confirm_active_test:true},config);
-          current=result.pairing;update();if(terminal.has(current.phase)){stopPolling();config=await api.read();refreshStatus({pairingBound:current.phase==='BOUND'});}}
+          current=result.pairing;update();if(terminal.has(current.phase)){stopPolling();config=await api.read();refreshStatus({syncNotifications:current.phase==='BOUND'});}}
         catch(e){status.textContent=error(e);}finally{working=false;}
       }));
       if(current&&!terminal.has(current.phase)&&current.phase!=='IDLE')controls.push(button('取消配对',async()=>{
@@ -169,9 +214,9 @@ export function createQQSettingsPanel(api){
       },'text'));
       actions.replaceChildren(...controls);
     }
-    host.append(el('p',{class:'muted',text:'配对最长 3 分钟，只连接 QQ。一次性口令请勿转发。核对接收人后可发送 1 条测试消息。'}),
+    host.append(el('p',{class:'muted',text:`最多 ${recipientLimit()} 名接收人。每次配对最长 3 分钟，核对接收人后可发送 1 条测试消息。一次性口令请勿转发。`}),
       el('label',{class:'settings-check'},[network,el('span',{text:'同意本次短时连接 QQ（不调用模型）'})]),status,challenge,actions);
-    update();if(api.pairingStatus)void refresh();return host;
+    refreshPairing=update;update();if(api.pairingStatus)void refresh();return host;
   }
   async function load(){if(busy)return;notice.textContent='正在读取 QQ 设置…';
     try{config=await api.read();render();notice.textContent='';}

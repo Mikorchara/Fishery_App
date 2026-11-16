@@ -53,8 +53,10 @@ class ManagementRun(HybridRun):
             from apps.ai_service.channel_management_agent import AgentChannelBudget
             budget_type=AgentChannelBudget if self.web_agent else ContinuousChannelBudget
             self.channel_budget=budget_type(max_output_tokens=request.output_tokens)
-        self._notice_recipient = self._notice_recipient_path = None
+        self._notice_recipients = ()
+        self._notice_recipient_path = None
         self._notice_summary = None
+        self._approved_notice_summary_sha256 = None
         self._notice_report = {'enabled':False}
         self.device_event_device_id=None
         self._issuer = LivePermitIssuer(self.check)
@@ -131,6 +133,7 @@ class ManagementRun(HybridRun):
         if not self.request.enabled: raise BotError('AI_DISABLED')
         self.request.check(); self._check_configuration()
         result = SessionRun.approve(self, plan, confirmed=confirmed)
+        self._approved_notice_summary_sha256 = _hash(plan.get('event_notifications'))
         self._approved_event_board_device_id = plan.get('agent_event_board_device_id')
         self.permit = self._issuer.issue(scope_sha256=self.scope_sha256, bindings_sha256=self._binding_digest,
             consent_id=self.ledger._id, lease_authority=self.ledger.authority, offline=self.offline_test)
@@ -176,14 +179,14 @@ class ManagementRun(HybridRun):
             async_client_factory=self.factory, clock=self.clock, monotonic=self.now,**extra)
 
     def enable_event_notifications(self, recipient_path):
-        from .event_recipients import load_recipient
+        from .event_recipients import load_recipients
         from .event_notifications import approval_summary
         if self.permit is not None:raise BotError('INVALID_RUN_APPROVAL')
-        recipient=load_recipient(recipient_path,self.access.app_id)
+        recipients=load_recipients(recipient_path,self.access.app_id)
         group=next(g for g in self.access.groups if g.group_id==self.inputs.group_id)
         if 'current' not in group.capabilities:raise BotError('EVENT_NOTIFICATION_PERMISSION_REQUIRED')
-        self._notice_recipient,self._notice_recipient_path=recipient,recipient_path
-        self._notice_summary=approval_summary(recipient,self.device_event_device_id)
+        self._notice_recipients,self._notice_recipient_path=recipients,recipient_path
+        self._notice_summary=approval_summary(recipients,self.device_event_device_id)
 
     def enable_device_events(self,device_id):
         """One explicit board binding for notices, never an AI/water device grant."""
@@ -194,7 +197,7 @@ class ManagementRun(HybridRun):
         if device_id==self.device_id:raise BotError('DEVICE_EVENT_SOURCE_CONFLICT')
         self.device_event_device_id=device_id
         if self._notice_summary is not None:
-            self._notice_summary=approval_summary(self._notice_recipient,device_id)
+            self._notice_summary=approval_summary(self._notice_recipients,device_id)
 
     def report(self,code='RUN_SNAPSHOT'):
         return {**SessionRun.report(self,code),'event_notifications':self._notice_report}

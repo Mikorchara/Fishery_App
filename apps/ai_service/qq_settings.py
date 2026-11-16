@@ -50,6 +50,14 @@ def validate_settings(value):
     return {**value, 'members': list(members)}
 
 
+def _recipient_refs(bridge):
+    refs = bridge.get('recipient_refs')
+    if refs is not None:
+        return list(refs)
+    legacy = bridge.get('recipient_ref')
+    return [legacy] if legacy else []
+
+
 class QQSettingsStore:
     """Atomic, CAS-protected non-secret settings; no credential or database reads."""
     def __init__(self, path):
@@ -142,12 +150,16 @@ class QQSettingsService:
         return stored, bridge, revision, settings
 
     def public(self):
+        from apps.qq_bot.event_recipients import MAX_RECIPIENTS
+
         stored, bridge, revision, settings = self._state()
+        recipient_refs = _recipient_refs(bridge)
         return dict(revision=revision, settings=settings, configured=bridge['configured'],
                     agent_mode=bridge.get('agent_mode', 'current'), tools=bridge.get('tools', []),
                     provider=bridge.get('provider'), model=bridge.get('model'), preset=bridge.get('preset'),
                     binding=dict(data_root=str(self.data_root), instance_id=bridge.get('instance_id'), device_id=bridge.get('device_id')),
-                    recipient_available=bool(bridge.get('recipient_available')), recipient_ref=bridge.get('recipient_ref'),
+                    recipient_available=bool(recipient_refs), recipient_ref=recipient_refs[0] if recipient_refs else None,
+                    recipient_refs=recipient_refs, recipient_limit=MAX_RECIPIENTS,
                     runtime_status=bridge.get('runtime_status', 'NOT_CHECKED'), restart_required=True,
                     secret_status='SAVED_FOR_THIS_APP' if settings['app_id'] and stored['secret_saved_for_app'] == settings['app_id'] else 'NOT_CHECKED',
                     max_allowed_output_tokens=4096, token_unit='PER_MODEL_HTTP_REQUEST', network_requests=0, database_opened=False)
@@ -169,12 +181,16 @@ class QQSettingsService:
             return self._pairing.status() if self._pairing is not None else dict(phase='IDLE', code='PRIVATE_PAIRING_IDLE')
 
     def pairing_start(self, value):
+        from apps.qq_bot.event_recipients import MAX_RECIPIENTS
+
         with self._pairing_lock:
             stored, bridge, revision, settings = self._check_revision(value, {'revision', 'confirm_network'})
             if value['confirm_network'] is not True:
                 raise QQSettingsError('PRIVATE_PAIRING_NETWORK_APPROVAL_REQUIRED')
             if not bridge['configured']:
                 raise QQSettingsError('PRIVATE_PAIRING_SAVE_IDENTITY_FIRST')
+            if len(_recipient_refs(bridge)) >= MAX_RECIPIENTS:
+                raise QQSettingsError('EVENT_RECIPIENT_LIMIT')
             def validate():
                 if self._state()[2] != revision:
                     raise QQSettingsError('QQ_SETTINGS_STALE')
@@ -212,6 +228,23 @@ class QQSettingsService:
             manager = self._pairing
         if manager is not None:
             manager.close()
+
+    def remove_recipient(self, value):
+        with self._pairing_lock, self.store.writing():
+            _, bridge, _, _ = self._check_revision(value, {'revision', 'user_ref', 'confirm_remove'})
+            if value['confirm_remove'] is not True:
+                raise QQSettingsError('QQ_RECIPIENT_REMOVE_CONFIRMATION_REQUIRED')
+            ref = value['user_ref']
+            if not isinstance(ref, str) or not re.fullmatch(r'[0-9a-f]{12}', ref):
+                raise QQSettingsError('QQ_RECIPIENT_INVALID')
+            try:
+                self.bridge.remove_verified_recipient(ref, expected_revision=bridge['revision'])
+            except Exception as error:
+                code = getattr(error, 'code', '')
+                mapped = {'QQ_SETTINGS_CONFLICT': 'QQ_SETTINGS_STALE',
+                          'EVENT_RECIPIENT_NOT_FOUND': 'EVENT_RECIPIENT_NOT_FOUND'}
+                raise QQSettingsError(mapped.get(code, 'QQ_RECIPIENT_REMOVE_FAILED')) from None
+        return self.public()
 
     def _check_revision(self, value, keys):
         if not isinstance(value, dict) or set(value) != keys or not isinstance(value.get('revision'), str):

@@ -184,15 +184,20 @@ def run(request_path, directory, *, offline=False, seconds=None, stop_requested=
                 if device_report_device_id is not None:host.enable_device_events(device_report_device_id)
                 host.enable_event_notifications(request.event_recipient_file)
             plan=host.plan(); digest=_hash(plan)[:12]
+            if plan.get('event_notifications') != summary.get('event_notifications'):
+                raise BotError('EVENT_NOTIFICATION_RECIPIENT_CHANGED')
             emit_status('MANAGEMENT_BOT_APPROVAL_REQUIRED',summary=summary,plan_sha256=_hash(plan))
             if not offline:
                 if plan.get('agent_event_board_device_id'):
                     print('本次设备联调允许将绑定开发板 '+plan['agent_event_board_device_id']+
                         ' 的事件摘要提交给 Qwen 并回复到当前批准的QQ群。',flush=True)
                 if plan.get('event_notifications'):
-                    print('另行批准：向已验证好友（摘要 '+plan['event_notifications']['recipient_ref']+
-                        '）主动发送本次指定设备的 SIMULATOR 事件、观测时间。新异常、升级、可靠消退各一次；'
-                        '不调用模型，未知送达不重发，每10秒最多1次、每日最多100次。仅本进程有效。',flush=True)
+                    notice = plan['event_notifications']
+                    refs = '、'.join(notice['recipient_refs'])
+                    print(f'另行批准向 {notice["recipient_count"]} 名已验证好友（摘要 {refs}）逐人私聊发送'
+                        '本次指定设备的 SIMULATOR 事件和观测时间。每位接收人的新异常、升级、可靠消退各发送一次。'
+                        f'每 {notice["interval_seconds"]} 秒最多向一人提交，每人每日最多 {notice["daily_limit"]} 次。'
+                        '未知送达不重发。仅本进程有效。',flush=True)
                     if device_report_device_id is not None:
                         print('同时向上述接收人发送绑定设备 '+device_report_device_id+
                             ' 的视觉检测异常提醒（DEVICE REPORT，非确诊）；不自动判断恢复，不调用模型。',flush=True)
@@ -228,15 +233,21 @@ def run(request_path, directory, *, offline=False, seconds=None, stop_requested=
                 emit=lambda c,**fields:emit_status(c,**fields))
             if summary.get('event_notifications'):
                 from .event_notifications import NotificationPermit,NoticeJournal,EventNotifier
-                permit=NotificationPermit(host)
                 journal_dir=ROOT/'outputs/qq-bot/event-notices'
                 journal_dir.parent.mkdir(parents=True,exist_ok=True);ensure_private_directory(journal_dir)
-                journal=NoticeJournal(journal_dir,permit.audience,clock=host.clock)
+                targets = []
                 try:
+                    for permit in NotificationPermit.for_host(host):
+                        journal = NoticeJournal(journal_dir, permit.audience, clock=host.clock)
+                        targets.append((permit, journal))
+                    permit, journal = targets[0]
                     notifier=EventNotifier(permit,api,journal,
                         connected=lambda:gateway.ready.is_set() and transport.connected,
-                        clock=host.clock,emit=emit_status)
-                except Exception:journal.close();raise
+                        clock=host.clock,emit=emit_status,additional_targets=targets[1:])
+                except Exception:
+                    for _, journal in reversed(targets):
+                        journal.close()
+                    raise
                 notifier.start()
             def drive():
                 try:

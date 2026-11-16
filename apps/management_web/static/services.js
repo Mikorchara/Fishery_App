@@ -8,6 +8,7 @@ export const services={
     budget:(value,config)=>aiWrite('/api/settings/budgets',value,config),
     qq:{read:()=>qqRead(),save:(value,config)=>qqWrite('/api/settings/qq',value,config),
       secret:(value,config)=>qqWrite('/api/settings/qq/secret',value,config),
+      removeRecipient:(value,config)=>qqWrite('/api/settings/qq/recipients/remove',value,config),
       pairingStatus:()=>qqRead('/api/settings/qq/pairing'),
       pairingStart:(value,config)=>qqWrite('/api/settings/qq/pairing/start',value,config),
       pairingConfirm:(value,config)=>qqWrite('/api/settings/qq/pairing/confirm',value,config),

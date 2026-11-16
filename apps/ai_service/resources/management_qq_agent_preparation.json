@@ -181,12 +181,12 @@
     "failure_notice": "TWO_FIXED_ERRORS_PASSIVE_ONCE_NO_HISTORY@1",
     "websocket_dependency": "websockets==15.0.1",
     "entry_implementation": {
-      "apps/qq_bot/event_notifications.py": "edb24d01f6b21d6718348863882ceae4bca694f4a72460048e781a5e11bb0441",
-      "apps/qq_bot/event_recipients.py": "c9f4d69d27a77a9790557da6d7426ed6ec90dea5d9459d0e10de6b7a1ed40856",
+      "apps/qq_bot/event_notifications.py": "8b358daf330783a627ff46f24581ea2681d3312f1f353cb7a2dc819ad2c469d3",
+      "apps/qq_bot/event_recipients.py": "4c9aff6b382ed0a1d53425119624f41567e5e70653c3535505339f4479f8489b",
       "apps/ai_service/channel_management_live.py": "3d146bb031467df20c5d4382730ae2d2080010bde6ecf28d50c0996d4fbd677e",
-      "apps/qq_bot/management_run.py": "a4362d2dba80df5e18aa628e89e22b0686033f986a14bf31c294a3c96f06b03b",
-      "apps/qq_bot/management_config.py": "a37fce785b080922ea904d0bd164a7c2de6913cc31b6534009283af4a1303136",
-      "apps/qq_bot/management_cli.py": "87431db7f921c046264b8662ef2f8fa366f985f3cedef07d8ef342a7467ca408",
+      "apps/qq_bot/management_run.py": "3cd4cc1efbe19244eeef6d44da4ddf82f40e53f19ad289ccfeb48c8c75b0d5df",
+      "apps/qq_bot/management_config.py": "95fd080c25384f830a76845dc41510af9396da7993416793266b5faa4d472912",
+      "apps/qq_bot/management_cli.py": "5a4a9f8a119cd2b81cc1310193ee0fa1849e2a16dd6501c3f00e315aa87aabcb",
       "apps/qq_bot/live_transport.py": "2806805cb6838735644c2d241f7614e7aaa58b17121d34b1eb2b7c5ce3bdae1f",
       "apps/qq_bot/demo_runtime.py": "a64235054f8ee1f359fa27e0e8ce34d5175dacc5213e2ef4f97d823479089e0b",
       "apps/management_process.py": "9d2dd07caacb9a70e34093a617bcfd6615357f60c4bca396cb787c2fcd1ca915",
@@ -199,8 +199,8 @@
       "apps/monitoring/event_reset.py": "0e97bbfc12a44ffbd3619b562f9597a9e2c1dbf0861bbb27cbf27a79bae897d7",
       "apps/ai_service/channel_management_continuous.py": "feeedd5d826349e471815becb48e9ddb4460706dec53e7ad009b65cb487443ab",
       "apps/ai_service/channel_natural_presentation.py": "cbdd8a6cf6dc7a7c4d268163d0ba9174b501b5b163d50b4246c9225141c69cfd",
-      "apps/ai_service/qq_settings.py": "dd8924d191e0c73e10449a3f6461c5108ce6cb0140e1ce10b46f21237f5bfe0e",
-      "apps/qq_bot/management_configuration_bridge.py": "efa42c04e64d475ab94f4c8e337db668cd559dcf2832b70b399705c68d759c1c",
+      "apps/ai_service/qq_settings.py": "e42e99006abce969aa97315b528091781449d41ee4edc8b494cbf58affb57a8b",
+      "apps/qq_bot/management_configuration_bridge.py": "343e4e9361f7df778f84c2d7477957e89ce8bacd024cf17d3892d9f6c4be89ca",
       "apps/ai_service/channel_management_agent.py": "975d4e6bdc2989fdd7ef90e480a301fbe43f1f660776a45cdf7b892661ce5796",
       "apps/ai_service/channel_agent_presentation.py": "2dfc62f950f620afc51f82d2b75864f4ab992e20992ef09baac9edb94bf726f2",
       "apps/ai_service/runtime/assistant.py": "5011bec66ce933abd1e7435ac66fbef94b1dee0131d5689ac817cee61547cdd0",
@@ -233,7 +233,7 @@
       "instance": "EXPLICIT_READ_ONLY_SAME_INSTANCE"
     }
   },
-  "scope_sha256": "7f4b0101a4930d0f5ff5079a3aa4189dd38c439f922eec35d3a236d4894e100b",
+  "scope_sha256": "6180345afb7a50c7ce1e1fadf3f9af41710d1ff567b44b95c1476b776a0216de",
   "old_approvals_accepted": false,
   "real_execution_requires": "CURRENT_PROCESS_WEB_AGENT_OPERATOR_CONSENT"
 }

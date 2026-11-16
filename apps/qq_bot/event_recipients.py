@@ -14,6 +14,8 @@ from .configuration import app_identifier, json_object
 from .contracts import BotError, identifier
 
 CONTRACT = 'qq-private-event-recipient@1'
+RECIPIENTS_CONTRACT = 'qq-private-event-recipients@1'
+MAX_RECIPIENTS = 4
 PROBE = 'qq-private-active-probe@1'
 
 
@@ -33,9 +35,9 @@ def recipient_ref(app_id, user_id):
     return hashlib.sha256((app_id+'\0'+user_id).encode()).hexdigest()[:12]
 
 
-def load_recipient(path, app_id):
-    value = read_private(path)
-    if (set(value) != {'contract', 'app_id', 'user_openid', 'user_ref', 'active_probe_sha256'}
+def _validate_recipient(value, app_id):
+    if (type(value) is not dict
+            or set(value) != {'contract', 'app_id', 'user_openid', 'user_ref', 'active_probe_sha256'}
             or value.get('contract') != CONTRACT or value.get('app_id') != app_id):
         raise BotError('EVENT_RECIPIENT_BINDING_INVALID')
     app_identifier(app_id); identifier(value['user_openid'])
@@ -45,6 +47,25 @@ def load_recipient(path, app_id):
             or any(c not in '0123456789abcdef' for c in proof)):
         raise BotError('EVENT_RECIPIENT_BINDING_INVALID')
     return value
+
+
+def load_recipient(path, app_id):
+    return _validate_recipient(read_private(path), app_id)
+
+
+def load_recipients(path, app_id):
+    """Read a verified recipient list or a legacy single verified recipient."""
+    value = read_private(path)
+    if value.get('contract') != RECIPIENTS_CONTRACT:
+        return (_validate_recipient(value, app_id),)
+    entries = value.get('recipients')
+    if (set(value) != {'contract', 'recipients'} or type(entries) is not list
+            or not 1 <= len(entries) <= MAX_RECIPIENTS):
+        raise BotError('EVENT_RECIPIENT_BINDING_INVALID')
+    recipients = tuple(_validate_recipient(entry, app_id) for entry in entries)
+    if len({entry['user_ref'] for entry in recipients}) != len(recipients):
+        raise BotError('EVENT_RECIPIENT_BINDING_INVALID')
+    return tuple(sorted(recipients, key=lambda entry: entry['user_ref']))
 
 
 def prepare_recipient(probe_directory, output):

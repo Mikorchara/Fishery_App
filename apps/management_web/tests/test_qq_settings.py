@@ -17,12 +17,14 @@ class FakeBridge:
         self.configured = False
         self.settings = default_settings()
         self.recipient = False
+        self.recipient_refs = None
         self.writes = []
 
     def read_nonsecret(self):
         return dict(configured=self.configured, revision=str(self.version), settings=deepcopy(self.settings),
                     instance_id='synthetic-instance', device_id='synthetic-device',
                     recipient_available=self.recipient, recipient_ref='synthetic-ref' if self.recipient else None,
+                    recipient_refs=self.recipient_refs,
                     runtime_status='NOT_CHECKED')
 
     def apply(self, settings, *, expected_revision):
@@ -31,6 +33,15 @@ class FakeBridge:
         self.writes.append(deepcopy(settings))
         self.settings = deepcopy(settings)
         self.configured = bool(settings['app_id'])
+        self.version += 1
+
+    def remove_verified_recipient(self, user_ref, *, expected_revision):
+        if expected_revision != str(self.version):
+            raise QQSettingsError('QQ_SETTINGS_CONFLICT')
+        if user_ref not in self.recipient_refs:
+            raise QQSettingsError('EVENT_RECIPIENT_NOT_FOUND')
+        self.recipient_refs.remove(user_ref)
+        self.settings['event_notifications_enabled'] = False
         self.version += 1
 
 
@@ -138,6 +149,47 @@ class QQSettingsTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()['recipient_ref'], 'synthetic-ref')
 
+    def test_multi_recipient_removal_is_local_confirmed_revision_checked_and_stops_notifications(self):
+        self.bridge.recipient = True
+        refs = ['000000000001', '000000000002']
+        self.bridge.recipient_refs = refs.copy()
+        self.post(dict(self.identity(), event_notifications_enabled=True))
+        state = self.get()
+        self.assertEqual(state['recipient_refs'], refs)
+        self.assertEqual(state['recipient_limit'], 4)
+        target = '/api/settings/qq/recipients/remove'
+        headers = {'X-Management-QQ':self.service.browser_token}
+        value = dict(revision=state['revision'], user_ref=refs[0], confirm_remove=True)
+        self.assertEqual(self.client.post(target, json=value).status_code, 403)
+        self.assertEqual(self.client.post(target, json=value, headers={**headers, 'Origin':'https://evil.invalid'}).status_code, 403)
+        result = self.client.post(target, json=dict(value, confirm_remove=False), headers=headers)
+        self.assertEqual(result.get_json()['error_code'], 'QQ_RECIPIENT_REMOVE_CONFIRMATION_REQUIRED')
+        result = self.client.post(target, json=dict(value, user_ref='arbitrary-openid'), headers=headers)
+        self.assertEqual(result.get_json()['error_code'], 'QQ_RECIPIENT_INVALID')
+        result = self.client.post(target, json=dict(value, user_ref='000000000003'), headers=headers)
+        self.assertEqual(result.get_json()['error_code'], 'EVENT_RECIPIENT_NOT_FOUND')
+        response = self.client.post(target, json=value, headers=headers)
+        self.assertEqual(response.status_code, 200)
+        result = response.get_json()
+        self.assertEqual(result['recipient_refs'], refs[1:])
+        self.assertEqual(result['recipient_ref'], refs[1])
+        self.assertFalse(result['settings']['event_notifications_enabled'])
+        self.assertNotIn('synthetic-member', response.get_data(as_text=True))
+        stale = self.client.post(target, json=dict(value, user_ref=refs[1]), headers=headers)
+        self.assertEqual(stale.get_json()['error_code'], 'QQ_SETTINGS_STALE')
+        self.factory.assert_not_called()
+
+    def test_full_recipient_list_rejects_pairing_before_worker_or_secret(self):
+        self.post(self.identity())
+        self.bridge.recipient_refs = [str(i).zfill(12) for i in range(4)]
+        self.service.pairing_factory = Mock()
+        response = self.client.post('/api/settings/qq/pairing/start',
+            json=dict(revision=self.get()['revision'], confirm_network=True),
+            headers={'X-Management-QQ':self.service.browser_token})
+        self.assertEqual(response.get_json()['error_code'], 'EVENT_RECIPIENT_LIMIT')
+        self.service.pairing_factory.assert_not_called()
+        self.factory.assert_not_called()
+
     def test_secret_is_explicit_private_write_never_returned_or_saved_in_settings(self):
         self.assertEqual(self.post(self.identity()).status_code, 200)
         self.factory.assert_not_called()
@@ -236,12 +288,13 @@ class QQSettingsTests(unittest.TestCase):
 
 
 class QQSettingsBridgeTests(unittest.TestCase):
-    def test_web_pairing_with_real_bridge_binds_only_verified_pointer_without_changing_scope_policy_or_database(self):
+    def test_web_pairing_appends_verified_users_without_changing_scope_policy_or_database(self):
         from apps.qq_bot.management_configuration_bridge import QQConfigurationBridge
         from apps.qq_bot.management_config import ROOT, MARKER
         from apps.management_paths import ManagementPaths
         from apps.management_web.instance import initialize_instance
         from apps.qq_bot.private_pairing import PairingManager
+        from apps.qq_bot.event_recipients import recipient_ref
         from apps.qq_bot.tests.test_private_pairing import Socket, packet, APP, GROUP
         from apps.ai_backend.credentials import CredentialSnapshot, CredentialStatus
         import httpx
@@ -261,35 +314,44 @@ class QQSettingsBridgeTests(unittest.TestCase):
                 app_id=APP, group_id=GROUP, members=['synthetic-member'], enabled=True, ai_enabled=True)))
             files = [config_root/'scope.json', *list((config_root/'policy').glob('*.json')), *list(data_root.glob('*.sqlite3'))]
             before = {p:p.read_bytes() for p in files}
-            socket, messages = Socket(), []
+            sockets, messages = [Socket(), Socket()], []
+            next_socket = iter(sockets)
             def http(request):
                 if request.url.path.endswith('getAppAccessToken'):return httpx.Response(200, json=dict(access_token='synthetic', expires_in=3600))
                 if request.url.path == '/gateway':return httpx.Response(200, json=dict(url='wss://api.bot.qq.com/websocket/'))
                 messages.append(request)
                 return httpx.Response(200, json=dict(id='accepted'))
             with httpx.Client(transport=httpx.MockTransport(http)) as client:
-                manager = PairingManager(test_root, config_root, client=client, connector=lambda _:socket,
+                manager = PairingManager(test_root, config_root, client=client, connector=lambda _:next(next_socket),
                     secret_supplier=lambda:CredentialSnapshot('synthetic-secret', CredentialStatus('PRESENT','TEST',False)))
                 service.pairing_factory = lambda:manager
                 try:
                     with patch('sqlite3.connect', side_effect=AssertionError('DB forbidden')), \
                             patch('apps.ai_backend.credentials.CredentialStore.resolve', side_effect=AssertionError('real secret forbidden')):
-                        started = service.pairing_start(dict(revision=saved['revision'], confirm_network=True))
-                        deadline = time.monotonic()+3
-                        while not manager._run.gateway.ready.is_set() and time.monotonic()<deadline:threading.Event().wait(.01)
-                        socket.frames.put(packet(started['challenge_command']))
-                        while manager.status()['phase'] != 'AWAITING_CONFIRMATION' and time.monotonic()<deadline:threading.Event().wait(.01)
-                        self.assertEqual(manager.status()['phase'], 'AWAITING_CONFIRMATION')
-                        status = service.pairing_action(dict(pairing_id=started['pairing_id'], user_ref=manager.status()['user_ref'],
-                            confirm_active_test=True), confirm=True)
-                        self.assertEqual(status['phase'], 'BOUND')
-                        public = service.public()
-                        self.assertTrue(public['recipient_available'])
-                        self.assertFalse(public['settings']['event_notifications_enabled'])
+                        public = saved
+                        refs = []
+                        for socket, user in zip(sockets, ('synthetic-first-user', 'synthetic-second-user')):
+                            started = service.pairing_start(dict(revision=public['revision'], confirm_network=True))
+                            deadline = time.monotonic()+3
+                            while not manager._run.gateway.ready.is_set() and time.monotonic()<deadline:threading.Event().wait(.01)
+                            socket.frames.put(packet(started['challenge_command'], user=user))
+                            while manager.status()['phase'] != 'AWAITING_CONFIRMATION' and time.monotonic()<deadline:threading.Event().wait(.01)
+                            self.assertEqual(manager.status()['phase'], 'AWAITING_CONFIRMATION')
+                            ref = recipient_ref(APP, user)
+                            self.assertEqual(manager.status()['user_ref'], ref)
+                            status = service.pairing_action(dict(pairing_id=started['pairing_id'], user_ref=ref,
+                                confirm_active_test=True), confirm=True)
+                            self.assertEqual(status['phase'], 'BOUND')
+                            refs.append(ref)
+                            public = service.public()
+                            self.assertEqual(public['recipient_refs'], sorted(refs))
+                            self.assertTrue(public['recipient_available'])
+                            self.assertFalse(public['settings']['event_notifications_enabled'])
                         request = json.loads((config_root/'request.json').read_text())
                         self.assertIn('verified_recipient_file', request)
                         self.assertNotIn('event_recipient_file', request)
-                    self.assertEqual(len(messages), 1)
+                    self.assertEqual([message.url.path for message in messages],
+                                     ['/v2/users/synthetic-first-user/messages', '/v2/users/synthetic-second-user/messages'])
                     self.assertEqual(before, {p:p.read_bytes() for p in before})
                 finally:service.close()
 

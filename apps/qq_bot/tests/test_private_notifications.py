@@ -16,13 +16,15 @@ from apps.qq_bot.management_run import ManagementRun
 from apps.qq_bot.management_config import load_request,check_request
 from apps.qq_bot.live_transport import LiveQQAPI
 from apps.qq_bot.event_notifications import NotificationPermit,NoticeJournal,EventNotifier
-from apps.qq_bot.event_recipients import prepare_recipient,load_recipient,recipient_ref,PROBE
+from apps.qq_bot.event_recipients import (prepare_recipient, load_recipient, recipient_ref, PROBE,
+                                         RECIPIENTS_CONTRACT)
 from apps.qq_bot.tests import test_management_live as fixture
 
 
-def binding(root):
-    proof=root/'proof';proof.mkdir();ref=recipient_ref('123456789','private-user')
-    recipient=dict(contract=PROBE,app_id='123456789',user_openid='private-user',user_ref=ref,
+def binding(root, user='private-user'):
+    root.mkdir(exist_ok=True)
+    proof=root/'proof';proof.mkdir();ref=recipient_ref('123456789',user)
+    recipient=dict(contract=PROBE,app_id='123456789',user_openid=user,user_ref=ref,
                    status='PROBE_RECIPIENT_ONLY',business_access=False)
     result=dict(contract=PROBE,mode='active_once',code='QQ_PRIVATE_ACTIVE_API_ACCEPTED',
         api_accepted=True,operator_approved_active=True,message_submissions=1,proactive_messages=1,
@@ -47,7 +49,8 @@ class PrivateNoticeTests(unittest.TestCase):
         self.writer.ingest(packet);self.seconds+=10
 
     def compose(self,approve=True):
-        directory=self.case.root/'notice-run';directory.mkdir()
+        directory=self.case.root/f'notice-run-{len(list(self.case.root.glob("notice-run-*")))}'
+        directory.mkdir()
         self.host=ManagementRun(self.case.request,directory,async_client_factory=self.case.factory,clock=lambda:self.now)
         self.addCleanup(self.host.close);self.host.enable_event_notifications(self.binding)
         if not approve:return
@@ -55,16 +58,18 @@ class PrivateNoticeTests(unittest.TestCase):
         self.outcome='ACCEPTED'
         def http(request):
             self.posts.append(request)
-            if self.outcome=='UNKNOWN':raise httpx.ReadTimeout('fake',request=request)
-            if self.outcome=='DENIED':return httpx.Response(400,json={'code':40034105,'message':'private detail'})
+            outcome = self.outcome(request) if callable(self.outcome) else self.outcome
+            if outcome=='UNKNOWN':raise httpx.ReadTimeout('fake',request=request)
+            if outcome=='DENIED':return httpx.Response(400,json={'code':40034105,'message':'private detail'})
             return httpx.Response(200,json={'id':'accepted'})
         client=httpx.Client(transport=httpx.MockTransport(http));self.addCleanup(client.close)
         self.api=LiveQQAPI('123456789',None,permit=self.host.permit,client=client)
         self.api._token='fictional';self.api._expires=self.api._now()+3600
-        self.permit=NotificationPermit(self.host)
-        self.journal=NoticeJournal(self.case.root,self.permit.audience,clock=lambda:self.now)
+        targets = [(permit, NoticeJournal(self.case.root, permit.audience, clock=lambda: self.now))
+                   for permit in NotificationPermit.for_host(self.host)]
+        self.permit, self.journal = targets[0]
         self.notifier=EventNotifier(self.permit,self.api,self.journal,connected=lambda:self.connected,
-            clock=lambda:self.now,monotonic=lambda:self.seconds)
+            clock=lambda:self.now,monotonic=lambda:self.seconds,additional_targets=targets[1:])
         self.addCleanup(self.notifier.close)
 
     def test_new_upgrade_recovery_only_private_zero_model_readonly(self):
@@ -145,6 +150,79 @@ class PrivateNoticeTests(unittest.TestCase):
         self.assertEqual(report['event_notifications']['accepted'],1)
         self.assertFalse(report['event_notifications']['client_display_confirmed'])
 
+    def select_two_recipients(self):
+        new_binding = binding(self.case.root/'second', user='another-user')
+        target = self.case.root/'recipient-list.json'
+        entries = [load_recipient(path, '123456789') for path in (self.binding, new_binding)]
+        write_private(target, json.dumps(dict(contract=RECIPIENTS_CONTRACT, recipients=entries)).encode())
+        self.binding = target
+        return new_binding
+
+    def test_multiple_notices_share_rate_limit_and_isolate_unknown_delivery(self):
+        self.select_two_recipients()
+        self.compose()
+        plan = self.host.plan()['event_notifications']
+        self.assertEqual(plan['recipient_count'], 2)
+        self.assertEqual(plan['approved_recipients_daily_limit'], 200)
+        self.assertNotIn('another-user', json.dumps(plan))
+        self.outcome = lambda request: 'UNKNOWN' if len(self.posts) == 1 else 'ACCEPTED'
+        self.notifier.tick()
+        self.seconds += 9
+        self.notifier.tick()
+        self.assertEqual(len(self.posts), 1)
+        self.seconds += 1
+        self.notifier.tick()
+        self.assertEqual({post.url.path for post in self.posts}, {
+            '/v2/users/private-user/messages', '/v2/users/another-user/messages'})
+        report = self.notifier.report()
+        self.assertEqual((report['accepted'], report['delivery_unknown']), (1, 1))
+        self.assertEqual(len(report['recipients']), 2)
+        self.assertNotIn('another-user', json.dumps(report))
+        self.notifier.close()
+        self.compose()
+        self.notifier.tick()
+        self.assertEqual(len(self.posts), 2)
+
+    def test_legacy_journal_dedupes_when_adding_then_removing_a_recipient(self):
+        original_binding = self.binding
+        self.compose()
+        self.notifier.tick()
+        self.notifier.close()
+        self.select_two_recipients()
+        self.compose()
+        self.notifier.tick()
+        self.assertEqual([post.url.path for post in self.posts], [
+            '/v2/users/private-user/messages', '/v2/users/another-user/messages'])
+        self.notifier.close()
+        self.binding = original_binding
+        self.compose()
+        self.notifier.tick()
+        self.assertEqual(len(self.posts), 2)
+
+    def test_recipient_list_change_blocks_the_next_delivery(self):
+        second = self.select_two_recipients()
+        self.compose()
+        self.notifier.tick()
+        self.binding.write_bytes(second.read_bytes())
+        self.seconds += 10
+        with self.assertRaisesRegex(BotError, 'EVENT_NOTIFICATION_RECIPIENT_CHANGED'):
+            self.notifier.tick()
+        self.assertEqual(len(self.posts), 1)
+
+    def test_recipient_change_during_token_lookup_blocks_the_post(self):
+        second = self.select_two_recipients()
+        self.compose()
+        token = self.api._token
+
+        def replace_binding():
+            self.binding.write_bytes(second.read_bytes())
+            return token
+
+        with patch.object(self.api, 'token', side_effect=replace_binding):
+            with self.assertRaisesRegex(BotError, 'EVENT_NOTIFICATION_RECIPIENT_CHANGED'):
+                self.notifier.tick()
+        self.assertEqual(self.posts, [])
+
     def test_offline_cli_notification_lifecycle_and_final_report(self):
         from apps.qq_bot.management_cli import run
         value=json.loads(self.case.path.read_text());value['event_recipient_file']=str(self.binding)
@@ -159,6 +237,30 @@ class PrivateNoticeTests(unittest.TestCase):
         self.assertEqual(report['event_notifications']['accepted'],1)
         self.assertEqual(report['event_notifications']['destination'],'private')
         self.assertEqual(report['event_notifications']['state'],'CLOSED')
+
+    def test_offline_cli_composes_all_approved_notifiers(self):
+        from apps.qq_bot.management_cli import run
+        self.select_two_recipients()
+        value = json.loads(self.case.path.read_text())
+        value['event_recipient_file'] = str(self.binding)
+        path = self.case.root/'multi-notice-request.json'
+        path.write_text(json.dumps(value))
+        refs = set()
+
+        def status(code, **fields):
+            if code == 'QQ_EVENT_NOTICE_API_ACCEPTED':
+                refs.add(fields['recipient_ref'])
+
+        directory = self.case.root/'multi-cli-run'
+        with patch('apps.qq_bot.management_cli.ROOT', self.case.root), \
+                patch('apps.qq_bot.event_notifications.POLL_SECONDS', .01), \
+                patch('apps.qq_bot.event_notifications.INTERVAL_SECONDS', .01):
+            code = run(path, directory, offline=True, seconds=30,
+                       stop_requested=lambda: len(refs) == 2, emit_status=status)
+        self.assertEqual(code, 0)
+        report = json.loads((directory/'result.json').read_text())['event_notifications']
+        self.assertEqual(report['accepted'], 2)
+        self.assertEqual(refs, {entry['recipient_ref'] for entry in report['recipients']})
 
     def test_identity_templates_and_prompt_match_product_role(self):
         from apps.qq_bot.hybrid_intent import classify

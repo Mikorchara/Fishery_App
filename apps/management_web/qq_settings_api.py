@@ -85,6 +85,13 @@ def register_qq_settings_api(app, service):
             return failure
         return jsonify(**_browser_settings(service.save_secret(body())), browser_token=service.browser_token)
 
+    @app.post('/api/settings/qq/recipients/remove')
+    def qq_remove_recipient():
+        failure = checked()
+        if failure is not None:
+            return failure
+        return jsonify(**_browser_settings(service.remove_recipient(body())), browser_token=service.browser_token)
+
     @app.get('/api/settings/qq/pairing')
     def qq_pairing_status():
         failure = checked()

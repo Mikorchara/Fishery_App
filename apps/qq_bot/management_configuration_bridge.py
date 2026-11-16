@@ -6,6 +6,7 @@ configuration generation, retaining the old directory for local recovery.
 from pathlib import Path
 import json
 import os
+import re
 import uuid
 
 from apps.ai_backend.secure_files import exclusive_lock
@@ -13,8 +14,14 @@ from apps.ai_service.channel_trial import PRESET
 from apps.ai_service.runtime.assistant import assistant_profile
 from apps.ai_service.runtime.release_contracts import _hash
 from .contracts import BotError
+from .event_recipients import MAX_RECIPIENTS, RECIPIENTS_CONTRACT, load_recipient, load_recipients, read_private
 from .management_config import ROOT, MARKER
 from .trial_configuration import local_path, read_json, write_new
+
+
+def _recipient_path(request):
+    path = request.get('event_recipient_file') or request.get('verified_recipient_file')
+    return local_path(path) if path else None
 
 
 class QQConfigurationBridge:
@@ -39,7 +46,7 @@ class QQConfigurationBridge:
 
     def read_nonsecret(self):
         revision=self._revision();profile=assistant_profile(PRESET)
-        result=dict(configured=False,revision=revision,recipient_available=False,recipient_ref=None,
+        result=dict(configured=False,revision=revision,recipient_available=False,recipient_ref=None,recipient_refs=[],
             runtime_status='NOT_CONFIGURED',provider=profile.service_id,model=profile.model,preset=PRESET,
             instance_id='management-isolated',device_id='sim-pond-1',
             binding=dict(data_root=str(self.data_root),instance_id='management-isolated',device_id='sim-pond-1'))
@@ -52,18 +59,16 @@ class QQConfigurationBridge:
         if Path(source['data_root']).resolve()!=self.data_root:raise BotError('MANAGEMENT_INSTANCE_BINDING_MISMATCH')
         group=next((g for g in access.groups if g.group_id==request['inputs']['group_id']),None)
         if group is None:raise BotError('INVALID_MANAGEMENT_REQUEST')
-        recipient=None
-        recipient_file=request.get('event_recipient_file') or request.get('verified_recipient_file')
-        if recipient_file:
-            from .event_recipients import load_recipient
-            recipient=load_recipient(local_path(recipient_file),access.app_id)
+        recipient_path = _recipient_path(request)
+        recipients = load_recipients(recipient_path, access.app_id) if recipient_path is not None else ()
+        refs = [recipient['user_ref'] for recipient in recipients]
         result.update(configured=True,runtime_status='CONFIGURED_RESTART_REQUIRED',
             agent_mode=request.get('agent_mode','current'),
             tools=list(next(g.tools for g in ai.grants if g.group_id==group.group_id)),
             settings=dict(enabled=request['enabled'],ai_enabled=request.get('ai_enabled',request['enabled']),
                 app_id=access.app_id,group_id=group.group_id,members=list(request['members']),
                 max_output_tokens=ai.budget.max_output_tokens,event_notifications_enabled=bool(request.get('event_recipient_file'))),
-            recipient_available=recipient is not None,recipient_ref=recipient['user_ref'] if recipient else None)
+            recipient_available=bool(refs),recipient_ref=refs[0] if refs else None,recipient_refs=refs)
         return result
 
     def apply(self, settings, *, expected_revision):
@@ -88,8 +93,7 @@ class QQConfigurationBridge:
                 if not path.is_file() or path.stat().st_size==0:raise BotError('MANAGEMENT_INSTANCE_MISSING')
             recipient_path=None;old=current.get('settings',{})
             if current['configured'] and old.get('app_id')==settings['app_id'] and current['recipient_available']:
-                previous=read_json(self.directory/'request.json')
-                recipient_path=local_path(previous.get('event_recipient_file') or previous['verified_recipient_file'])
+                recipient_path=_recipient_path(read_json(self.directory/'request.json'))
             if settings['event_notifications_enabled']:
                 if recipient_path is None:
                     raise BotError('EVENT_RECIPIENT_BINDING_REQUIRED')
@@ -105,7 +109,7 @@ class QQConfigurationBridge:
                     from apps.ai_backend.secure_files import write_private
                     destination=stage/recipient_path.relative_to(cfg)
                     destination.parent.mkdir(parents=True,exist_ok=True)
-                    value=read_json(recipient_path)
+                    value=read_private(recipient_path)
                     write_private(destination,(json.dumps(value,ensure_ascii=False,indent=2)+'\n').encode())
                 request['event_recipient_file' if settings['event_notifications_enabled'] else 'verified_recipient_file']=str(recipient_path)
             # Only a newly created staging file is replaced here; historical
@@ -130,25 +134,69 @@ class QQConfigurationBridge:
         publication without trying to acquire that same Bot lock recursively.
         """
         from .configuration import load_access
-        from .event_recipients import load_recipient
-        from apps.ai_backend.secure_files import write_private,atomic_replace
-        target=local_path(path).resolve()
-        if target.parent!=self.directory or not target.name.startswith('event-recipient-'):
+        target = local_path(path).resolve()
+        if target.parent != self.directory or not target.name.startswith('event-recipient-'):
             raise BotError('PRIVATE_PAIRING_BINDING_INVALID')
         with exclusive_lock(self.directory.parent/'.qq-configuration.lock'):
-            if self._revision()!=expected_revision:raise BotError('QQ_SETTINGS_CONFLICT')
-            request_path=self.directory/'request.json'
-            request=read_json(request_path)
-            if request.get('schema_version') not in (2,3):raise BotError('PRIVATE_PAIRING_SAVE_IDENTITY_FIRST')
-            access=load_access(self.directory/'access.json')
-            load_recipient(target,access.app_id)
-            original=request_path.read_bytes()
-            backup=self.directory/('request.before-pairing-'+uuid.uuid4().hex+'.json')
-            write_private(backup,original)
-            request.pop('event_recipient_file',None)
-            request['verified_recipient_file']=str(target)
-            temporary=self.directory/('request.pairing-'+uuid.uuid4().hex+'.json')
-            write_private(temporary,(json.dumps(request,ensure_ascii=False,indent=2)+'\n').encode())
-            if self._revision()!=expected_revision:raise BotError('QQ_SETTINGS_CONFLICT')
-            atomic_replace(temporary,request_path)
-        return self.read_nonsecret()
+            if self._revision() != expected_revision:
+                raise BotError('QQ_SETTINGS_CONFLICT')
+            request = read_json(self.directory/'request.json')
+            if request.get('schema_version') not in (2, 3):
+                raise BotError('PRIVATE_PAIRING_SAVE_IDENTITY_FIRST')
+            app_id = load_access(self.directory/'access.json').app_id
+            recipient = load_recipient(target, app_id)
+            previous_path = _recipient_path(request)
+            recipients = load_recipients(previous_path, app_id) if previous_path is not None else ()
+            for current in recipients:
+                if current['user_ref'] == recipient['user_ref']:
+                    if current['user_openid'] != recipient['user_openid']:
+                        raise BotError('EVENT_RECIPIENT_BINDING_INVALID')
+                    return self.read_nonsecret()
+            if len(recipients) >= MAX_RECIPIENTS:
+                raise BotError('EVENT_RECIPIENT_LIMIT')
+            self._publish_recipient_binding(request, (*recipients, recipient), expected_revision,
+                                            single_target=target if not recipients else None)
+            return self.read_nonsecret()
+
+    def remove_verified_recipient(self, user_ref, *, expected_revision):
+        """Revoke one binding without changing QQ group or AI permissions."""
+        from .configuration import load_access
+        if type(user_ref) is not str or not re.fullmatch('[0-9a-f]{12}', user_ref):
+            raise BotError('EVENT_RECIPIENT_BINDING_INVALID')
+        with exclusive_lock(self.directory.parent/'.qq-configuration.lock'):
+            if self._revision() != expected_revision:
+                raise BotError('QQ_SETTINGS_CONFLICT')
+            request = read_json(self.directory/'request.json')
+            path = _recipient_path(request)
+            app_id = load_access(self.directory/'access.json').app_id
+            recipients = load_recipients(path, app_id) if path is not None else ()
+            retained = tuple(recipient for recipient in recipients if recipient['user_ref'] != user_ref)
+            if retained == recipients:
+                raise BotError('EVENT_RECIPIENT_NOT_FOUND')
+            self._publish_recipient_binding(request, retained, expected_revision)
+            return self.read_nonsecret()
+
+    def _publish_recipient_binding(self, request, recipients, expected_revision, *, single_target=None):
+        from apps.ai_backend.secure_files import atomic_replace, write_private
+
+        # Keep every published recipient file immutable so the old request is
+        # still valid if recording the new request fails or must be recovered.
+        target = single_target
+        if recipients and target is None:
+            target = self.directory/('event-recipients-'+uuid.uuid4().hex+'.json')
+            ordered = sorted(recipients, key=lambda entry: entry['user_ref'])
+            value = ordered[0] if len(ordered) == 1 else dict(contract=RECIPIENTS_CONTRACT, recipients=ordered)
+            write_private(target, (json.dumps(value, ensure_ascii=False, indent=2)+'\n').encode())
+
+        request_path = self.directory/'request.json'
+        backup = self.directory/('request.before-recipient-change-'+uuid.uuid4().hex+'.json')
+        write_private(backup, request_path.read_bytes())
+        request.pop('event_recipient_file', None)
+        request.pop('verified_recipient_file', None)
+        if target is not None:
+            request['verified_recipient_file'] = str(target)
+        temporary = self.directory/('request.recipient-change-'+uuid.uuid4().hex+'.json')
+        write_private(temporary, (json.dumps(request, ensure_ascii=False, indent=2)+'\n').encode())
+        if self._revision() != expected_revision:
+            raise BotError('QQ_SETTINGS_CONFLICT')
+        atomic_replace(temporary, request_path)
