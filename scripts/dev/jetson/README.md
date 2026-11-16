@@ -1,6 +1,6 @@
 # Jetson 开发板联调
 
-这里集中存放 Management 侧的 SSH 排查步骤和旧版报文精简工具。正式接收器及网页启动见 [设备连接步骤](../../../apps/docs/DEVICE_INTERFACE_QUICK.md)。2026-11-08 交接后的板端现用 `peak_frame_v1` 自动发送完整单包。现行字段见 [设备视觉页改版与数据清单](../../../apps/docs/development/DEVICE_REPORT_REDESIGN.md)。
+这里集中存放 Management 侧的 SSH 排查步骤和旧版报文精简工具。正式接收器及网页启动见 [设备连接步骤](../../../docs/DEVICE_INTERFACE_QUICK.md)。2026-11-08 交接后的板端现用 `peak_frame_v1` 自动发送完整单包。现行字段见 [设备视觉页改版与数据清单](../../../docs/development/DEVICE_REPORT_REDESIGN.md)。
 
 源码副本、现场日志、报文样本、验证结果和队列备份保存在 Git 忽略的 `outputs/hardware-evidence` 与 `outputs/hardware-checks`。SSH 密码、密钥和实际凭据使用原有私有存储。
 
@@ -38,7 +38,7 @@ sha256sum website_publish.py
 
 ## 启动回放检测并复用已有行为结果
 
-先在电脑启动[接收器和网页](../../../apps/docs/DEVICE_INTERFACE_QUICK.md)。如板端检测已在运行，沿用该进程。需要启动时，在开发板 SSH 窗口执行下面的命令。若接收报告的电脑地址变化，先将 `PC_IP` 的值替换为电脑当前的局域网 IPv4，再执行地址设置行。
+先在电脑启动[接收器和网页](../../../docs/DEVICE_INTERFACE_QUICK.md)。如板端检测已在运行，沿用该进程。需要启动时，在开发板 SSH 窗口执行下面的命令。若接收报告的电脑地址变化，先将 `PC_IP` 的值替换为电脑当前的局域网 IPv4，再执行地址设置行。
 
 ```bash
 cd /home/lxw/fish_cpp_agent_integration

@@ -4,14 +4,14 @@
 
 **当前：固定15个真实样本技术通过，用户已完成真实管理网页基本验收；Qwen Normal历史单工具仍为local_experimental、Web默认关闭、非released。回答质量独立抽样，不阻塞普通功能开发；用户观察不等于正式资格。操作见第9～11节及BUILD_RUN。下文1～8节保留准备/停止记录，不代表永久网络授权。**
 
-入口：[qualify_management_history.py](../../../scripts/qualification/qualify_management_history.py)。实现位于 [history_qualification.py](../../ai_service/development/history_qualification.py)，只复用正式管理 Service / Assistant / ToolCallingService；没有第二个执行循环或自动重试。固定批次薄入口见第7节。旧 [Streaming 资格](STREAMING_QUALIFICATION.md) 与其授权独立。
+入口：[qualify_management_history.py](../../scripts/qualification/qualify_management_history.py)。实现位于 [history_qualification.py](../../apps/ai_service/development/history_qualification.py)，只复用正式管理 Service / Assistant / ToolCallingService；没有第二个执行循环或自动重试。固定批次薄入口见第7节。旧 [Streaming 资格](STREAMING_QUALIFICATION.md) 与其授权独立。
 
 ## 1. 精确范围
 
 - Qwen `dashscope-qwen38-flash-r1`，OFF / Normal；Identity、ProtocolSpec 与 Preset 合同来自维护者固定配置。
 - 只暴露 `get_water_quality_history`；1 Call / 1 Round / 最多 2 Requests，retry=0、整 Turn 120 秒。
 - 使用正式 `ASSISTANT_V2@1`，不加实验 System Prompt；正式 B History Projection，三个案例均 EMPTY。
-- 复用 [历史 candidate Scope](../../ai_service/resources/water_history_candidate.json)：Monitoring `management-water-history@1`、720 行 / 12 条明细 / 24 KiB、`historical-water-receipt@1`、冻结设备。
+- 复用 [历史 candidate Scope](../../apps/ai_service/resources/water_history_candidate.json)：Monitoring `management-water-history@1`、720 行 / 12 条明细 / 24 KiB、`historical-water-receipt@1`、冻结设备。
 - 历史专用候选/资格每请求1024 output tokens，通过原 Adapter / ProtocolSpec 编码为 `max_tokens`；`water_history_candidate@2` / `management-history-qualification@2`，旧256计划不可复用。Profile默认输出预算为None，不会压低该值；未知Capability不伪造为已支持。其他Normal资格仍限256、Streaming资格仍512；未改变已开放两工具。Normal省略`stream`字段，使用SDK默认false。
 - Scope、配置、Schema、Prompt/History、固定问题、夹具数据集、版本、SDK 版本、Policy 与预算均进入计划 hash。与两工具 Normal / Streaming 的 Scope、revision、资格记录独立。
 
@@ -199,7 +199,7 @@ $historyBatch.batch.plans | ConvertTo-Json -Depth 15
 三工具候选 `management-normal-three-tools@1` 使用正式多轮Prompt/History及原Registry/循环，精确Qwen OFF、Normal、2/2/3、1024 tokens、retry=0、120秒。Scope额外绑定历史数据合同和来源版本；candidate、enabled=false，既不加入普通请求，也不开放Streaming。离线Fake证明模型响应可以选择任一工具、按首个真实结果继续选择第二个、提前Final及拒绝第三个调用；不证明真实LLM的选择稳定性。开放条件和启动操作见[BUILD_RUN](AI_BACKEND_DEVELOPMENT_GUIDE.md)。
 
 离线验收（各层含重叠，不相加）：Backend 175项通过（28.382秒）；随后候选专项7项通过（1.885秒，含追加的JSON不得自行升级/启用门禁）；FAST 165项通过；管理HTTP/API 93项通过；历史/Streaming/批次资格基础设施46项通过；前端Node 60项通过。原六条Normal/Streaming路径与已冻结资格计划哈希对比通过，未改写基线。浏览器Fake SDK经真实HTTP完成历史查询并恢复普通提问；1280×900和390×844下无横向溢出，长禁用原因与输入/发送均未被卡片裁切，页面JS错误为0。Markdown本地链接/锚点、Python/JS/JSON语法、常见敏感模式和diff检查通过。未调用真实Provider/NPU，未更改真实数据、用户授权或现有发布范围。
-| 当前文档 | apps/docs 的BUILD_RUN、HISTORY_QUALIFICATION、INTEGRATION、STRUCTURE、README、AI_BACKEND_DEVELOPMENT_GUIDE；apps/ai_service/runtime/README.md |
+| 当前文档 | docs 的BUILD_RUN、HISTORY_QUALIFICATION、INTEGRATION、STRUCTURE、README、AI_BACKEND_DEVELOPMENT_GUIDE；apps/ai_service/runtime/README.md |
 
 - Backend 169项通过（28.169秒），FAST 165项通过（1.523秒）；管理HTTP/API 93项通过（19.045秒）。测试层有重叠，不相加为唯一总数。
 - 完整离线Qualification 213项：212通过、1项因本机符号链接限制跳过（41.151秒）；没有任何真实Provider/Ollama/NPU请求。
@@ -213,4 +213,4 @@ $historyBatch.batch.plans | ConvertTo-Json -Depth 15
 
 用户确认：Qwen在真实管理网页成功选择历史Tool，Monitoring返回实际统计，Tool Execution与Source Gate正常，生成完整Final；管理设置和启动开关可禁用。此处记录用户观察，本轮没有读取真实报告、数据库或私有配置，没有新增qualification_id、人工回答质量批准或released状态。
 
-历史Tool作为可长期维护的有限业务模块保留；模型组合发布、默认开关与用户授权继续分别控制。后续真实连接由用户从[manual_real_tests](../../../scripts/manual_real_tests/README.md)亲自执行，原单案例/批次CLI不搬迁；默认Dry-run，真实执行需要本次计划与明确确认，旧hash不作为永久授权。完整复盘及并发保存问题见[R2D-1最终审计](AI_BACKEND_DEVELOPMENT_GUIDE.md)。
+历史Tool作为可长期维护的有限业务模块保留；模型组合发布、默认开关与用户授权继续分别控制。后续真实连接由用户从[manual_real_tests](../../scripts/manual_real_tests/README.md)亲自执行，原单案例/批次CLI不搬迁；默认Dry-run，真实执行需要本次计划与明确确认，旧hash不作为永久授权。完整复盘及并发保存问题见[R2D-1最终审计](AI_BACKEND_DEVELOPMENT_GUIDE.md)。

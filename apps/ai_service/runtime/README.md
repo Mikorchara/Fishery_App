@@ -2,7 +2,7 @@
 
 R2C-1D后由正式ManagementAssistantService直接使用；通用执行由 [ai_backend](../../ai_backend/README.md) 负责，业务层不复制循环。
 
-这里的 runtime 指业务 Assistant 合同，不是第二套通用 Runtime。Tool、Prompt、参数扩展步骤见 [开发指南](../../docs/deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。不要在本目录添加 Gateway、Streaming Assembler 或新的执行循环。
+这里的 runtime 指业务 Assistant 合同，不是第二套通用 Runtime。Tool、Prompt、参数扩展步骤见 [开发指南](../../../docs/deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。不要在本目录添加 Gateway、Streaming Assembler 或新的执行循环。
 
 - `assistant.py`：原两版业务Prompt、History完整pair裁剪、Source/Trace Commit Gate。
 - `sources.py`：Requirement/Receipt/Ledger，只从本轮新Backend执行步骤认证来源；历史操作及可靠历史观测独立于当前观测。
@@ -17,7 +17,7 @@ R2C-1D后由正式ManagementAssistantService直接使用；通用执行由 [ai_b
 
 旧顶层 bindings.py 和本目录 tools.py 已移除，真实调用方迁到各 Tool owner / registry，不留 re-export/Alias；Policy、Receipt/Ledger、Activity/Catalog 和提交职责仍留本目录。
 
-R2D-1G 的 [历史 Tool](../business_tools/water_quality_history.py) 由 bind_tools(include_history=True) 显式装配，默认请求Registry仍仅两工具。history_execution.py 绑定Qwen OFF / Normal / 历史单工具 / 1024 / 1/1/2 / retry=0 / 120秒，local_experimental但默认关闭；`--assistant-history-trial`与管理Policy opt-in均必需。共享格式仍拒绝历史名称。管理HTTP只接受固定Profile及对应revision，不能指定预算；Service以同一Assistant/Executor和产品Adapter预算编码执行，不使用development Adapter。15个真实样本技术通过，回答质量未审、非released，见[资格与试用记录](../../docs/deep-dive/HISTORY_QUALIFICATION.md#9-r2d-1g真实批次通过与本地实验开放)。开发CLI保留独立关闭candidate计划，后续真实执行仍需新授权。
+R2D-1G 的 [历史 Tool](../business_tools/water_quality_history.py) 由 bind_tools(include_history=True) 显式装配，默认请求Registry仍仅两工具。history_execution.py 绑定Qwen OFF / Normal / 历史单工具 / 1024 / 1/1/2 / retry=0 / 120秒，local_experimental但默认关闭；`--assistant-history-trial`与管理Policy opt-in均必需。共享格式仍拒绝历史名称。管理HTTP只接受固定Profile及对应revision，不能指定预算；Service以同一Assistant/Executor和产品Adapter预算编码执行，不使用development Adapter。15个真实样本技术通过，回答质量未审、非released，见[资格与试用记录](../../../docs/deep-dive/HISTORY_QUALIFICATION.md#9-r2d-1g真实批次通过与本地实验开放)。开发CLI保留独立关闭candidate计划，后续真实执行仍需新授权。
 
 同名文件要按层定位：顶层 execution.py 是 Normal 发布/Scope/revision，streaming.py 是 Streaming 发布/Scope；通用请求取消/Deadline 在 ai_backend/execution.py，HTTP SSE worker 在 management_web/streaming.py。顶层 contracts.py 是进程内 PreparedAssistantTurn / AssistantBackend 业务合同，不是 Web DTO。
 
@@ -27,4 +27,4 @@ R2D-1G 的 [历史 Tool](../business_tools/water_quality_history.py) 由 bind_to
 
 R2C-1E：用户已报告新 Backend 的 Qwen Normal 水质查询、Streaming 水质 + Knowledge 与最终提交基本网页验收通过。迁移主线已结束；这不替代回答质量专项审核，不增加 Provider 资格或发布范围。Monitoring 领域独立化已由 MIG-1 完成；Knowledge 在 R2D-3B 脱离旧实现，旧 JSON 仅作显式迁移/历史资格夹具。
 
-验证：`python scripts/dev/run_tests.py backend`。当前执行路径、指纹与回滚见 [实施记录](../../docs/deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。
+验证：`python scripts/dev/run_tests.py backend`。当前执行路径、指纹与回滚见 [实施记录](../../../docs/deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。

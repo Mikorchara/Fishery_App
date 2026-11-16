@@ -11,5 +11,5 @@
 - 测试 TEMP/TMP 必须指向本仓库忽略目录，例如 outputs/test-tmp；不要让隔离测试写正式 `%LOCALAPPDATA%\FisheryManagement`。
 - 启动/初始化必须明确选择数据根。缺失已有库应报错；不得初始化空库掩盖迁移遗漏。真实数据迁移与凭据身份处理需独立批准。
 - 普通启动、刷新和测试不得自动调用模型；失败不得自动重试、切换 Provider 或传输方式。
-- 行为变更补针对性测试与中文文档；不要为目录美观增加框架。详细规则见 apps/AGENTS.md，操作见 apps/docs/BUILD_RUN.md。
+- 行为变更补针对性测试与中文文档；不要为目录美观增加框架。详细规则见 apps/AGENTS.md，操作见 docs/BUILD_RUN.md。
 - 不自行 commit/push；初始基线提交也须用户批准。

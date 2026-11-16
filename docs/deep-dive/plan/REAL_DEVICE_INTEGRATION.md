@@ -88,7 +88,7 @@ X-Simulator-Token: <本次启动产生的令牌，不在文档中填写>
 - 报文上限 **8 KiB**；JSON 禁止重复字段和非有限数值，字段集合按合同严格校验。
 - 对象中不能擅自增加 `source`、`camera_url` 或原始视频。监测报文 `schema_version=1` 与 SQLite 当前 v2 是两种独立版本，不能混用。
 
-依据：[Web 上报处理](../../../management_web/app.py)、[模拟上报器](../../../simulator/transport.py)、[合同校验](../../../monitoring/contracts.py)。
+依据：[Web 上报处理](../../../apps/management_web/app.py)、[模拟上报器](../../../apps/simulator/transport.py)、[合同校验](../../../apps/monitoring/contracts.py)。
 
 ### 4.2 完整水质示例（虚构，仅用于格式说明）
 
@@ -388,11 +388,11 @@ Authorization: Bearer <设备接入专用凭据，由私有存储管理>
 
 本项目源码依据：
 
-- [monitoring/contracts.py](../../../monitoring/contracts.py)：窗口 v1、单位、时间、点数、视觉统计与来源限制。
-- [management_web/app.py](../../../management_web/app.py)：上报门禁、8 KiB 限制、错误返回、CSP。
-- [management_web/__main__.py](../../../management_web/__main__.py)：回环绑定与显式 ingestion 开关。
-- [monitoring/repository.py](../../../monitoring/repository.py)：事务、去重、冲突、乱序与留存范围。
-- [monitoring/service.py](../../../monitoring/service.py)：数据投影、默认时效和 `stream_url=null`。
-- [management_web/static/app.js](../../../management_web/static/app.js)：视频监控页、模拟统计与设备报告布局。
-- [ai_service/channel.py](../../../ai_service/channel.py)：SourceSummary 的 simulator 限制。
+- [monitoring/contracts.py](../../../apps/monitoring/contracts.py)：窗口 v1、单位、时间、点数、视觉统计与来源限制。
+- [management_web/app.py](../../../apps/management_web/app.py)：上报门禁、8 KiB 限制、错误返回、CSP。
+- [management_web/__main__.py](../../../apps/management_web/__main__.py)：回环绑定与显式 ingestion 开关。
+- [monitoring/repository.py](../../../apps/monitoring/repository.py)：事务、去重、冲突、乱序与留存范围。
+- [monitoring/service.py](../../../apps/monitoring/service.py)：数据投影、默认时效和 `stream_url=null`。
+- [management_web/static/app.js](../../../apps/management_web/static/app.js)：视频监控页、模拟统计与设备报告布局。
+- [ai_service/channel.py](../../../apps/ai_service/channel.py)：SourceSummary 的 simulator 限制。
 - [组员技术路线](../../presentations/TECHNICAL_ROUTE_TEAM.md)、[启动指南](../../BUILD_RUN.md)：当前项目能力和使用边界。

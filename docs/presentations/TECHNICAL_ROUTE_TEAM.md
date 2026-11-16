@@ -292,15 +292,15 @@ Prototype 的实验数字不能直接当作 Management 的性能或正确率。Q
 | 想了解什么 | 入口 |
 |---|---|
 | 启动入口与组员交接 | [BUILD_RUN](../BUILD_RUN.md)、[首次配置](../guides/DEPLOYMENT.md) |
-| 数据生成与上报 | [generator.py](../../simulator/generator.py)、[transport.py](../../simulator/transport.py) |
-| 监测统一事实、规则与事件 | [service.py](../../monitoring/service.py)、[rules.py](../../monitoring/rules.py)、[events.py](../../monitoring/events.py) |
-| 数据库只读边界 | [repository.py](../../monitoring/repository.py)、[Monitoring 适配](../../qq_bot/monitoring_source.py) |
-| Web/QQ 共享 AI 装配 | [AI Service](../../ai_service/service.py)、[工具 Registry](../../ai_service/business_tools/registry.py) |
-| Hybrid Prompt 与 General/Water 判定 | [channel_hybrid.py](../../ai_service/channel_hybrid.py)、[展示合同](../../ai_service/channel_presentation.py) |
-| 许可、队列、交付和记忆 | [run_consent.py](../../qq_bot/run_consent.py)、[ai_scheduler.py](../../qq_bot/ai_scheduler.py)、[ai_delivery.py](../../qq_bot/ai_delivery.py)、[conversations.py](../../qq_bot/conversations.py) |
-| Management 真实运行装配 | [channel_management_live.py](../../ai_service/channel_management_live.py)、[QQ运行合同](../deep-dive/QQ_BOT.md) |
-| SDK 清理与资源门禁 | [sdk_resources.py](../../ai_backend/sdk_resources.py)、[SDK安全边界](../deep-dive/QQ_BOT.md) |
-| Web 知识检索 | [retrieval.py](../../knowledge/retrieval.py)、[知识内容说明](../deep-dive/KNOWLEDGE_CONTENT.md) |
+| 数据生成与上报 | [generator.py](../../apps/simulator/generator.py)、[transport.py](../../apps/simulator/transport.py) |
+| 监测统一事实、规则与事件 | [service.py](../../apps/monitoring/service.py)、[rules.py](../../apps/monitoring/rules.py)、[events.py](../../apps/monitoring/events.py) |
+| 数据库只读边界 | [repository.py](../../apps/monitoring/repository.py)、[Monitoring 适配](../../apps/qq_bot/monitoring_source.py) |
+| Web/QQ 共享 AI 装配 | [AI Service](../../apps/ai_service/service.py)、[工具 Registry](../../apps/ai_service/business_tools/registry.py) |
+| Hybrid Prompt 与 General/Water 判定 | [channel_hybrid.py](../../apps/ai_service/channel_hybrid.py)、[展示合同](../../apps/ai_service/channel_presentation.py) |
+| 许可、队列、交付和记忆 | [run_consent.py](../../apps/qq_bot/run_consent.py)、[ai_scheduler.py](../../apps/qq_bot/ai_scheduler.py)、[ai_delivery.py](../../apps/qq_bot/ai_delivery.py)、[conversations.py](../../apps/qq_bot/conversations.py) |
+| Management 真实运行装配 | [channel_management_live.py](../../apps/ai_service/channel_management_live.py)、[QQ运行合同](../deep-dive/QQ_BOT.md) |
+| SDK 清理与资源门禁 | [sdk_resources.py](../../apps/ai_backend/sdk_resources.py)、[SDK安全边界](../deep-dive/QQ_BOT.md) |
+| Web 知识检索 | [retrieval.py](../../apps/knowledge/retrieval.py)、[知识内容说明](../deep-dive/KNOWLEDGE_CONTENT.md) |
 | 移植与兼容性依据 | [QQ集成边界](../deep-dive/QQ_BOT.md) |
 
 ### 讲解常用词

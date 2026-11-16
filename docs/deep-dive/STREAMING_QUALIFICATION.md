@@ -25,7 +25,7 @@ R2C-1E 更新：用户另行报告独立 Backend 的真实管理网页 Qwen Norm
 | 预算 | 每请求 512 output tokens，最多 2 Calls / 2 Rounds / 3 Requests，每轮一个 Tool，retry=0，整 Turn 120 秒 |
 | 当前发布 | 管理独立配置 `enabled=false / local_experimental`，无 qualification_id / validated_at；显式启动参数开启，不代表人工回答质量通过 |
 
-以上来自当前维护者合同。Dry-run 重新计算精确 Scope，与 [管理配置](../../ai_service/resources/assistant_streaming.json) 比较；Identity、协议、Prompt、History、Tool 或绑定不匹配直接拒绝。输出预算必须与该范围的 512 一致。配置、SDK 版本、案例、问题、Scope、预算、History framing 改变都会影响计划指纹，不沿用旧批准。
+以上来自当前维护者合同。Dry-run 重新计算精确 Scope，与 [管理配置](../../apps/ai_service/resources/assistant_streaming.json) 比较；Identity、协议、Prompt、History、Tool 或绑定不匹配直接拒绝。输出预算必须与该范围的 512 一致。配置、SDK 版本、案例、问题、Scope、预算、History framing 改变都会影响计划指纹，不沿用旧批准。
 
 本轮核对的 Scope SHA256：`fc476b2e9ac19046b0127e65d70dc1488016c04f9dde29698d681c6047708e90`。它不代表资格通过；未来使用重新计算的 Dry-run 为准。
 

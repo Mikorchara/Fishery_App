@@ -1,10 +1,10 @@
-> MIG-3：本模块已在独立Fishery Management中运行。当前启动、数据根与测试以 apps/docs/BUILD_RUN.md 为准；下文迁移沿革不要求安装旧Prototype。
+> MIG-3：本模块已在独立Fishery Management中运行。当前启动、数据根与测试以 docs/BUILD_RUN.md 为准；下文迁移沿革不要求安装旧Prototype。
 
 # AI Backend 源码入口
 
 R2C-1C Phase I 已建立新侧闭包。起点为 `d88dbf34f6f20f7dcfe62f828bbf78970acfc7c2` 的既有实现，选择性分叉，不重写执行算法。旧 Prototype 保留自身实现；参数诊断已撤销共享 Alias。R2C-1D Phase II 已将管理 Web / ManagementAssistantService / SSE / 资格入口统一切到这里；旧 Prototype 仍独立。
 
-扩展 Tool、Prompt 与执行配置先看 [AI Backend 与 Assistant 开发指南](../docs/deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。本 README 只定位通用实现；业务 Assistant 在 ai_service/runtime，HTTP SSE worker 在 management_web。
+扩展 Tool、Prompt 与执行配置先看 [AI Backend 与 Assistant 开发指南](../../docs/deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。本 README 只定位通用实现；业务 Assistant 在 ai_service/runtime，HTTP SSE worker 在 management_web。
 
 ## 模块与公共边界
 
@@ -67,7 +67,7 @@ RequestHandle/RequestRegistry 可在构造时固定 `summarize_tool`，只接收
 
 pyproject 明确打包 Backend、AI Service、Monitoring、Simulator、Management Web及业务JSON/静态资源，排除所有apps测试；没有使用宽泛apps.*。新旧平台在同一个wheel分发，但管理Turn不调用旧LLM实现。领域/Knowledge依赖仍在业务侧。
 
-正式PEP517 wheel已用本机缓存的setuptools84.0.0在工作区隔离venv中构建/安装；没有联网或改现有.venv，build-system仍要求setuptools>=68。内容/CRC和隔离导入、Fake流程见 [实施记录§14](../docs/deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。不是build_py替代验收。
+正式PEP517 wheel已用本机缓存的setuptools84.0.0在工作区隔离venv中构建/安装；没有联网或改现有.venv，build-system仍要求setuptools>=68。内容/CRC和隔离导入、Fake流程见 [实施记录§14](../../docs/deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。不是build_py替代验收。
 
 ## 当前装配与回滚
 
@@ -75,8 +75,8 @@ pyproject 明确打包 Backend、AI Service、Monitoring、Simulator、Managemen
 
 管理qualification观察器已独立到ai_service/development，继承这里的Adapter/Assembler；新计划为management-streaming-qualification@2并绑定apps.ai_backend@1，旧plan-sha授权失效。Scope/Prompt/Schema/预算未变，不改写既有真实报告或升级资格。
 
-源码启动仍使用原project root；wheel安装入口从有效工作区定位，无法确认时拒绝WORKSPACE_REQUIRED，避免写到site-packages或改变私有凭据身份。应用启动与回滚见 [BUILD_RUN](../docs/BUILD_RUN.md)。
+源码启动仍使用原project root；wheel安装入口从有效工作区定位，无法确认时拒绝WORKSPACE_REQUIRED，避免写到site-packages或改变私有凭据身份。应用启动与回滚见 [BUILD_RUN](../../docs/BUILD_RUN.md)。
 
 R2C-1E 已完成工程收尾：用户报告 Qwen Normal 水质 Tool / Final、Streaming 水质 + Knowledge / Final 提交，以及模拟来源 / PROTOTYPE 标签正常。它是基本人工观察，未生成新的 Provider 资格记录，回答质量专项审核仍独立进行。迁移主线结束，下一阶段可开展管理业务开发。
 
-仅关闭试用时去掉 trial 启动参数并重启，仍使用本 Backend。代码整体回滚基线为 Phase I `0cf64f6`；应完整撤销 Phase II `a256569` 的切换范围并重启新 epoch，不单独替换 Adapter/Handle，不自动重发，不修改 SQLite、Policy、凭据或报告。本轮只核对回滚方案，不执行回滚；详见 [迁移收尾记录](../docs/deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。
+仅关闭试用时去掉 trial 启动参数并重启，仍使用本 Backend。代码整体回滚基线为 Phase I `0cf64f6`；应完整撤销 Phase II `a256569` 的切换范围并重启新 epoch，不单独替换 Adapter/Handle，不自动重发，不修改 SQLite、Policy、凭据或报告。本轮只核对回滚方案，不执行回滚；详见 [迁移收尾记录](../../docs/deep-dive/AI_BACKEND_DEVELOPMENT_GUIDE.md)。

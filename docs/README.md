@@ -1,6 +1,6 @@
 # 文档目录
 
-**第一次从 GitHub 下载源码：只需先读根目录的 [开始使用](../../开始使用.md)。** 其余文档按需要查阅，不必全部读完。
+**第一次从 GitHub 下载源码：只需先读根目录的 [开始使用](../开始使用.md)。** 其余文档按需要查阅，不必全部读完。
 
 ## 常用文档
 
@@ -24,4 +24,4 @@
 
 历史资格参考：[Streaming](deep-dive/STREAMING_QUALIFICATION.md)、[历史水质Tool](deep-dive/HISTORY_QUALIFICATION.md)。这些记录不授予新代码联网许可。
 
-板端诊断见 [Jetson 联调目录](../../scripts/dev/jetson/README.md)。未来对接见 [真实设备规划](deep-dive/plan/REAL_DEVICE_INTEGRATION.md)。工程约束见 [AGENTS](../AGENTS.md)。
+板端诊断见 [Jetson 联调目录](../scripts/dev/jetson/README.md)。未来对接见 [真实设备规划](deep-dive/plan/REAL_DEVICE_INTEGRATION.md)。工程约束见 [AGENTS](../apps/AGENTS.md)。

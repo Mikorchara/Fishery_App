@@ -1,4 +1,4 @@
-> MIG-3：本模块已在独立Fishery Management中运行。当前启动、数据根与测试以 apps/docs/BUILD_RUN.md 为准；下文迁移沿革不要求安装旧Prototype。
+> MIG-3：本模块已在独立Fishery Management中运行。当前启动、数据根与测试以 docs/BUILD_RUN.md 为准；下文迁移沿革不要求安装旧Prototype。
 
 # 管理知识业务包
 
@@ -18,4 +18,4 @@
 
 Web 与 AI Knowledge Tool 显式注入同一内容服务。Tool 只有只读搜索权限；原始来源与后续编辑版本分离。正常管理链不再导入 `fishery_ai.knowledge`、旧 Evidence 或读取固定 JSON，旧 Prototype 保持独立。
 
-[迁移、查看、导出、备份及回滚操作](../docs/deep-dive/KNOWLEDGE_CONTENT.md) · [一行启动](../docs/BUILD_RUN.md)
+[迁移、查看、导出、备份及回滚操作](../../docs/deep-dive/KNOWLEDGE_CONTENT.md) · [一行启动](../../docs/BUILD_RUN.md)

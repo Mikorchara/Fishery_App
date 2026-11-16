@@ -1,10 +1,10 @@
-> MIG-3：本项目已独立；根 AGENTS.md 与 apps/docs/BUILD_RUN.md 为当前操作入口。以下迁移沿革不构成旧项目依赖。
+> MIG-3：本项目已独立；根 AGENTS.md 与 docs/BUILD_RUN.md 为当前操作入口。以下迁移沿革不构成旧项目依赖。
 
 # 管理平台开发规则
 
 MIG-2：业务数据位置统一由 `apps/management_paths.py` 装配。默认旧工作区路径不变；显式独立实例缺库不得自动建库或回退，初始化必须明确操作。Credentials 仍使用独立私有 Store，不进入业务数据根。下文固定知识路径指兼容默认；独立实例使用其 knowledge.sqlite3。
 
-本文件适用于 `apps/`，同时遵守根目录 AGENTS.md。[主要文档入口](docs/README.md)。
+本文件适用于 `apps/`，同时遵守根目录 AGENTS.md。[主要文档入口](../docs/README.md)。
 
 - `apps/monitoring/` 是共享数据合同、存储与读取服务；`apps/simulator/` 是独立生产端，只经受控 HTTP 上报，不直接写服务器状态。模拟源不可由客户端声明为真实设备。
 
@@ -20,6 +20,6 @@ MIG-2：业务数据位置统一由 `apps/management_paths.py` 装配。默认�
 - Tool 继续按 Policy / Registry / Executor 执行；Source Ledger、Commit Gate、预算、Deadline、Stop、发布 Scope 与逐次网络确认不得绕过。预览不作为成功回答或 History。
 - 当前本机展示边界不是生产鉴权。禁用或隐藏按钮不提供权限保护；新增写 API、文件访问或 AI 执行前补服务端安全检查。管理员操作与开发调试入口分开，禁止未经授权的设备、数据库和阈值修改。
 - 行为变更补离线 Python / Node 测试和中文文档；UI 变更检查导航、空状态和响应式布局。相关 Runtime 桥接还须运行对应原型回归。真实请求须本轮明确授权，禁止测试自动调用 Provider / Ollama。
-- `apps/docs/` 描述管理平台及独立 Backend 当前状态；旧 AI Prototype 的文档留在独立来源仓库，不属于本项目运行依赖。两侧 Runtime 与领域实现独立演进，不要求自动同步；管理端水质阈值仅在 monitoring/diagnosis.py 定义，rules.py 负责证据门禁，不复制阈值。以源码、测试为事实，规划明确标为未实现。保护未提交改动，不修改 `D:\Fishery_Project` 或工作区外文件。
+- `docs/` 描述管理平台及独立 Backend 当前状态；旧 AI Prototype 的文档留在独立来源仓库，不属于本项目运行依赖。两侧 Runtime 与领域实现独立演进，不要求自动同步；管理端水质阈值仅在 monitoring/diagnosis.py 定义，rules.py 负责证据门禁，不复制阈值。以源码、测试为事实，规划明确标为未实现。保护未提交改动，不修改 `D:\Fishery_Project` 或工作区外文件。
 
 - 管理知识运行时仅由显式实例的 `knowledge.sqlite3` 权威存储（Git忽略/不打包），`apps/knowledge_data` 仅为旧路径兼容。`apps/knowledge/resources` 的31条固定项目背景资料只供显式首次初始化，正常启动和检索不读取JSON；不将实际用户库夹带进初始化。知识写操作不是LLM Tool，原始来源与编辑版本分离。
