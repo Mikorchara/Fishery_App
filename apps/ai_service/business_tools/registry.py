@@ -1,5 +1,7 @@
 """Explicit business Tool assembly; known Policy names never create handlers."""
+from dataclasses import replace
 from functools import partial
+from types import MappingProxyType
 from apps.ai_backend.tools import ToolRegistry, ToolDefinition
 from . import active_events, current_water_quality, fishery_knowledge, water_quality_history, water_quality_score
 
@@ -12,14 +14,22 @@ KNOWN_TOOL_NAMES = (current_water_quality.CURRENT_WATER_QUALITY, WATER_QUALITY_S
 # isolated Policy; product History assembly requires its own approved trial.
 FORMAL_TOOL_NAMES = (current_water_quality.CURRENT_WATER_QUALITY, fishery_knowledge.SEARCH_FISHERY_KNOWLEDGE)
 HISTORY_CANDIDATE_TOOL_NAMES = (*FORMAL_TOOL_NAMES, water_quality_history.WATER_QUALITY_HISTORY)
+RESULT_INSTRUCTIONS = MappingProxyType({
+    current_water_quality.CURRENT_WATER_QUALITY: current_water_quality.RESULT_INSTRUCTION,
+    fishery_knowledge.SEARCH_FISHERY_KNOWLEDGE: fishery_knowledge.RESULT_INSTRUCTION,
+    water_quality_history.WATER_QUALITY_HISTORY: water_quality_history.RESULT_INSTRUCTION,
+    WATER_QUALITY_SCORE: water_quality_score.RESULT_INSTRUCTION,
+    active_events.ACTIVE_EVENTS: active_events.RESULT_INSTRUCTION,
+})
 
 
 def bind_tools(monitoring, device_id, knowledge, *, formal=None, include_history=False,
                include_knowledge=True, include_score=False, include_active_events=False,
-               board_device_id=None):
+               board_device_id=None, include_result_instructions=True):
     # Internal composition only. Existing Web callers retain their two/three
     # tools and Knowledge requirement; no channel/authorization entry is added.
-    if type(include_history) is not bool or type(include_knowledge) is not bool or type(include_score) is not bool:
+    if any(type(flag) is not bool for flag in (
+            include_history, include_knowledge, include_score, include_result_instructions)):
         raise ValueError("INVALID_BUSINESS_TOOL_ASSEMBLY")
     if formal is not None and (water_quality_history.WATER_QUALITY_HISTORY in
             tuple(d.name for d in formal.model_definitions())) != include_history:
@@ -50,4 +60,9 @@ def bind_tools(monitoring, device_id, knowledge, *, formal=None, include_history
     if include_active_events:
         entries.append(ToolDefinition(active_events.ACTIVE_EVENTS_DEFINITION,
             partial(active_events.active_events_payload, monitoring, device_id, board_device_id=board_device_id)))
+    instructions = RESULT_INSTRUCTIONS if include_result_instructions else {}
+    for index, entry in enumerate(entries):
+        instruction = instructions.get(entry.model_definition.name, "")
+        if instruction != entry.result_instruction:
+            entries[index] = replace(entry, result_instruction=instruction)
     return ToolRegistry(entries)

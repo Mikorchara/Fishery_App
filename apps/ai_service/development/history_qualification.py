@@ -23,6 +23,7 @@ from apps.ai_backend.tools import ToolRegistry, ToolDefinition
 from apps.monitoring.repository import MonitoringRepository
 from apps.monitoring.service import MonitoringService
 from apps.simulator.generator import Simulator
+from ..business_tools.registry import RESULT_INSTRUCTIONS
 from ..business_tools.water_quality_history import HISTORY_DEFINITION, WATER_QUALITY_HISTORY, validate_arguments
 from ..contracts import PreparedAssistantTurn
 from ..history_execution import (HISTORY_PROFILE, HISTORY_MAX_OUTPUT_TOKENS, HistoryCandidateConfig,
@@ -32,7 +33,8 @@ from ..runtime.sources import SourceRequirement, requirement_satisfied_by_ledger
 from ..runtime.release_contracts import _json, _hash
 from ..service import ManagementAssistantService
 from .qualification_adapter import QualificationAdapter
-from .qualification_support import QualificationError, _credentials, _RunTrace, _ExperimentGateway, _code, write_report
+from .qualification_support import (QualificationError, _credentials, _RunTrace, _ExperimentGateway, _code,
+    verify_product_system_prompt, write_report)
 from .streaming_qualification import _workspace
 
 VERSION = 'management-history-qualification@2'
@@ -99,7 +101,7 @@ def plan(case_id):
     case = get_case(case_id)
     profile = assistant_profile(PRESET)
     registry = ToolRegistry([ToolDefinition(HISTORY_DEFINITION, _unavailable_handler,
-                                           validate_arguments=validate_arguments)])
+        validate_arguments=validate_arguments, result_instruction=RESULT_INSTRUCTIONS[WATER_QUALITY_HISTORY])])
     # Qualification keeps the approved closed candidate manifest. Product trial
     # status is a separate user approval, not a new qualification verdict/hash.
     config = HistoryCandidateConfig(load_history_config().scope_json)
@@ -197,9 +199,7 @@ class _Gateway:
         self.adapter,self.registry,self.case,self.observed = adapter,registry,case,None
 
     def complete(self, request, runtime):
-        if (not request.messages or request.messages[0].role != 'system'
-                or request.messages[0].content != SYSTEM_INSTRUCTION):
-            raise GatewayError('QUALIFICATION_PRODUCT_PROMPT_MISMATCH')
+        verify_product_system_prompt(request, self.registry, SYSTEM_INSTRUCTION)
         if self.observed is None:
             self.observed = _ExperimentGateway(self.adapter,runtime,self.registry,self.case)
         encoded_count,cleanup_count = len(self.adapter.encoded),len(self.adapter.cleanup)

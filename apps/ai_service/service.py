@@ -35,13 +35,12 @@ from .channel import ChannelAuthorization, ChannelAssistantResult, OfflineChanne
 from .channel_presentation import QQ_PROMPT_ID, QQ_SYSTEM_INSTRUCTION
 from .channel_conversation import ChannelHistoryAuthority, ChannelHistorySnapshot, conversation_decision, PROMPT_ID as DIALOGUE_PROMPT_ID, INSTRUCTION as DIALOGUE_INSTRUCTION
 from .business_tools.current_water_quality import CURRENT_WATER_QUALITY
-from apps.ai_backend.tools import ToolDefinition
 from apps.ai_backend.tool_conversation import ToolExecutionMode
 
 from .score_execution import ScoreTrialConfig,load_score_config,resolve_score_trial,SCORE_TOOL_NAMES
 from .business_tools.registry import WATER_QUALITY_SCORE
 from .business_tools.active_events import ACTIVE_EVENTS
-from .active_event_execution import (ActiveEventTrialConfig, ACTIVE_EVENT_PROMPT,
+from .active_event_execution import (ActiveEventTrialConfig,
     ACTIVE_EVENT_TOOL_NAMES, requires_active_events, resolve_active_event_trial)
 
 PRESETS = ("dashscope-qwen38-flash-r1", "ollama-qwen35-4b-r1")
@@ -398,8 +397,7 @@ class ManagementAssistantService:
                         turn_timeout_s=90, multi_round_prompt=(AGENT_PROMPT,AGENT_INSTRUCTION))
                 else:
                     assistant = AssistantService(coordinator, execution_mode=mode, history_projection=DEFAULT_HISTORY_PROJECTION,
-                        single_round_prompt=prompt,
-                        multi_round_prompt=ACTIVE_EVENT_PROMPT if ACTIVE_EVENTS in policy.exposed_tools else None)
+                        single_round_prompt=prompt)
                 result = assistant.send(turn, runtime)
                 if authorization is not None:
                     self._check_channel(authorization, prepared.policy_revision)
@@ -506,7 +504,8 @@ class ManagementAssistantService:
                 include_history=True,include_knowledge=True,include_score=True,include_active_events=ACTIVE_EVENTS in names,
                 board_device_id=self._channel_trial.event_board_device_id if ACTIVE_EVENTS in names and self._channel_trial else None)
         else:
-            registry=bind_tools(self.monitoring,authorization.device_id,None,include_knowledge=False)
+            registry=bind_tools(self.monitoring,authorization.device_id,None,include_knowledge=False,
+                include_result_instructions=False)
             names=tuple(name for name in authorization.tools if name==CURRENT_WATER_QUALITY and name in snapshot.selected_tools)
             if names!=(CURRENT_WATER_QUALITY,):raise GatewayError('CHANNEL_TOOL_NOT_AUTHORIZED')
         entries=[]
@@ -517,7 +516,7 @@ class ManagementAssistantService:
                 result=_entry.handler(*args)
                 if self._channel_trial is not None:self._channel_trial.validate_tool_result(result)
                 return result
-            entries.append(ToolDefinition(entry.model_definition,guarded,entry.validate_arguments))
+            entries.append(replace(entry, handler=guarded))
         return ToolRegistry(entries)
 
     @classmethod

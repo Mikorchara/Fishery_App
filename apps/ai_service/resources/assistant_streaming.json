@@ -33,7 +33,7 @@
             "get_current_water_quality",
             "search_fishery_knowledge"
           ],
-          "tool_definitions_sha256": "5cd73fefcd80a73f1024f40f6eb60da9d302fe8bd2deb5bc578e0095ea91e854",
+          "tool_definitions_sha256": "03505fc6178d60f0e67ad2c6112f58f1582c8ff5e119f839f18a377f98c710d8",
           "model_transport": "STREAMING",
           "assembler_version": "openai-tool-stream-assembler@1"
         },

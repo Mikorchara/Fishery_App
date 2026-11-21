@@ -22,6 +22,12 @@ SCORE_DEFINITION = ModelToolDefinition(name=WATER_QUALITY_SCORE,
         '必须完整、有效、新鲜且正常上报；缺测、无效、过期或离线返回NOT_SCORABLE，不补正常分、不用旧历史。'
         'NO_DATA为没有观测。评分由程序计算，不允许模型自创分数或阈值；必须说明来源、时间和非专业标准。'),
     parameters={'type':'object','properties':{},'additionalProperties':False})
+RESULT_INSTRUCTION = (
+    "有评分时使用程序返回的 score、grade_label 和相关 components，必要时交代 score_cap。"
+    "说明该实验评分为非专业标准，并注明实际来源、设备与水质观测时间。"
+    "NOT_SCORABLE 时按 unscorable_reasons 说明原因。NO_DATA 时说明缺少观测。"
+    "只引用已有分数与等级，保留 limitation 中与问题有关的限制。"
+)
 
 
 def _finite(value):

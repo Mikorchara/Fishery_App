@@ -103,8 +103,8 @@
     "history": "qq-hybrid-history@1",
     "commit": "API_ACCEPTED_SAFE_TEXT_CAS@1",
     "implementation": {
-      "ai_service/business_tools/current_water_quality.py": "79c935778a27eba4ae4c4f57f697b9018b6216d1a41ae8eadb9b8f3500efc368",
-      "ai_service/business_tools/registry.py": "a37117073cf08d45f3e60df7227a3e23186a56e8f78f703a163a8ea88e004d2a",
+      "ai_service/business_tools/current_water_quality.py": "00ec4823d18999e08de5f86ef41fe7dbe94f781814aadff0a0fbeba24958b19f",
+      "ai_service/business_tools/registry.py": "fc5d77191b5249037cfb09d80bf1369083d0f2e2bf0ee435c82b4f348f3b61dc",
       "ai_service/channel.py": "5105132b9dcfec2aa8e8a70ef66ffa0ebdb74e6a1c87506a70d86b9f3bccd716",
       "ai_service/channel_chat_presentation.py": "98d5581cf8211fd011cd95ee37ceed4797a439100aa1f0196e4d12a4ccb41fd3",
       "ai_service/channel_conversation.py": "9fff8f9fc66bbe9733fe034ae15877b3ca1054318c3ec3a0da2709343a3392be",
@@ -122,7 +122,7 @@
       "ai_service/runtime/assistant.py": "5011bec66ce933abd1e7435ac66fbef94b1dee0131d5689ac817cee61547cdd0",
       "ai_service/runtime/resources/presets.json": "30aa3ce86c42ffaf6e50adee6fbe3e3ab44cc5dccd2adfef7dd4d4d4207fce19",
       "ai_service/runtime/sources.py": "3e8cfbd0526c044c4c76de187ac49cee82b0b3d89ec4e3ceacfb532910052f9a",
-      "ai_service/service.py": "42146a8bc9b0b7ee48ffde9eeee4d92d585f083ca6ccc2387f3c9077d318ae4b",
+      "ai_service/service.py": "3178a92548e35cf0b430c860d4c10b6114e7c9df97d1e62b001adc453982ec80",
       "qq_bot/__init__.py": "6ce26d450305863fa4bb3681c707c6d11b09b039ae28f4bc31c49d4a890664dc",
       "qq_bot/__main__.py": "4af4fdf3c9709c5459c3632be53094cff5bbd9ea0060e72d869fc726539ba78d",
       "qq_bot/adapter.py": "1a6057beab784dee3e95861d27544c6615b1591444b1b877dfd4e52ede43fcf6",
@@ -169,7 +169,7 @@
     "deployment": "fishery-management",
     "publication": "FAKE_GATEWAY_ONLY_NO_REAL_GENERAL_APPROVAL"
   },
-  "scope_sha256": "6d88017cac53d3f8c63e742681f80ea181cc0d5f49c400c57d03535a0b16933b",
+  "scope_sha256": "ac329e7a4b99b9c1a5810e71a2d97012a2270b1e9c4263719358cb9e29df9df8",
   "qualification_id": null,
   "can_execute_real": false,
   "can_deliver_real": false

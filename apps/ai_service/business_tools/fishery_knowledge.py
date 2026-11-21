@@ -18,6 +18,12 @@ KNOWLEDGE_PARAMETERS = {
 }
 
 KNOWLEDGE_DEFINITION = ModelToolDefinition(SEARCH_FISHERY_KNOWLEDGE, KNOWLEDGE_DESCRIPTION, KNOWLEDGE_PARAMETERS)
+RESULT_INSTRUCTION = (
+    "把 evidence 当作项目背景资料，仅引用相关条目的内容和实际来源。"
+    "说明匹配内容与用户问题的关系，保留原资料的条件和适用范围。"
+    "NO_MATCH 表示本轮在项目资料中未检索到符合条件的条目。"
+    "背景资料无法证明当前水质、现场状况或疾病诊断。"
+)
 
 
 KNOWLEDGE_BINDING_VERSION = "management-project-knowledge@1"

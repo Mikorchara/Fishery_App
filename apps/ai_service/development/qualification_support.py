@@ -10,6 +10,7 @@ from apps.ai_backend.credentials import CredentialStore
 from apps.ai_backend.execution import check_cancelled
 from apps.ai_backend.model_gateway import GatewayError, ModelResponse, StreamingModelError
 from apps.ai_backend.observability import JsonlTraceSink
+from apps.ai_backend.tool_conversation import compose_result_system_instruction
 from ..runtime.locations import private_project_location
 from ..runtime.assistant import MULTI_ROUND_SYSTEM_INSTRUCTION
 from .qualification_adapter import response_summary
@@ -72,6 +73,19 @@ def _code(code):
     return safe_code(code)
 
 
+def verify_product_system_prompt(request, registry, base):
+    completed = {message.tool_call_id for message in request.messages if message.role == "tool"}
+    instructions = {
+        call.function_name: registry.lookup(call.function_name).result_instruction
+        for message in request.messages if message.role == "assistant"
+        for call in message.tool_calls if call.id in completed
+    }
+    expected = compose_result_system_instruction(base, instructions)
+    if (not request.messages or request.messages[0].role != "system"
+            or request.messages[0].content != expected):
+        raise GatewayError("QUALIFICATION_PRODUCT_PROMPT_MISMATCH")
+
+
 class _ExperimentGateway:
     """Observe without retaining response text/arguments; impose the case ceiling."""
     def __init__(self, gateway, runtime, registry, case, *, assistant_product=False, streaming=False):
@@ -98,9 +112,8 @@ class _ExperimentGateway:
         if (runtime is not self.runtime or runtime.max_retries != 0
                 or tuple(tool.name for tool in request.tools) != self.case.exposed_tools):
             raise GatewayError("QUALIFICATION_IDENTITY_MISMATCH")
-        if self.assistant_product and (request.messages[0].role != "system"
-                or request.messages[0].content != MULTI_ROUND_SYSTEM_INSTRUCTION):
-            raise GatewayError("QUALIFICATION_PRODUCT_PROMPT_MISMATCH")
+        if self.assistant_product:
+            verify_product_system_prompt(request, self.registry, MULTI_ROUND_SYSTEM_INSTRUCTION)
         row = {"request_number": len(self.rows) + 1, "tool_definitions": list(self.case.exposed_tools),
             "tool_choice": request.tool_choice, "outcome": "started", "error_code": None}
         self.rows.append(row)

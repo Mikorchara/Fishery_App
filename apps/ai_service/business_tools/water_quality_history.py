@@ -22,6 +22,12 @@ HISTORY_DEFINITION = ModelToolDefinition(
         "metrics": {"type": "array", "items": {"type": "string", "enum": list(METRICS)},
                     "minItems": 1, "maxItems": 3, "uniqueItems": True}},
      "required": ["lookback_minutes"], "additionalProperties": False})
+RESULT_INSTRUCTION = (
+    "注明绑定设备、requested_range 和来源。用 metrics 中实际返回的可靠窗口统计说明变化和单位。"
+    "首末值与极值均为历史观测窗口的均值。details 仅是代表窗口，不能按它重新计算全范围统计。"
+    "PARTIAL 时说明相关的覆盖缺口、数据质量或 Session 限制。NO_DATA 表示没有完整匹配的历史窗口。"
+    "历史末值无法证明当前状态，也无法直接判断持续低氧或恢复。"
+)
 
 
 def validate_arguments(arguments):

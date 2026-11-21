@@ -14,6 +14,12 @@ WATER_DEFINITION = ModelToolDefinition(
                  "查询不等于重新采样。"),
     parameters={"type": "object", "properties": {}, "additionalProperties": False},
 )
+RESULT_INSTRUCTION = (
+    "用 water_quality 的实际读数和 metrics 的单位，注明 source_kind、device_id 和 observed_at。"
+    "区分观测时间、last_reported_at 上报时间与 evaluated_at 评估时间。"
+    "NO_DATA 表示暂无观测。对缺测、无效、不完整、过期或离线如实说明。"
+    "水质告警只按 findings 的实际状态报告。HIT 表示规则命中，证据不足或未评估的指标无法判断。"
+)
 
 
 def water_payload(monitoring, device_id):

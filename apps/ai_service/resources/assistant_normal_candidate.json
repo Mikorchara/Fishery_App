@@ -30,7 +30,7 @@
         "search_fishery_knowledge",
         "get_water_quality_history"
       ],
-      "tool_definitions_sha256": "b5a7401ac1cd4b088bff633a9607c2c713ee74eb09e848e25dc4afb18cf39f6b"
+      "tool_definitions_sha256": "60f2c55179bba3d08dfe268607bb02f44f9b7035ef7810bbebef91c479a89f97"
     },
     "data_bindings": {
       "water": "management-current-water@1",

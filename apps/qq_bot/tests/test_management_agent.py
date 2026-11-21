@@ -4,7 +4,8 @@ import unittest
 import httpx
 from openai import AsyncOpenAI
 
-from apps.ai_service.channel_management_agent import TOOLS, prepared_scope, preparation_record
+from apps.ai_service.business_tools.registry import RESULT_INSTRUCTIONS
+from apps.ai_service.channel_management_agent import INSTRUCTION, TOOLS, prepared_scope, preparation_record
 from apps.ai_service.runtime.release_contracts import _hash
 from apps.qq_bot.conversations import ConversationOptions
 from apps.qq_bot.management_config import load_request
@@ -74,6 +75,14 @@ class ManagementAgentTests(unittest.TestCase):
             self.assertIn(note,self.posts[-1]['content'])
             self.assertEqual(self.host.turns[-1]['tool_executions'],1)
             self.assertEqual(self.host.turns[-1]['source_kinds'],[name])
+            first, second = self.http[-2:]
+            self.assertEqual(first['messages'][0]['content'], INSTRUCTION)
+            self.assertNotIn('get_active_events', first['messages'][0]['content'])
+            guidance = second['messages'][0]['content']
+            self.assertTrue(guidance.startswith(INSTRUCTION))
+            for candidate, note in RESULT_INSTRUCTIONS.items():
+                with self.subTest(actual=name, candidate=candidate):
+                    self.assertEqual(guidance.count(note), int(candidate == name))
         self.assertEqual(len(self.http),10)
         self.assertEqual(len(self.posts),5)
         for name,bytes_before in before.items():self.assertEqual((self.root/'instance'/name).read_bytes(),bytes_before)

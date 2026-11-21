@@ -26,7 +26,7 @@ QQ仍是独立进程：官方Gateway → 程序固定分支/Hybrid路由 → Coo
 
 固定查询、帮助、工具能力、常见问候和清空会话由程序处理，不产生模型请求。其他授权自然语言进入现有Agent；不靠不断增加业务关键词分类。只处理平台认证的群@事件，伪造@文本不能触发模型。
 
-当前 Prompt 为 `QQ_MANAGEMENT_WEB_AGENT@3`，复用 Web 多轮系统指令、原 Agent、History Projection 和 ToolCallingService。模型可查询当前水质、10/30/60 分钟历史水质、项目知识库、实验水质评分和当前事件。五项工具均只读，实际范围由 Bot Policy、群成员权限与本次启动审批共同限定。
+当前 Prompt 为 `QQ_MANAGEMENT_WEB_AGENT@4`，复用 Web 多轮通用规则、原 Agent、History Projection 和 ToolCallingService。模型可查询当前水质、10/30/60 分钟历史水质、项目知识库、实验水质评分和当前事件。五项工具均只读，实际范围由 Bot Policy、群成员权限与本次启动审批共同限定。工具返回结果后，后端才将对应的结果说明加入下一次模型请求。旧版配置升级后，重启网页并重新保存 QQ 设置，再启动并批准新版 Bot 进程。
 
 不要求General/Water JSON，不设旧General 600字符发布限制，不将调用Tool后的回答统一替换成水质模板。最终单条消息仍有1500字符的整体长度预算，包含来源说明；超长会明确提示缩小问题，不截断来源后假装完整、不自动重推理。General通常1次模型请求0Tool；最多2次只读Tool、2轮工具迭代、3次模型请求，沿用原Web多轮执行循环。
 

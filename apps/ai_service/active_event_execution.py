@@ -13,7 +13,7 @@ from apps.monitoring.history import HISTORY_VERSION, MAX_HISTORY_ROWS, MAX_HISTO
 from .business_tools import active_events
 from .execution import ExecutionDecision, management_scope
 from .normal_selection import UNIFIED_PRESET
-from .runtime.assistant import MULTI_ROUND_SYSTEM_INSTRUCTION, assistant_profile
+from .runtime.assistant import assistant_profile
 from .runtime.release_contracts import AssistantExecutionProfile, _hash
 from .runtime.sources import HISTORY_SOURCE_CONTRACT_VERSION
 from .runtime.streaming_contracts import streaming_scope
@@ -22,17 +22,7 @@ from .score_execution import SCORE_TOOL_NAMES
 
 CONTRACT = 'management-active-event-tool-trial@1'
 ACTIVE_EVENT_TOOL_NAMES = (*SCORE_TOOL_NAMES, active_events.ACTIVE_EVENTS)
-ACTIVE_EVENT_PROMPT = (
-    'ASSISTANT_ACTIVE_EVENTS@1',
-    MULTI_ROUND_SYSTEM_INSTRUCTION
-    + '用户明确询问当前有哪些事件、异常或告警时，使用已授权的 get_active_events，参数固定为空对象。'
-    '依据本轮实际返回的事件来源、状态和时间说明结果，区分 SIMULATOR 模拟记录和设备报告。'
-    '保留待核实、待复核、观测缺失、过期和结果截断等限制。'
-    '未查到符合条件的事件只适用于已查询范围，不能证明鱼群健康或风险已经消退。'
-    '设备报告中断只描述报告更新，不能证明设备离线。'
-    '外观和行为信号需要人工核查，不能用来确诊疾病。'
-    '没有本轮事件查询依据时，说明当前事件无法核实。工具不会确认、删除、结束事件或操作设备。',
-)
+
 
 _EVENT_NOUN = r'(?:(?:(?:还在|正在)发生的|未结束的)?事件|活动事件|活跃事件|异常事件|告警|异常)'
 _CURRENT = r'(?:当前|现在|目前)'
@@ -62,6 +52,8 @@ _IMPLEMENTATION = (
     'monitoring/service.py',
     'management_web/streaming.py',
     'ai_backend/assistant_events.py',
+    'ai_backend/tool_conversation.py',
+    'ai_backend/tools/contracts.py',
 )
 
 
@@ -106,8 +98,6 @@ def active_event_scope(profile, policy, registry, knowledge, transport, *, devic
     streaming = transport == ToolModelTransport.STREAMING
     if streaming:
         scope['runtime'] = streaming_scope(profile, policy, registry, DEFAULT_HISTORY_PROJECTION)
-    prompt_id, instruction = ACTIVE_EVENT_PROMPT
-    scope['runtime'].update(prompt_id=prompt_id, prompt_sha256=_hash(instruction))
     return {
         **scope, 'contract': CONTRACT, 'transport': transport.value,
         'generation': asdict(profile.default_generation),

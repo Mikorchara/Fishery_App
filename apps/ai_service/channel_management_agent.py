@@ -8,36 +8,32 @@ from apps.ai_backend.tools import ToolDefinition, ToolRegistry
 from apps.ai_backend.tools.policy import ToolPolicy
 from apps.ai_backend.history_projection import DEFAULT_HISTORY_PROJECTION
 from apps.monitoring.contracts import identifier
-from .active_event_execution import ACTIVE_EVENT_PROMPT
 from .business_tools.active_events import ACTIVE_EVENTS, ACTIVE_EVENTS_DEFINITION, ACTIVE_EVENTS_PROJECTION
 from .business_tools.current_water_quality import WATER_DEFINITION, CURRENT_WATER_QUALITY
 from .business_tools.fishery_knowledge import KNOWLEDGE_DEFINITION, SEARCH_FISHERY_KNOWLEDGE
 from .business_tools.water_quality_history import HISTORY_DEFINITION, WATER_QUALITY_HISTORY
 from .business_tools.water_quality_score import SCORE_DEFINITION, WATER_QUALITY_SCORE
+from .business_tools.registry import RESULT_INSTRUCTIONS
 from .channel import ChannelAssistantResult
 from .channel_hybrid import HybridHistorySnapshot
 from .channel_management_continuous import ContinuousChannelBudget, ContinuousManagementTurn, prepared_scope as previous_scope
 from .channel_validation import implementation_sha256
 from .channel_trial import PRESET, QwenTrialSession
 from .execution import ExecutionDecision
-from .runtime.assistant import assistant_profile
+from .runtime.assistant import MULTI_ROUND_SYSTEM_INSTRUCTION, assistant_profile
 from .runtime.release_contracts import AssistantExecutionProfile, _hash, release_scope
 from .runtime.sources import TurnSourceReceipt
 from .channel_agent_presentation import present, CONTRACT as PRESENTATION_CONTRACT
 
 CONTRACT = 'management-qq-web-agent-run@1'
-PROMPT_ID = 'QQ_MANAGEMENT_WEB_AGENT@3'
+PROMPT_ID = 'QQ_MANAGEMENT_WEB_AGENT@4'
 _DEFINITIONS = (WATER_DEFINITION, KNOWLEDGE_DEFINITION, HISTORY_DEFINITION, SCORE_DEFINITION, ACTIVE_EVENTS_DEFINITION)
 TOOLS = tuple(definition.name for definition in _DEFINITIONS)
-INSTRUCTION = ACTIVE_EVENT_PROMPT[1] + (
+INSTRUCTION = MULTI_ROUND_SYSTEM_INSTRUCTION + (
     '你以鳗鲡养殖智能体的身份在QQ群交流，自然、直接地回答问题，可用简短分段。'
     '不要求JSON、固定报告或General/Water标签。普通概念和养殖解释可直接回答。'
-    '当前读数、当前事件、历史统计、项目知识和实验评分各用对应可用工具；参数依其定义，设备由服务器固定。'
-    'get_current_water_quality、get_active_events、score_current_water_quality 的参数对象均严格为 {}。例如查询当前事件时，调用 get_active_events，arguments 传 "{}"。这些工具不接收问题原文、设备 ID、时间范围或其他字段。历史水质工具只接受 lookback_minutes（10、30 或 60）和可选 metrics。'
-    '知识工具只接受query，不接受路径、设备或权限。实验评分是程序计算的参考，不是专业标准。'
-    '历史窗口统计和项目知识不能证明当前水质，若比较历史与现在应分别查询；'
-    '评分工具已包含本轮当前观测，不必为同一评分重复查询当前水质。'
-    'Tool来源为SIMULATOR时如实说明；缺测、过期、离线和NO_DATA/NO_MATCH不能解释为正常或已命中。'
+    '按本轮可用工具的说明选择工具并传参，无参数的工具传 {}，设备由服务器固定。'
+    '按实际返回的时间区分当前观测和历史资料。需要比较两者时，分别获取对应证据。'
     '需要的来源超出本轮预算时说明尚缺信息，不编造。系统会附本轮实际查询来源，不必复述全部技术字段。'
     '只能读取，不执行ACK、删除、规则修改、设备控制或通过聊天切换设备和权限。')
 
@@ -50,12 +46,14 @@ class AgentChannelBudget(ContinuousChannelBudget):
 def prepared_scope(options, output_tokens=2048):
     budget = AgentChannelBudget(output_tokens)
     base = previous_scope(options, output_tokens)
-    registry = ToolRegistry(ToolDefinition(d, lambda *_: None) for d in _DEFINITIONS)
+    registry = ToolRegistry(ToolDefinition(d, lambda *_: None, result_instruction=RESULT_INSTRUCTIONS[d.name])
+                            for d in _DEFINITIONS)
     runtime = release_scope(assistant_profile(PRESET), ToolPolicy('assistant', True, TOOLS),
                             registry, DEFAULT_HISTORY_PROJECTION)
     runtime.update(prompt_id=PROMPT_ID, prompt_sha256=_hash(INSTRUCTION))
     root = Path(__file__).resolve().parents[2]
     paths = ('apps/ai_service/channel_management_agent.py', 'apps/ai_service/channel_agent_presentation.py',
+             'apps/ai_backend/tool_conversation.py', 'apps/ai_backend/tools/contracts.py',
              'apps/ai_service/runtime/assistant.py', 'apps/ai_service/runtime/sources.py',
              'apps/ai_service/business_tools/registry.py', 'apps/ai_service/business_tools/fishery_knowledge.py',
              'apps/ai_service/business_tools/water_quality_history.py', 'apps/ai_service/business_tools/water_quality_score.py',
@@ -122,7 +120,8 @@ class AgentManagementTurn(ContinuousManagementTurn):
                     or not set(names)<=set(TOOLS) or tuple(policy.exposed_tools)!=names
                     or not set(names)<=set(authorization.tools)
                     or self.event_board_device_id == authorization.device_id
-                    or any(registry.lookup(name).model_definition!=definitions[name] for name in names)
+                    or any(registry.lookup(name).model_definition!=definitions[name]
+                           or registry.lookup(name).result_instruction!=RESULT_INSTRUCTIONS[name] for name in names)
                     or snapshot is not self.snapshot or snapshot.authority is not self.authority
                     or snapshot.identity[3:8]!=expected or snapshot.identity[9]!=self.conversation_epoch):
                 raise GatewayError('SESSION_RUN_BINDING_CHANGED')

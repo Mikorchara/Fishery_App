@@ -62,11 +62,17 @@ class ToolDefinition:
     parses the model's JSON, hands that object to the callable, and calls the
     handler with the **normalized** arguments as a single positional argument.
     Rejection is expressed by raising; the Executor maps it to a safe error.
+    The server supplies any result instruction only after this tool returns.
     """
 
     model_definition: ModelToolDefinition
     handler: Callable[..., dict] = field(repr=False, compare=False)
     validate_arguments: Callable[[dict], dict] | None = field(default=None, repr=False, compare=False)
+    result_instruction: str = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.result_instruction, str):
+            raise ValueError("tool result instruction must be text")
 
     def bind(self, arguments: dict) -> Callable[[], dict]:
         """Return the zero-argument invocation for already-parsed arguments.

@@ -13,7 +13,8 @@ from apps.ai_backend.tests import test_execution as offline_guard
 from apps.ai_service.active_event_execution import ActiveEventTrialConfig, ACTIVE_EVENT_TOOL_NAMES
 from apps.ai_service.business_tools.active_events import ACTIVE_EVENTS
 from apps.ai_service.business_tools.current_water_quality import CURRENT_WATER_QUALITY
-from apps.ai_service.runtime.assistant import assistant_profile
+from apps.ai_service.business_tools.registry import RESULT_INSTRUCTIONS
+from apps.ai_service.runtime.assistant import MULTI_ROUND_SYSTEM_INSTRUCTION, assistant_profile
 from apps.ai_service.service import ManagementAssistantService
 from apps.knowledge.tests.support import reference_knowledge
 from apps.management_web.ai_adapter import ManagementAssistant
@@ -82,7 +83,21 @@ class ActiveEventAssistantTests(unittest.TestCase):
                 response.close()
                 self.assertTrue(result['successful_turn'], result.get('error_code'))
                 self.assertEqual(len(self.sdk.bodies), 2)
-                message = next(item for item in self.sdk.bodies[1]['messages'] if item['role'] == 'tool')
+                first, second = self.sdk.bodies
+                self.assertEqual(first['messages'][0]['content'], MULTI_ROUND_SYSTEM_INSTRUCTION)
+                self.assertEqual(first['tools'], second['tools'])
+                event_definition = next(item['function'] for item in first['tools']
+                                        if item['function']['name'] == ACTIVE_EVENTS)
+                self.assertEqual(event_definition['parameters']['properties'], {})
+                self.assertEqual(second['messages'][0]['role'], 'system')
+                self.assertTrue(second['messages'][0]['content'].startswith(MULTI_ROUND_SYSTEM_INSTRUCTION))
+                self.assertIn(RESULT_INSTRUCTIONS[ACTIVE_EVENTS], second['messages'][0]['content'])
+                self.assertNotIn(RESULT_INSTRUCTIONS[CURRENT_WATER_QUALITY], second['messages'][0]['content'])
+                self.assertEqual(second['messages'][1], first['messages'][1])
+                call = second['messages'][-2]['tool_calls'][0]
+                message = second['messages'][-1]
+                self.assertEqual(call['id'], message['tool_call_id'])
+                self.assertEqual(message['role'], 'tool')
                 payload = json.loads(message['content'])
                 self.assertTrue(any(event['code'].startswith('OXYGEN_') for event in payload['items']))
                 self.assertTrue(all(client.closed for client in self.sdk.clients))
@@ -110,6 +125,13 @@ class ActiveEventAssistantTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.get_json()['result']['successful_turn'])
         self.assertEqual(len(self.sdk.bodies), 3)
+        first, second, third = [body['messages'][0]['content'] for body in self.sdk.bodies]
+        self.assertEqual(first, MULTI_ROUND_SYSTEM_INSTRUCTION)
+        self.assertNotIn(RESULT_INSTRUCTIONS[ACTIVE_EVENTS], second)
+        self.assertEqual(second.count(RESULT_INSTRUCTIONS[CURRENT_WATER_QUALITY]), 1)
+        self.assertEqual(third.count(RESULT_INSTRUCTIONS[CURRENT_WATER_QUALITY]), 1)
+        self.assertEqual(third.count(RESULT_INSTRUCTIONS[ACTIVE_EVENTS]), 1)
+        self.assertEqual(self.sdk.bodies[-1]['tool_choice'], 'none')
         self.assertEqual(len([item for item in self.sdk.bodies[-1]['messages'] if item['role']=='tool']), 2)
         self.assertTrue(all(client.closed for client in self.sdk.clients))
 

@@ -1,5 +1,6 @@
 """Shared bounded coordinator; production stays single-round by default."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
@@ -211,6 +212,14 @@ def _aggregate_usage(items: list[Usage]) -> SessionUsage:
         return SessionUsage(len(items), sum(item.source == UsageSource.PROVIDER for item in items), Usage())
 
 
+def compose_result_system_instruction(base: str, instructions: Mapping[str, str]) -> str:
+    """Append server-owned result instructions in tool execution order."""
+    sections = [base] if base else []
+    sections.extend(f"Tool result guidance ({name}):\n{instruction}"
+                    for name, instruction in instructions.items() if instruction)
+    return "\n\n".join(sections)
+
+
 class ToolCallingService:
     """One shared bounded executor; callers own Analysis or Assistant context."""
 
@@ -283,6 +292,8 @@ class ToolCallingService:
                           if transport == ToolModelTransport.STREAMING else self.gateway.complete)
         steps: list[ModelExecutionStep | ToolExecutionStep] = []
         usage_items: list[Usage] = []
+        base_system = request.messages[0].content if request.messages and request.messages[0].role == "system" else ""
+        result_instructions: dict[str, str] = {}
         executor = None
         tool_attempts = 0
         text, finish_reason, error_code = "", None, None
@@ -420,8 +431,16 @@ class ToolCallingService:
                 final_only = (tool_attempts >= budget.max_tool_calls
                               or tool_attempts >= budget.max_tool_rounds
                               or index + 2 >= budget.max_model_requests)
+                messages = request.messages
+                name = tool_result.tool_name
+                instruction = self.registry.lookup(name).result_instruction
+                if instruction and name not in result_instructions:
+                    result_instructions[name] = instruction
+                    system_content = compose_result_system_instruction(base_system, result_instructions)
+                    history = messages[1:] if messages and messages[0].role == "system" else messages
+                    messages = (ModelMessage("system", system_content), *history)
                 request = replace(request, tool_choice="none" if final_only else "auto", messages=(
-                    *request.messages,
+                    *messages,
                     ModelMessage("assistant", response.text, tool_calls=calls),
                     ModelMessage("tool", tool_result.to_json(), tool_call_id=calls[0].id),
                     *((ModelMessage("user", final_response_instruction),)

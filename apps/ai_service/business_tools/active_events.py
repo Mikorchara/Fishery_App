@@ -22,6 +22,17 @@ ACTIVE_EVENTS_DEFINITION = ModelToolDefinition(
     '设备由服务端固定，参数必须为 {}。',
     {'type': 'object', 'properties': {}, 'additionalProperties': False},
 )
+RESULT_INSTRUCTION = (
+    "按设备分开报告事件，区分 simulator 模拟记录和 device_report 设备报告。"
+    "将 ACTIVE、INDETERMINATE、NEEDS_REVIEW 分别解释为活动、待核实、待复核。只把 ACTIVE 计入活动风险。"
+    "依据 last_observed_at 和各来源的观测时间与新鲜度说明缺测和过期，evaluated_at 是评估时间。"
+    "NO_MATCH 表示本次查询范围内无符合条件的事件，NO_DATA 表示该范围无观测。零条活动风险无法证明健康或风险已消退。"
+    "omitted_count 大于零时说明结果已截断。设备报告中断仅描述报告更新，无法据此判断设备离线。"
+    "abnormal_video_count 是被模型标为异常的视频数量，result_timestamp 是行为结果版本时间。"
+    "如问到行为上报时间，说明本次事件结果未提供。"
+    "外观与行为信号需人工核查，仅凭这些信号无法确诊疾病。"
+    "这次查询只读事件信息，确认、删除、结束事件或操作设备均需另行处理。"
+)
 
 _WATER_TITLES = {code: value[1] for code, value in FAMILIES.items()}
 _VISUAL_TITLES = {code: value[1] for code, value in VISUAL_RULES.items()}

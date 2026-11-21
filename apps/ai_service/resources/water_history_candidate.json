@@ -30,7 +30,7 @@
       "tools": [
         "get_water_quality_history"
       ],
-      "tool_definitions_sha256": "2276bc068095c9cf5b23d08bf5ccf4d7520e9d6b685be69a823408529e6533ad"
+      "tool_definitions_sha256": "6d3986a03b819c899d0f9c99d9015f1f57adc571e2e7f548609f209c8bebdf92"
     },
     "transport": "NORMAL",
     "history_framing_sha256": "4f81ca3cb5d86125435bb263fbd182b97ed4f7307855ba48687532281964259b",

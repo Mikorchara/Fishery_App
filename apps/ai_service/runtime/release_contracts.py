@@ -23,6 +23,14 @@ def _hash(value):
 def release_scope(profile, policy, registry, projection):
     """Safe maintainer facts, including fingerprints of actual executable definitions."""
     definitions = policy.model_definitions(registry)
+    tool_contracts = []
+    for definition in definitions:
+        contract = {"name": definition.name, "description": definition.description,
+                    "parameters": definition.parameters_dict()}
+        result_instruction = registry.lookup(definition.name).result_instruction
+        if result_instruction:
+            contract["result_instruction"] = result_instruction
+        tool_contracts.append(contract)
     return {"preset_id": profile.preset_id, "preset_variant": profile.preset_variant,
         "contract_version": profile.preset_contract_version,
         "identity": [profile.service_id, profile.adapter_id, profile.base_url, profile.model],
@@ -31,8 +39,7 @@ def release_scope(profile, policy, registry, projection):
         "prompt_id": MULTI_ROUND_PROMPT_ID, "prompt_sha256": _hash(MULTI_ROUND_SYSTEM_INSTRUCTION),
         "history_projection": projection.value, "history_version": PROJECTION_VERSION,
         "tools": [d.name for d in definitions],
-        "tool_definitions_sha256": _hash([{"name": d.name, "description": d.description,
-            "parameters": d.parameters_dict()} for d in definitions])}
+        "tool_definitions_sha256": _hash(tool_contracts)}
 
 
 @dataclass(frozen=True)
