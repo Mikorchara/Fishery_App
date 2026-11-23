@@ -37,7 +37,7 @@
           "get_water_quality_history",
           "score_current_water_quality"
         ],
-        "tool_definitions_sha256": "b80a53f3cb687ac2aa24990eb3c6ff83c0df6425ed4b2090a3ddbbe26c4c7058"
+        "tool_definitions_sha256": "0fe3451281fd5bb6057626c1cf9c8f9a42597a8e9f20645b9306c174887c45be"
       },
       "data_bindings": {
         "water": "management-current-water@1",
@@ -131,7 +131,7 @@
           "get_water_quality_history",
           "score_current_water_quality"
         ],
-        "tool_definitions_sha256": "b80a53f3cb687ac2aa24990eb3c6ff83c0df6425ed4b2090a3ddbbe26c4c7058",
+        "tool_definitions_sha256": "0fe3451281fd5bb6057626c1cf9c8f9a42597a8e9f20645b9306c174887c45be",
         "model_transport": "STREAMING",
         "assembler_version": "openai-tool-stream-assembler@1"
       },
@@ -227,7 +227,7 @@
           "get_water_quality_history",
           "score_current_water_quality"
         ],
-        "tool_definitions_sha256": "b80a53f3cb687ac2aa24990eb3c6ff83c0df6425ed4b2090a3ddbbe26c4c7058"
+        "tool_definitions_sha256": "0fe3451281fd5bb6057626c1cf9c8f9a42597a8e9f20645b9306c174887c45be"
       },
       "data_bindings": {
         "water": "management-current-water@1",
@@ -321,7 +321,7 @@
           "get_water_quality_history",
           "score_current_water_quality"
         ],
-        "tool_definitions_sha256": "b80a53f3cb687ac2aa24990eb3c6ff83c0df6425ed4b2090a3ddbbe26c4c7058",
+        "tool_definitions_sha256": "0fe3451281fd5bb6057626c1cf9c8f9a42597a8e9f20645b9306c174887c45be",
         "model_transport": "STREAMING",
         "assembler_version": "openai-tool-stream-assembler@1"
       },

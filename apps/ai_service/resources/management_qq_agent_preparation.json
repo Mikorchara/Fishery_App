@@ -38,7 +38,7 @@
         "score_current_water_quality",
         "get_active_events"
       ],
-      "tool_definitions_sha256": "5ee1f6cffbd3fd9b78693c0ef9aca5e1257d503d8fc963dd832edd0e73f3a77b"
+      "tool_definitions_sha256": "8beed7edbef101dac034ccac80d7bc1be36c64958dc03ff29013f73d4a7bdc33"
     },
     "sdk": {
       "adapter": "apps.ai_backend.openai_compatible_adapter.OpenAICompatibleAdapter",
@@ -209,7 +209,7 @@
       "apps/ai_service/runtime/sources.py": "3e8cfbd0526c044c4c76de187ac49cee82b0b3d89ec4e3ceacfb532910052f9a",
       "apps/ai_service/business_tools/registry.py": "492976534bd72c7b073f6b3188fb68835ff547c123b8411144e09d3be85033ea",
       "apps/ai_service/business_tools/fishery_knowledge.py": "a704f2990c6e6cd662b0dd2d50009831e55bd06d04a2a0129806793878379116",
-      "apps/ai_service/business_tools/water_quality_history.py": "d2d20edbf3754d9364f7a3962de259c7293d4f44bbcfaa90022467db4495d6c7",
+      "apps/ai_service/business_tools/water_quality_history.py": "1d1317322f6b07e0c595a5e8ebc793a51c766716c277600225f7643ae4711f22",
       "apps/ai_service/business_tools/water_quality_score.py": "164beff120aa7b008f5d6abe9eefc9e0c28ab7473d46de15ed87033275bfba85",
       "apps/knowledge/repository.py": "2b51beff434554f75dbc9ccc802faf3687063ced8f6bde9aaf760f9184cad901",
       "apps/knowledge/service.py": "28bd123ca2f6b44d866dcbf866baf397cd5c8401cebea9e71df269ed6518095c",
@@ -218,7 +218,7 @@
       "apps/qq_bot/knowledge_source.py": "d3ae9951fa523ba1d359f8929302ea7c5621d7ade126869a48b2e16e00e492f0",
       "apps/qq_bot/agent_conversations.py": "91ee652bc35e7f68d72fa9b01c310f64645c7d7575b8aa3c76472c564ed94743",
       "apps/ai_service/active_event_execution.py": "d69a27a85736e323cd25530d18720960c217c067b3b013750159854d576b038f",
-      "apps/ai_service/business_tools/active_events.py": "326ceb9527a8f0c8d88b99824482374a8bd9008470bb5e268e6211f625591ac8",
+      "apps/ai_service/business_tools/active_events.py": "e08b8ef64c1db991b66c7b7fbcf588dcfc320941a7fac22ede26ec8789c3af90",
       "apps/monitoring/event_cycles.py": "cf86acdfed8a4683dd44896e5465a8a4f903fc3f680301a5a6c46a6c27ace262",
       "apps/monitoring/event_families.py": "0908d65df415b7fdc96fb08f4f9e93127023dd7d07a5be005599a7cd48534fd6",
       "apps/monitoring/manual_end.py": "058c4fa392d68e297d91066940615a56f6574c3ac98a1dc66bfe77899215e6de"
@@ -236,7 +236,7 @@
       "instance": "EXPLICIT_READ_ONLY_SAME_INSTANCE"
     }
   },
-  "scope_sha256": "34fd6b14aed0c53fa445f0c9d37288c1dc82a63610df790e0e69f32af2bf6e99",
+  "scope_sha256": "bacc139ef22c665fdb58bd5be674063cc3fbc3ee4efcd5758321b41cce358ddb",
   "old_approvals_accepted": false,
   "real_execution_requires": "CURRENT_PROCESS_WEB_AGENT_OPERATOR_CONSENT"
 }

@@ -88,6 +88,9 @@ class ActiveEventAssistantTests(unittest.TestCase):
                 self.assertEqual(first['tools'], second['tools'])
                 event_definition = next(item['function'] for item in first['tools']
                                         if item['function']['name'] == ACTIVE_EVENTS)
+                self.assertTrue(event_definition['description'].startswith(
+                    '用户问当前有哪些告警、异常或事件，且未将范围限定为水质时，优先用本工具。'
+                    '明确只问当前水质告警且本轮已授权当前水质工具时，用当前水质工具。'))
                 self.assertEqual(event_definition['parameters']['properties'], {})
                 self.assertEqual(second['messages'][0]['role'], 'system')
                 self.assertTrue(second['messages'][0]['content'].startswith(MULTI_ROUND_SYSTEM_INSTRUCTION))

@@ -294,6 +294,12 @@ class HistoryCandidateTests(unittest.TestCase):
                     self.assertEqual(body['max_tokens'],1024);self.assertNotIn('stream',body)
                     self.assertEqual([d['function']['name'] for d in body['tools']],[HISTORY])
                     self.assertFalse(body['extra_body']['enable_thinking'])
+                mean_rule = '应明确说明未取得总体均值'
+                first, followup = self.sdk.bodies
+                self.assertNotIn(mean_rule, first['messages'][0]['content'])
+                self.assertIn(mean_rule, followup['messages'][0]['content'])
+                self.assertIn('不要用代表窗口、首末值或极值代替总体均值',
+                              followup['messages'][0]['content'])
                 payload=json.loads(next(m['content'] for m in self.sdk.bodies[1]['messages'] if m['role']=='tool'))
                 self.assertEqual((payload['status'],payload['device_id']),(status,'pond-a'))
                 receipt=results[0].source_receipt

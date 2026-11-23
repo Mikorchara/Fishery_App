@@ -16,6 +16,8 @@ MAX_ACTIVE_EVENT_CYCLES = 512  # Two repository snapshots of at most 256 records
 MAX_ACTIVE_EVENT_RESULT_BYTES = 8192
 ACTIVE_EVENTS_DEFINITION = ModelToolDefinition(
     ACTIVE_EVENTS,
+    '用户问当前有哪些告警、异常或事件，且未将范围限定为水质时，优先用本工具。'
+    '明确只问当前水质告警且本轮已授权当前水质工具时，用当前水质工具。'
     '只读查询本轮绑定设备的活动事件、待核实事件和待复核的行为结果。若已授权设备报告，也可返回该设备的外观异常、行为异常和报告中断。'
     '只使用程序返回的来源、事件状态及时间。NO_MATCH 表示已查询范围内没有符合条件的事件，NO_DATA 表示该范围没有观测。'
     '两者都不能证明鱼群健康或无风险。行为文件可能过期，报告中断不证明设备离线。按 evidence 和观察时间如实说明。'
