@@ -309,4 +309,18 @@ node --test apps/management_web/tests/*.test.mjs
 
 [settings.py](../../apps/ai_service/settings.py)负责默认偏好、固定 Preset 展示与 Provider 凭据操作；[settings_api.py](../../apps/management_web/settings_api.py)负责本机 HTTP。底层[project_env.py](../../apps/ai_backend/project_env.py)沿用既有 Writer，不是第二个 CredentialStore。R2D-4B 的[credential_test.py](../../apps/ai_service/credential_test.py)只做用户主动的单请求连接测试，临时 Snapshot 不写正式 Store；成功保存需短期绑定凭证。
 
+管理网页的「API 密钥」提供 Qwen / DashScope 的连接测试和保存。已存的 DeepSeek 私有凭据及底层适配继续保留。
+
+### Windows 密钥保存排查
+
+Windows 凭据目录由 `%LOCALAPPDATA%` 和项目绝对路径共同决定。用另一 Windows 用户运行服务或将项目克隆到新路径时，网页可能看到不同的私有凭据。第一次配置可直接在网页测试并保存，应用会在允许的本地卷上创建受保护的目录。[位置计算](../../apps/ai_service/runtime/locations.py) · [私有路径检查](../../apps/ai_backend/credential_paths.py)
+
+| 网页状态 | 含义与检查项 |
+| --- | --- |
+| `启动环境（只读）` | 服务进程已收到 `DASHSCOPE_API_KEY`，此来源优先于用户私有文件。检查启动网页的环境。 |
+| `存储不可用 · 只读` | 当前进程没通过本地存储检查。确认以日常 Windows 账号启动，`%LOCALAPPDATA%` 位于支持 ACL 的本地固定卷，相关目录归运行账号所有且路径中没有符号链接或目录联接。旧凭据格式错误也会显示此状态。 |
+| `用户私有文件` | 网页可按「测试新密钥 → 保存／替换」操作。连接测试验证远端调用，保存另行检查本地权限。 |
+
+遇到 `存储不可用` 时，记录状态文字、启动方式和是否换过账号或项目路径。运行时用脱敏错误码表示失败，检查只需位置和权限元数据。本机以当前进程复核，默认目录、现有文件和访问控制检查均通过。当前分支从启动环境计算固定位置，网页没有单独指定私有凭据目录的设置。[Windows 文件权限检查](../../apps/ai_backend/secure_files.py) · [网页凭据状态](../../apps/ai_service/settings.py)
+
 [settings_store.py](../../apps/ai_service/settings_store.py)延续同一 JSON/CAS，v1 兼容、明确保存时写 v2；[output_budget.py](../../apps/ai_service/output_budget.py)仅在原精确门禁通过后应用 Qwen 本地 1–4096 输出合同。范围、选定值、预算版本及基础 Scope 绑定 revision；通用 Adapter 的新内部 ceiling 不授予模型能力，不放宽默认限制或 2/2/3。默认偏好与预算均不重配进行中的 Turn。自定义模型发布入口仍未开放。见[运行说明](../BUILD_RUN.md)。

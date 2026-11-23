@@ -244,9 +244,9 @@ SDK 清理失败时，系统保留故障隔离并停止新模型调用，不能�
 .\scripts\dev\启动QQ演示系统.cmd
 ```
 
-两种方式都在 Simulator 窗口选场景。三终端还需在 Bot 窗口人工批准；该入口关闭本次 Web AI，但保留 QQ AI。其他 Web AI 启动方式见 [启动指南](../BUILD_RUN.md) 和 [运行维护参考](../deep-dive/OPERATIONS.md)。
+两种方式都在 Simulator 窗口选场景，根目录有 `sample.mp4` 时可在网页播放。使用 QQ 时在 Bot 窗口批准本次运行。板端视频入口和网页 AI 的设置方法见 [启动指南](../BUILD_RUN.md)。
 
-五个日常入口共用 `outputs/qq-m3-real-test`，首次初始化包含31条背景知识。QQ后续只给同库追加配置；旧实例保留但不会被日常入口自动选择。
+三个日常入口共用 `outputs/qq-m3-real-test`，首次初始化包含 31 条背景知识。QQ 后续使用同一实例。
 
 ### 7.2 建议演示顺序
 

@@ -5,23 +5,20 @@
 **第一次下载源码，只需先读 [开始使用](开始使用.md)，按步骤安装、启动和配置。** 已配置的机器看 [日常启动](docs/BUILD_RUN.md)。比赛后的完成情况和下一步见 [项目路线图](docs/ROADMAP.md)。更多资料见 [文档目录](docs/README.md)。
 
 ```powershell
-# 两终端：Simulator + Web
+# Simulator + Web，默认加载根目录 sample.mp4
 .\scripts\dev\启动演示系统.cmd
-# 三终端：Simulator + Web + QQ Hybrid（需本机配置及人工审批）
+# Simulator + Web + QQ，默认加载根目录 sample.mp4
 .\scripts\dev\启动QQ演示系统.cmd
-# 带根目录 sample.mp4 的两个版本
-.\scripts\dev\启动视频演示系统.cmd
-.\scripts\dev\启动QQ视频演示系统.cmd
-# 三终端：模拟水质 + Web + QQ，使用开发板当前的 RTSP 地址
+# 模拟水质 + Web + QQ，使用开发板当前的 RTSP 地址
 .\scripts\dev\启动QQ板端视频演示系统.cmd
 ```
 
 新电脑安装依赖后，先执行一次 `.\scripts\dev\Initialize-Management.ps1`，自动创建唯一日常实例和31条初始背景资料，再用上面的入口。两终端可直接运行，三终端需为同一实例配置 QQ。日常实例在 `outputs/qq-m3-real-test`，原始设备报告单独存入 `outputs/device-reports`。完整目录见[部署说明](docs/guides/DEPLOYMENT.md)。
 
-- 前四个入口选 `1` 使用完整模拟，选 `2` 使用模拟水质和开发板视觉报告。第五个入口直接进入设备联调，并提示输入开发板当前视频地址。设备联调的报告由独立的 8780 接收器接收。见[设备连接步骤](docs/DEVICE_INTERFACE_QUICK.md)。
+- 前两个入口选 `1` 使用完整模拟，选 `2` 使用模拟水质和开发板视觉报告。缺少指定的本地视频时，服务照常启动。板端视频入口直接进入设备联调，并提示输入开发板当前视频地址。设备联调的报告由独立的 8780 接收器接收。[设备连接步骤](docs/DEVICE_INTERFACE_QUICK.md)
 - QQ 为独立进程。网页新配置可使用五项只读工具：当前水质、历史水质、项目养殖知识、实验水质评分和当前事件。默认不联网，兼容旧配置，仍无事件确认、删除或设备控制权限。
 - QQ可在“系统设置 → QQ机器人”配置，采用持续运行与Web式自然回答；每次模型请求输出Token可调，启动仍需人工批准费用和访问范围。旧有界配置兼容，机制见[QQ专题](docs/deep-dive/QQ_BOT.md)。
-- 两/三终端及带视频版本共用一份日常实例；旧正式/演示目录保留，不自动合并。源码、业务数据和私有凭据分开。
+- 三个入口共用一份日常实例。源码、业务数据和私有凭据分开。
 - sample.mp4可作为获准源码演示素材跟踪；Wheel不包含视频、配置、数据库、密钥、报告或批准。交接不要打包整份outputs或.venv。
 
 安装和离线回归：

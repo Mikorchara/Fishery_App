@@ -13,8 +13,8 @@ from .credential_test import CredentialConnectionTests
 
 
 class ManagementSettingsService:
-    # Client chooses a fixed service identifier, never a filename or environment name.
-    CLOUDS = {'dashscope':'dashscope-qwen38-flash-r1', 'deepseek':'deepseek-flash-r1'}
+    # The Web credential allowlist is independent of the Backend adapters.
+    CLOUDS = {'dashscope':'dashscope-qwen38-flash-r1'}
 
     def __init__(self, backend, preferences_path, *, probe_gateway_factory=None):
         self.backend = backend

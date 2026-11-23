@@ -310,7 +310,8 @@ runpy.run_path(script,run_name='__main__')'''
             self.assertFalse(launch.call_args.kwargs['interactive_scenario'])
         wrapper=(ROOT/'scripts/dev/启动QQ演示系统.cmd').read_text(encoding='utf8')
         self.assertIn('%~dp0Start-ManagementStack.ps1',wrapper)
-        self.assertIn('-WithBot -NoAssistant -InteractiveScenario -OpenBrowser',wrapper)
+        self.assertIn('-WithBot -InteractiveScenario -OpenBrowser -ScoreTrial -EventTrial',wrapper)
+        self.assertNotIn('-NoAssistant',wrapper)
         self.assertNotIn('APPROVE',wrapper)
 
     def test_powershell_check_missing_config_scope_and_no_network(self):

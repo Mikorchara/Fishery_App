@@ -66,8 +66,8 @@ export function createSettingsWorkspace(api,toolPolicy,options={}){
           ['Streaming',m.modes.streaming.can_send?'本地实验可用':'未开放或条件不匹配'],['连接状态','未测试；保存配置不会连接模型']]),
         button('选择为默认',()=>{edit('preset_id',m.preset_id);model.children[1].value=m.preset_id;show('general');}),
         ...(m.kind==='cloud'?[button('管理 API 密钥',()=>show('credentials'),'text')]:[])]))),
-      el('p',{class:'muted',text:'添加、修改地址或禁用模型暂未开放。管理 Assistant 仅装配固定 Qwen/Ollama 预设；自定义模型尚需独立能力与工具发布验证。DeepSeek Backend 适配保留，但未接入本页可执行模型列表。'})]));
-    const credentialCards=config.credentials.map(item=>{
+      el('p',{class:'muted',text:'添加、修改地址或禁用模型暂未开放。管理 Assistant 仅装配固定 Qwen/Ollama 预设；自定义模型尚需独立能力与工具发布验证。'})]));
+    const credentialCards=config.credentials.filter(item=>item.provider==='dashscope').map(item=>{
       let current=item,working=false,clearPending=false,testToken=null,recent='尚未测试';
       const status=el('p'),feedback=el('p',{role:'status'}),actions=el('div',{class:'settings-actions'});
       const input=el('input',{type:'password',autocomplete:'new-password',spellcheck:'false','aria-label':`${item.provider} API Key`,maxlength:4096,
@@ -102,7 +102,7 @@ export function createSettingsWorkspace(api,toolPolicy,options={}){
         actions.replaceChildren(test,saved,save,clear,...(clearPending?[el('span',{text:'确认清除该 Provider 的私有密钥？'}),
           button('确认清除',()=>{if(!working)void change('remove');}),button('取消',()=>{clearPending=false;update();},'text')]:[]));}
       update();
-      return card(item.provider==='dashscope'?'Qwen / DashScope':'DeepSeek（保留的 Provider 配置）','仅显示状态，不回显、下载或缓存完整密钥。',[
+      return card('Qwen / DashScope','仅显示状态，不回显、下载或缓存完整密钥。',[
         status,el('label',{class:'field'},[el('span',{text:'新 API Key'}),input]),actions,feedback]);
     });
     panels.set('credentials',card('API 密钥','先测试新密钥，再保存。主动测试最多 1 次请求 / 8 输出 tokens / 20 秒，可能计费；只验证连接，不授予 Tool 或 Streaming 资格。PROCESS_ENV 优先且只读。',[

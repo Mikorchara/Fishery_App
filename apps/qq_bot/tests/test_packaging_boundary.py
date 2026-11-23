@@ -22,8 +22,10 @@ class PackagingBoundaryTests(unittest.TestCase):
                      'ai_service/resources/assistant_score_trial.json',
                      'device_reports/__main__.py', 'device_reports/storage.py', 'device_reports/binding.py'):
             self.assertTrue((stage/'apps'/name).is_file())
-        for name in ('启动视频演示系统.cmd','启动QQ视频演示系统.cmd',
-                     'Start-DeviceReports.ps1','device_report_cli.py','device_mode.py'):
+        launchers = stage / 'scripts/dev'
+        self.assertEqual({path.name for path in launchers.glob('启动*演示系统.cmd')},
+                         {'启动演示系统.cmd', '启动QQ演示系统.cmd', '启动QQ板端视频演示系统.cmd'})
+        for name in ('Start-BoardVideoDemo.ps1','Start-DeviceReports.ps1','device_report_cli.py','device_mode.py'):
             self.assertTrue((stage/'scripts/dev'/name).is_file())
         self.assertFalse((stage/'sample.mp4').exists())
         for path in stage.rglob('*'):

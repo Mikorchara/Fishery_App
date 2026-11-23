@@ -8,7 +8,7 @@ PACKAGES = ('ai_backend', 'ai_service', 'knowledge', 'monitoring', 'device_repor
 LAUNCHERS = ('Initialize-Management.ps1', 'device_mode.py', 'Start-DeviceReports.ps1', 'device_report_cli.py', 'local_session.py', 'windows_job.py', 'demo_instance.py', 'run_local.ps1', '启动演示系统.cmd',
     '启动QQ演示系统.cmd', 'management_stack.py', 'stack_console.py', 'console_job.py', 'management_stack_common.ps1',
     'Start-ManagementStack.ps1', 'Start-QQBot.ps1', 'Stop-ManagementStack.ps1', 'Stop-QQBot.ps1',
-    '启动视频演示系统.cmd', '启动QQ视频演示系统.cmd')
+    '启动QQ板端视频演示系统.cmd', 'Start-BoardVideoDemo.ps1')
 
 
 def prepare(destination, *, root=ROOT):

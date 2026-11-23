@@ -32,9 +32,9 @@ class ModeTests(unittest.TestCase):
         self.assertEqual(launch.call_args.kwargs['simulation_mode'],'water-only')
         self.assertEqual(launch.call_args.kwargs['device_report_device_id'],'board')
 
-    def test_all_four_shortcuts_offer_mode_selection(self):
+    def test_optional_board_report_shortcuts_offer_mode_selection(self):
         root=Path(__file__).resolve().parents[3]
-        for name in ('启动演示系统.cmd','启动视频演示系统.cmd','启动QQ演示系统.cmd','启动QQ视频演示系统.cmd'):
+        for name in ('启动演示系统.cmd','启动QQ演示系统.cmd'):
             self.assertIn('-InteractiveMode',(root/'scripts/dev'/name).read_text(encoding='utf-8'))
 
     def test_shortcut_mode_two_binds_fixed_reports_without_database_or_initialization(self):
@@ -117,9 +117,9 @@ class ModeTests(unittest.TestCase):
         self.assertEqual(launch.call_args.kwargs['device_report_directory'],root/'outputs/device-reports')
         self.assertEqual(launch.call_args.kwargs['device_report_device_id'],'fish-monitor-orin-01')
 
-    def test_four_shortcuts_enable_auto_binding_and_detached_powershell_preserves_it(self):
+    def test_shortcuts_enable_auto_binding_and_detached_powershell_preserves_it(self):
         root=Path(__file__).resolve().parents[3]
-        for name in ('启动演示系统.cmd','启动视频演示系统.cmd','启动QQ演示系统.cmd','启动QQ视频演示系统.cmd'):
+        for name in ('启动演示系统.cmd','启动QQ演示系统.cmd'):
             with self.subTest(shortcut=name):
                 self.assertIn('-AutoDeviceReports',(root/'scripts/dev'/name).read_text(encoding='utf-8'))
         shell=shutil.which('powershell.exe') or shutil.which('pwsh') or shutil.which('powershell')

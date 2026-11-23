@@ -6,7 +6,7 @@ import {Element} from './dom-fixture.mjs';
 import {fixture as assistantFixture,tick} from './assistant-fixture.mjs';
 
 const walk=n=>[n,...n.children.flatMap(walk)];
-function setup(){
+function setup({legacyCredential=false}={}){
   const normal={can_send:true,max_output_tokens:1024,default_output_tokens:1024,max_model_requests:3,max_tool_calls:2,max_tool_rounds:2,deadline_s:120,retry:0,
     editable:true,min_output_tokens:1,max_allowed_output_tokens:4096,approved_token_options:[512,1024,2048,4096]};
   const data={epoch:'fake-epoch',revision:'r1',browser_token:'fake-browser-token',default_available:true,
@@ -15,6 +15,7 @@ function setup(){
     models:[{preset_id:'qwen',name:'Qwen',provider:'dashscope',kind:'cloud',model_id:'fixed-model',connection:'https://example.invalid/v1',
       capabilities:{tool_calling:'supported',streaming:'supported'},modes:{normal,streaming:{...normal,max_output_tokens:512,default_output_tokens:512}}}],
     credentials:[{provider:'dashscope',availability:'MISSING',source:'MISSING',editable:true,exists:false,revision:'key-r1',credential_revision:'credential-r1'}],rag:{method:'TF-IDF',top_k:3,max_evidence_chars:800}};
+  if(legacyCredential)data.credentials.push({...data.credentials[0],provider:'deepseek'});
   const writes=[],keys=[],probes=[],budgets=[];let reads=0,saved=0;
   const api={read:async()=>{reads++;return structuredClone(data);},save:async value=>{
     writes.push(structuredClone(value));data.preferences=value.preferences;data.revision='r2';return structuredClone(data);},
@@ -59,6 +60,16 @@ test('API key is explicit write only, cleared in DOM after submission and never 
   p.find('取消').events.click();assert.equal(p.keys.length,1);
   p.find('清除密钥').events.click();p.find('确认清除').events.click();await tick();
   assert.equal(p.keys[1].confirm_clear,true);assert.equal(p.keys[1].secret,null);assert.equal(p.keys[1].action,'remove');
+});
+
+test('API keys show only Qwen even when settings contain a legacy provider',async()=>{
+  const p=setup({legacyCredential:true});await tick();p.find('API 密钥').events.click();
+  assert.match(p.root.textContent,/Qwen \/ DashScope/);
+  assert.doesNotMatch(p.root.textContent,/DeepSeek/i);
+  assert.ok(p.input('dashscope API Key'));
+  assert.equal(p.input('deepseek API Key'),undefined);
+  assert.equal(p.probes.length,0);
+  assert.equal(p.keys.length,0);
 });
 
 test('credential errors are bounded; budget and model capabilities are honest read-only facts',async()=>{

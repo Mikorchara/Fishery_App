@@ -16,6 +16,7 @@ from apps.ai_backend.openai_compatible_adapter import OpenAICompatibleAdapter
 from apps.ai_backend.tests.support import FakeSDK, sdk_final
 from apps.ai_backend.tool_conversation import ToolModelTransport
 from apps.ai_service import output_budget
+from apps.ai_service.runtime.assistant import assistant_profile
 from apps.ai_service.settings_store import PreferencesStore
 from apps.management_web.tests import test_settings as fixture
 
@@ -26,16 +27,16 @@ class ConnectionBudgetTests(unittest.TestCase):
         self.client,self.service,self.backend=self.f.client,self.f.service,self.f.f.backend
         self.headers=self.f.headers
 
-    def probe(self,secret='fictional-tested-key',provider='dashscope',source='input',**changes):
-        current=self.service.credential_status(provider)
-        body={'epoch':self.backend.epoch,'provider':provider,'source':source,
+    def probe(self,secret='fictional-tested-key',source='input',**changes):
+        current=self.service.credential_status('dashscope')
+        body={'epoch':self.backend.epoch,'provider':'dashscope','source':source,
             'secret':secret if source=='input' else None,
             'revision':current['revision' if source=='input' else 'credential_revision'],'confirm_network':True,**changes}
         return self.client.post('/api/settings/credentials/test',headers=self.headers,json=body)
 
-    def save(self,proof,secret='fictional-tested-key',provider='dashscope',**changes):
+    def save(self,proof,secret='fictional-tested-key',**changes):
         return self.client.post('/api/settings/credentials',headers=self.headers,json={
-            'epoch':self.backend.epoch,'provider':provider,'action':'save','revision':self.service.credential_status(provider)['revision'],
+            'epoch':self.backend.epoch,'provider':'dashscope','action':'save','revision':self.service.credential_status('dashscope')['revision'],
             'secret':secret,'confirm_clear':False,'test_token':proof,**changes})
 
     def budget(self,value,transport='normal',action='save',current=None,**changes):
@@ -55,9 +56,6 @@ class ConnectionBudgetTests(unittest.TestCase):
         self.assertEqual(self.save(proof['test_token'],secret='fictional-changed-key').get_json()['error_code'],'CREDENTIAL_TEST_REQUIRED')
         self.assertFalse(path.exists())
         self.assertEqual(self.save(None).get_json()['error_code'],'CREDENTIAL_TEST_REQUIRED')
-        proof=self.probe().get_json()['test']['test_token']
-        self.assertEqual(self.save(proof,provider='deepseek').get_json()['error_code'],'CREDENTIAL_TEST_REQUIRED')
-        self.assertFalse(path.exists())
         proof=self.probe().get_json()['test']['test_token']
         self.assertEqual(self.save(proof).status_code,200)
         self.assertEqual(self.save(proof).get_json()['error_code'],'CREDENTIAL_TEST_REQUIRED')
@@ -96,25 +94,52 @@ class ConnectionBudgetTests(unittest.TestCase):
         self.assertFalse(self.backend.credentials.project_env_path.exists())
         self.assertNotIn('fictional-process-key',json.dumps(self.f.read()))
 
-    def test_both_cloud_providers_use_the_input_key_then_saved_private_snapshot(self):
+    def test_qwen_uses_the_input_key_then_saved_private_snapshot(self):
         observed=[]
         sdk=FakeSDK(lambda _i,body:sdk_final(model=body['model']))
         def factory(runtime,remaining):
             observed.append((runtime.service_id,runtime.credential._for_adapter()))
             return sdk.factory(runtime,remaining)
         self.service.connection_tests.gateway_factory=lambda:OpenAICompatibleAdapter(async_client_factory=factory)
-        for provider in ('dashscope','deepseek'):
-            secret='fictional-'+provider+'-key'
-            result=self.probe(secret=secret,provider=provider).get_json()['test']
-            self.assertTrue(result['success'],result)
-            self.assertEqual(self.save(result['test_token'],secret,provider).status_code,200)
-            before=self.backend.credentials.project_env_path.read_bytes()
-            result=self.probe(provider=provider,source='saved').get_json()['test']
-            self.assertTrue(result['success'],result);self.assertNotIn('test_token',result)
-            self.assertEqual(before,self.backend.credentials.project_env_path.read_bytes())
-            self.assertEqual(observed[-1][1],secret)
-        self.assertEqual([row[0] for row in observed],['dashscope','dashscope','deepseek_api','deepseek_api'])
+        secret='fictional-dashscope-key'
+        result=self.probe(secret=secret).get_json()['test']
+        self.assertTrue(result['success'],result)
+        self.assertEqual(self.save(result['test_token'],secret).status_code,200)
+        before=self.backend.credentials.project_env_path.read_bytes()
+        result=self.probe(source='saved').get_json()['test']
+        self.assertTrue(result['success'],result);self.assertNotIn('test_token',result)
+        self.assertEqual(before,self.backend.credentials.project_env_path.read_bytes())
+        self.assertEqual(observed,[('dashscope',secret),('dashscope',secret)])
         self.assertTrue(all(body['max_tokens']==8 for body in sdk.bodies))
+
+    def test_web_rejects_deepseek_operations_and_preserves_its_existing_key(self):
+        legacy = assistant_profile('deepseek-flash-r1')
+        writer = self.service.writer
+        stored = writer.inspect(legacy.credential_ref, legacy.auth_spec)
+        writer.mutate(legacy.credential_ref, legacy.auth_spec, action='create',
+                      expected_revision=stored['revision'], secret='fictional-legacy-key')
+        path = self.backend.credentials.project_env_path
+        before = path.read_bytes()
+
+        self.assertEqual([item['provider'] for item in self.f.read()['credentials']], ['dashscope'])
+        for source in ('input', 'saved'):
+            with self.subTest(source=source):
+                response = self.probe(source=source, provider='deepseek')
+                self.assertEqual(response.status_code, 409)
+                self.assertEqual(response.get_json()['error_code'], 'INVALID_CREDENTIAL_TEST')
+        for action in ('save', 'remove'):
+            with self.subTest(action=action):
+                response = self.save(None, provider='deepseek', action=action,
+                                     secret=None if action == 'remove' else 'fictional-key',
+                                     confirm_clear=action == 'remove')
+                self.assertEqual(response.status_code, 409)
+                self.assertEqual(response.get_json()['error_code'], 'INVALID_CREDENTIAL_REQUEST')
+
+        self.assertEqual(self.f.probe_sdk.bodies, [])
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(self.f.change().status_code, 200)
+        self.assertEqual(self.f.change(action='remove', secret=None, confirm_clear=True).status_code, 200)
+        self.assertEqual(path.read_bytes(), before)
 
     def test_stale_receipt_expiry_concurrent_save_and_explicit_network_gate(self):
         self.assertEqual(self.probe(confirm_network=False).get_json()['error_code'],'INVALID_CREDENTIAL_TEST')

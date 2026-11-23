@@ -22,20 +22,50 @@ class VideoScoreStartTests(unittest.TestCase):
         self.root=Path(temporary.name)
         self.video=self.root/'sample.mp4';self.video.write_bytes(b'\x00\x00\x00\x18ftypisom'+b'fictional-video'*20)
 
-    def test_four_shortcuts_preserve_old_defaults_and_new_video_enables_web_score(self):
-        for name in ('启动视频演示系统.cmd','启动QQ视频演示系统.cmd'):
-            text=(ROOT/'scripts/dev'/name).read_text(encoding='utf8')
-            self.assertIn('if not exist',text);self.assertIn('sample.mp4',text)
-            self.assertIn('-DemoVideo',text);self.assertIn('-ScoreTrial',text)
-            self.assertIn('-EventTrial',text)
-            self.assertIn('-InteractiveScenario',text);self.assertNotIn('-NoAssistant',text)
-        for name in ('启动演示系统.cmd','启动QQ演示系统.cmd'):
-            text=(ROOT/'scripts/dev'/name).read_text(encoding='utf8')
-            self.assertNotIn('-DemoVideo',text);self.assertNotIn('-ScoreTrial',text)
-        self.assertIn('-EventTrial',(ROOT/'scripts/dev/启动演示系统.cmd').read_text(encoding='utf8'))
-        qq_without_web_ai=(ROOT/'scripts/dev/启动QQ演示系统.cmd').read_text(encoding='utf8')
-        self.assertIn('-NoAssistant',qq_without_web_ai)
-        self.assertNotIn('-EventTrial',qq_without_web_ai)
+    def test_daily_local_shortcuts_launch_with_optional_video_and_web_tools(self):
+        scripts = self.root / 'scripts/dev'
+        scripts.mkdir(parents=True)
+        launchers = ('启动演示系统.cmd', '启动QQ演示系统.cmd')
+        self.assertEqual({path.name for path in (ROOT / 'scripts/dev').glob('启动*演示系统.cmd')},
+                         {*launchers, '启动QQ板端视频演示系统.cmd'})
+        for name in launchers:
+            shutil.copyfile(ROOT / 'scripts/dev' / name, scripts / name)
+        stub = ('param($DataRoot,$Request,$DemoVideo,[switch]$InteractiveMode,[switch]$AutoDeviceReports,'
+                '[switch]$ShowTerminals,[switch]$WithBot,[switch]$InteractiveScenario,[switch]$OpenBrowser,'
+                '[switch]$Detach,[switch]$ScoreTrial,[switch]$EventTrial,[switch]$NoAssistant)\n'
+                '[Console]::OutputEncoding=[Text.Encoding]::UTF8\n'
+                'ConvertTo-Json -Compress -InputObject $PSBoundParameters\n')
+        for script in ('run_local.ps1', 'Start-ManagementStack.ps1'):
+            (scripts / script).write_text(stub, encoding='ascii')
+        explicit = self.root / '自选录像 test!.mp4'
+        explicit.write_bytes(self.video.read_bytes())
+        directory = self.root / 'folder.mp4'
+        directory.mkdir()
+        for source, expected in ((None, self.video), (explicit, explicit), (directory, None),
+                                 (self.root / 'missing.mp4', None), (None, None)):
+            if source is None and expected is None:
+                self.video.unlink()
+            for name in launchers:
+                with self.subTest(launcher=name, source=source, expected=expected):
+                    result = subprocess.run(['cmd.exe', '/d', '/c', name, *([str(source)] if source else [])],
+                                            cwd=scripts, input=b'', capture_output=True, timeout=15)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    flags = json.loads(result.stdout.splitlines()[-1])
+                    for name_of_flag in ('InteractiveMode','AutoDeviceReports','ScoreTrial','EventTrial','InteractiveScenario','OpenBrowser'):
+                        self.assertTrue(flags[name_of_flag]['IsPresent'])
+                    self.assertNotIn('NoAssistant', flags)
+                    if name == launchers[1]:
+                        self.assertTrue(flags['WithBot']['IsPresent'])
+                        self.assertEqual(Path(flags['Request']).resolve(),
+                                         self.root / 'outputs/qq-m3-real-config/request.json')
+                    else:
+                        self.assertTrue(flags['Detach']['IsPresent'])
+                        self.assertEqual(Path(flags['DataRoot']).resolve(),
+                                         self.root / 'outputs/qq-m3-real-test')
+                    if expected is None:
+                        self.assertFalse(flags.get('DemoVideo'))
+                    else:
+                        self.assertEqual(Path(flags['DemoVideo']).resolve(), expected)
 
     def test_stack_forwards_video_and_score_without_starting_services(self):
         with patch.object(stack,'launch_stack',return_value=0) as launch:
@@ -71,7 +101,7 @@ class VideoScoreStartTests(unittest.TestCase):
             run.assert_called_once_with('apps.management_web.board_video_entry', run_name='__main__', alter_sys=True)
             self.assertEqual(sys.argv, ['apps.management_web.board_video_entry', *args])
 
-    def test_fifth_shortcut_asks_for_the_current_board_address_and_launches_the_qq_stack(self):
+    def test_board_shortcut_asks_for_the_current_board_address_and_launches_the_qq_stack(self):
         scripts=self.root/'scripts/dev'
         scripts.mkdir(parents=True)
         name='启动QQ板端视频演示系统.cmd'

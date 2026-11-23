@@ -6,7 +6,7 @@
 
 安装依赖后显式执行 `Initialize-Management.ps1`，新建 `outputs/qq-m3-real-test`，带31条项目背景资料和空监测历史。两终端、三终端及视频版本共用此实例。没有QQ配置或密钥也能使用Web、Simulator、本地视频和知识页面。
 
-后续 QQ 在网页“系统设置 → QQ机器人”给同库新增配置。旧 `prepare-demo` 保留给独立测试。旧 `local-demo`、`demo-instance`、`--user-data` 都不在五个日常 cmd 的默认路径中。
+后续 QQ 在网页“系统设置 → QQ机器人”给同库新增配置。旧 `prepare-demo`、`local-demo`、`demo-instance`、`--user-data` 可供独立测试。三个日常 cmd 共用同一显式初始化的实例。
 
 | 位置 | 保存内容 |
 |---|---|
