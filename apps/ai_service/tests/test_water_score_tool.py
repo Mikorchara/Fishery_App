@@ -15,6 +15,8 @@ from apps.ai_backend.openai_compatible_adapter import OpenAICompatibleAdapter
 from apps.ai_backend.tool_conversation import ToolModelTransport
 from apps.ai_service.service import ManagementAssistantService
 from apps.ai_service.score_execution import load_score_config,SCORE_TOOL_NAMES
+from apps.ai_service.business_tools.current_water_quality import CURRENT_WATER_QUALITY as WATER
+from apps.ai_service.business_tools.registry import RESULT_INSTRUCTIONS
 from apps.ai_service.business_tools.water_quality_score import score_payload,WATER_QUALITY_SCORE as SCORE,valid_evaluation
 from apps.ai_service.runtime import assistant,sources
 from apps.knowledge.tests.support import reference_knowledge
@@ -80,7 +82,7 @@ class WaterScoreTests(unittest.TestCase):
         for key,value in [('score',100),('grade','GOOD'),('scoring_version','unknown')]:
             changed={**result,key:value};self.assertFalse(valid_evaluation(changed))
 
-    def configure(self,enabled=True):
+    def configure(self,enabled=True,*,selection=(SCORE,)):
         self.profile=assistant.assistant_profile('dashscope-qwen38-flash-r1')
         self.sdk=FakeSDK([],model=self.profile.model)
         self.backend=ManagementAssistantService(self.monitoring,knowledge=reference_knowledge(),
@@ -92,7 +94,7 @@ class WaterScoreTests(unittest.TestCase):
         self.headers={'X-Management-AI':self.web.browser_token}
         cfg=self.client.get('/api/ai/tool-policy').get_json()
         response=self.client.post('/api/ai/tool-policy',json={'epoch':cfg['epoch'],'revision':cfg['revision'],
-            'selected_tools':[SCORE]},headers=self.headers)
+            'selected_tools':list(selection)},headers=self.headers)
         self.assertEqual(response.status_code,200)
 
     def request(self,streaming=False,**overrides):
@@ -129,6 +131,58 @@ class WaterScoreTests(unittest.TestCase):
                     self.assertEqual(len(self.sdk.bodies),2)
                     self.assertEqual([d['function']['name'] for d in self.sdk.bodies[0]['tools']],[SCORE])
                     self.assertTrue(all(c.closed and (not c.stream or c.stream.closed) for c in self.sdk.clients))
+
+    def test_current_water_and_score_guidance_follows_its_own_tool_result(self):
+        self.observe(oxygen=4.2)
+        self.configure(selection=(WATER, SCORE))
+        self.sdk = FakeSDK([
+            sdk_tool(WATER, 'water', '{}', self.profile.model),
+            sdk_tool(SCORE, 'score', '{}', self.profile.model),
+            sdk_final('实验结果，请按限制解读。', model=self.profile.model),
+        ], model=self.profile.model)
+        captured = []
+        send = assistant.AssistantService.send
+
+        def collect(service, *args, **kwargs):
+            result = send(service, *args, **kwargs)
+            captured.append(result)
+            return result
+
+        with patch.object(assistant.AssistantService, 'send', collect):
+            response = self.client.post('/api/ai/messages', headers=self.headers,
+                json=self.request(question='请先查当前溶解氧，再给当前水质实验评分。'))
+            self.assertEqual(response.status_code, 200)
+            result = response.get_json()['result']
+            response.close()
+        self.assertTrue(result['successful_turn'], result)
+
+        initial, after_water, after_score = self.sdk.bodies
+        base = assistant.MULTI_ROUND_SYSTEM_INSTRUCTION
+        water_guidance = RESULT_INSTRUCTIONS[WATER]
+        score_guidance = RESULT_INSTRUCTIONS[SCORE]
+        self.assertIn('observed_at 是观测时间，勿以 last_reported_at 或 evaluated_at 代替。', water_guidance)
+        self.assertIn('首句直接说明本轮能否评分。有评分时使用 score 与 grade_label 原值。', score_guidance)
+        self.assertIn('\n若被问加权分与总分为什么不同且确有封顶', score_guidance)
+        self.assertIn('回答依据时将 source_kind、device_id 与 water_quality.observed_at 放在同一句', score_guidance)
+        water_system = f'{base}\n\nTool result guidance ({WATER}):\n{water_guidance}'
+        score_system = f'{water_system}\n\nTool result guidance ({SCORE}):\n{score_guidance}'
+        self.assertEqual(initial['messages'][0], {'role': 'system', 'content': base})
+        self.assertEqual(after_water['messages'][0], {'role': 'system', 'content': water_system})
+        self.assertEqual(after_score['messages'][0], {'role': 'system', 'content': score_system})
+        self.assertEqual(initial['tools'], after_water['tools'])
+        self.assertEqual(initial['tools'], after_score['tools'])
+
+        messages = [item for item in after_score['messages'] if item['role'] == 'tool']
+        self.assertEqual([item['tool_call_id'] for item in messages], ['water', 'score'])
+        water, score = (json.loads(item['content']) for item in messages)
+        self.assertEqual(water['water_quality']['dissolved_oxygen_mg_l'], 4.2)
+        self.assertEqual((water['device_id'], score['device_id']), ('pond-a', 'pond-a'))
+        self.assertEqual((score['weighted_score'], score['score_cap'], score['score']), (80, 79, 79))
+        water_receipt, score_receipt = (entry.receipt for entry in captured[0].source_ledger.entries)
+        self.assertTrue(water_receipt.observation_query_completed)
+        self.assertTrue(score_receipt.score_evaluation_completed)
+        self.assertTrue(score_receipt.has_score)
+        self.assertTrue(all(client.closed for client in self.sdk.clients))
 
     def test_opt_in_policy_confirmation_scope_and_revision_guards(self):
         self.observe();self.configure(False)

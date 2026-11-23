@@ -105,7 +105,7 @@
     "history": "qq-hybrid-history@1",
     "commit": "API_ACCEPTED_SAFE_TEXT_CAS@1",
     "implementation": {
-      "ai_service/business_tools/current_water_quality.py": "00ec4823d18999e08de5f86ef41fe7dbe94f781814aadff0a0fbeba24958b19f",
+      "ai_service/business_tools/current_water_quality.py": "f1b31161109da344191b0eafd4b102680ef9cf9cbd7555a12370aa5ee7c588fa",
       "ai_service/business_tools/registry.py": "492976534bd72c7b073f6b3188fb68835ff547c123b8411144e09d3be85033ea",
       "ai_service/channel.py": "5105132b9dcfec2aa8e8a70ef66ffa0ebdb74e6a1c87506a70d86b9f3bccd716",
       "ai_service/channel_chat_presentation.py": "98d5581cf8211fd011cd95ee37ceed4797a439100aa1f0196e4d12a4ccb41fd3",
@@ -199,7 +199,7 @@
       "apps/monitoring/event_reset.py": "0e97bbfc12a44ffbd3619b562f9597a9e2c1dbf0861bbb27cbf27a79bae897d7"
     }
   },
-  "scope_sha256": "8a3e051cb250321fa3e76e30f2bd516d2f678daf93feab87c05b5b0978cb1af2",
+  "scope_sha256": "35168662ab662f44139f56b79e96578be660b7c516a988c866bfbf0c463e18aa",
   "old_approvals_accepted": false,
   "real_execution_requires": "CURRENT_PROCESS_OPERATOR_RUNCONSENT"
 }

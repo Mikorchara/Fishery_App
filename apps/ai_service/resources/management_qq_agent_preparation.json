@@ -38,7 +38,7 @@
         "score_current_water_quality",
         "get_active_events"
       ],
-      "tool_definitions_sha256": "0efc3f6b0c0e55450bb612c289352e1f2cfcd75ef6a33c3869e92dbcb9475567"
+      "tool_definitions_sha256": "5ee1f6cffbd3fd9b78693c0ef9aca5e1257d503d8fc963dd832edd0e73f3a77b"
     },
     "sdk": {
       "adapter": "apps.ai_backend.openai_compatible_adapter.OpenAICompatibleAdapter",
@@ -102,8 +102,8 @@
     "history": "qq-hybrid-history@1",
     "commit": "API_ACCEPTED_SAFE_TEXT_CAS@1",
     "implementation": {
-      "ai_service/business_tools/current_water_quality.py": "00ec4823d18999e08de5f86ef41fe7dbe94f781814aadff0a0fbeba24958b19f",
-      "ai_service/business_tools/registry.py": "fc5d77191b5249037cfb09d80bf1369083d0f2e2bf0ee435c82b4f348f3b61dc",
+      "ai_service/business_tools/current_water_quality.py": "f1b31161109da344191b0eafd4b102680ef9cf9cbd7555a12370aa5ee7c588fa",
+      "ai_service/business_tools/registry.py": "492976534bd72c7b073f6b3188fb68835ff547c123b8411144e09d3be85033ea",
       "ai_service/channel.py": "5105132b9dcfec2aa8e8a70ef66ffa0ebdb74e6a1c87506a70d86b9f3bccd716",
       "ai_service/channel_chat_presentation.py": "98d5581cf8211fd011cd95ee37ceed4797a439100aa1f0196e4d12a4ccb41fd3",
       "ai_service/channel_conversation.py": "9fff8f9fc66bbe9733fe034ae15877b3ca1054318c3ec3a0da2709343a3392be",
@@ -121,7 +121,7 @@
       "ai_service/runtime/assistant.py": "5011bec66ce933abd1e7435ac66fbef94b1dee0131d5689ac817cee61547cdd0",
       "ai_service/runtime/resources/presets.json": "30aa3ce86c42ffaf6e50adee6fbe3e3ab44cc5dccd2adfef7dd4d4d4207fce19",
       "ai_service/runtime/sources.py": "3e8cfbd0526c044c4c76de187ac49cee82b0b3d89ec4e3ceacfb532910052f9a",
-      "ai_service/service.py": "3178a92548e35cf0b430c860d4c10b6114e7c9df97d1e62b001adc453982ec80",
+      "ai_service/service.py": "cdb443be9a65f764e8c07f4c6c518485b50d10ccd3494279b0d691eb43be5ec7",
       "qq_bot/__init__.py": "6ce26d450305863fa4bb3681c707c6d11b09b039ae28f4bc31c49d4a890664dc",
       "qq_bot/__main__.py": "4af4fdf3c9709c5459c3632be53094cff5bbd9ea0060e72d869fc726539ba78d",
       "qq_bot/adapter.py": "1a6057beab784dee3e95861d27544c6615b1591444b1b877dfd4e52ede43fcf6",
@@ -201,19 +201,20 @@
       "apps/ai_service/channel_natural_presentation.py": "cbdd8a6cf6dc7a7c4d268163d0ba9174b501b5b163d50b4246c9225141c69cfd",
       "apps/ai_service/qq_settings.py": "e42e99006abce969aa97315b528091781449d41ee4edc8b494cbf58affb57a8b",
       "apps/qq_bot/management_configuration_bridge.py": "343e4e9361f7df778f84c2d7477957e89ce8bacd024cf17d3892d9f6c4be89ca",
-      "apps/ai_service/channel_management_agent.py": "1e782e890b8a02f3e303ec8bd07ce4759e0a5d5038ede64c4dd79402984d2f67",
+      "apps/ai_service/channel_management_agent.py": "9a21fb6994e6ddf50e993d4871eec0f59006da8f949d937fc532ef853d10af44",
       "apps/ai_service/channel_agent_presentation.py": "2dfc62f950f620afc51f82d2b75864f4ab992e20992ef09baac9edb94bf726f2",
       "apps/ai_backend/tool_conversation.py": "89daef0baabe8ea27c344c5c2f52a17b9d8c80a0ebdc9b26573fb54b69bde006",
       "apps/ai_backend/tools/contracts.py": "cdd4ab78e875594f78a11897b3a3033dc01924393d02054069625e7cdd79af68",
       "apps/ai_service/runtime/assistant.py": "5011bec66ce933abd1e7435ac66fbef94b1dee0131d5689ac817cee61547cdd0",
       "apps/ai_service/runtime/sources.py": "3e8cfbd0526c044c4c76de187ac49cee82b0b3d89ec4e3ceacfb532910052f9a",
-      "apps/ai_service/business_tools/registry.py": "fc5d77191b5249037cfb09d80bf1369083d0f2e2bf0ee435c82b4f348f3b61dc",
-      "apps/ai_service/business_tools/fishery_knowledge.py": "a495741c6deec8f1ba24c7794c73cd62642314854302d64b01b8d9d5298fa370",
+      "apps/ai_service/business_tools/registry.py": "492976534bd72c7b073f6b3188fb68835ff547c123b8411144e09d3be85033ea",
+      "apps/ai_service/business_tools/fishery_knowledge.py": "a704f2990c6e6cd662b0dd2d50009831e55bd06d04a2a0129806793878379116",
       "apps/ai_service/business_tools/water_quality_history.py": "d2d20edbf3754d9364f7a3962de259c7293d4f44bbcfaa90022467db4495d6c7",
-      "apps/ai_service/business_tools/water_quality_score.py": "c564ecc53d03d2a78afffb447b9f8525b9548f3c7960d32a4eaa7953746f4247",
+      "apps/ai_service/business_tools/water_quality_score.py": "164beff120aa7b008f5d6abe9eefc9e0c28ab7473d46de15ed87033275bfba85",
       "apps/knowledge/repository.py": "2b51beff434554f75dbc9ccc802faf3687063ced8f6bde9aaf760f9184cad901",
-      "apps/knowledge/service.py": "45884c53c84e80d5812661b8c00f9a63f1db25184b007c33eb7b1fc6ca414340",
+      "apps/knowledge/service.py": "28bd123ca2f6b44d866dcbf866baf397cd5c8401cebea9e71df269ed6518095c",
       "apps/knowledge/retrieval.py": "9af252ebc773748c32dfacf2687bae55fa81a9466b9b8dc3b31628474d974a1a",
+      "apps/knowledge/curated_retrieval.py": "61e4ea96336d1e039322eb46e7dbb6b2fe221c5114d2757db6aae16e8ce031b4",
       "apps/qq_bot/knowledge_source.py": "d3ae9951fa523ba1d359f8929302ea7c5621d7ade126869a48b2e16e00e492f0",
       "apps/qq_bot/agent_conversations.py": "91ee652bc35e7f68d72fa9b01c310f64645c7d7575b8aa3c76472c564ed94743",
       "apps/ai_service/active_event_execution.py": "d69a27a85736e323cd25530d18720960c217c067b3b013750159854d576b038f",
@@ -235,7 +236,7 @@
       "instance": "EXPLICIT_READ_ONLY_SAME_INSTANCE"
     }
   },
-  "scope_sha256": "a49dc4d783fc43a8b6c063e0528181c125c34f4978d9fab8ab86ff7c7e42977a",
+  "scope_sha256": "34fd6b14aed0c53fa445f0c9d37288c1dc82a63610df790e0e69f32af2bf6e99",
   "old_approvals_accepted": false,
   "real_execution_requires": "CURRENT_PROCESS_WEB_AGENT_OPERATOR_CONSENT"
 }

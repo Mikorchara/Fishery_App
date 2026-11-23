@@ -35,7 +35,7 @@
             "get_current_water_quality",
             "search_fishery_knowledge"
           ],
-          "tool_definitions_sha256": "03505fc6178d60f0e67ad2c6112f58f1582c8ff5e119f839f18a377f98c710d8"
+          "tool_definitions_sha256": "d0d0557c8ceb6c0051d58b0a487e83c00af0ecfb433633864acc3cbbdfc4576a"
         },
         "data_bindings": {
           "water": "management-current-water@1",
@@ -81,7 +81,7 @@
             "get_current_water_quality",
             "search_fishery_knowledge"
           ],
-          "tool_definitions_sha256": "03505fc6178d60f0e67ad2c6112f58f1582c8ff5e119f839f18a377f98c710d8"
+          "tool_definitions_sha256": "d0d0557c8ceb6c0051d58b0a487e83c00af0ecfb433633864acc3cbbdfc4576a"
         },
         "data_bindings": {
           "water": "management-current-water@1",

@@ -15,10 +15,12 @@ WATER_DEFINITION = ModelToolDefinition(
     parameters={"type": "object", "properties": {}, "additionalProperties": False},
 )
 RESULT_INSTRUCTION = (
-    "用 water_quality 的实际读数和 metrics 的单位，注明 source_kind、device_id 和 observed_at。"
-    "区分观测时间、last_reported_at 上报时间与 evaluated_at 评估时间。"
-    "NO_DATA 表示暂无观测。对缺测、无效、不完整、过期或离线如实说明。"
-    "水质告警只按 findings 的实际状态报告。HIT 表示规则命中，证据不足或未评估的指标无法判断。"
+    "先回答所问指标。取 water_quality 的对应值、metrics 的单位和单项质量，注明来源、设备和观测时间（带时区）。"
+    "observed_at 是观测时间，勿以 last_reported_at 或 evaluated_at 代替。"
+    "NO_DATA 表示暂无观测。缺测、无效、过期或离线导致无法核实当前值时，先说明限制；"
+    "过期读数按旧观测标明时间，勿用对话中的旧值补足。部分有效时只报告可用指标并说明缺口。"
+    "告警按对应 findings 状态。HIT 是规则命中，CLEAR 是未命中该规则，证据不足或未评估则无法判断。"
+    "追问原因时说明规则用了什么观测；依据未提供实际成因时直说无法确定。"
 )
 
 

@@ -23,10 +23,17 @@ SCORE_DEFINITION = ModelToolDefinition(name=WATER_QUALITY_SCORE,
         'NO_DATA为没有观测。评分由程序计算，不允许模型自创分数或阈值；必须说明来源、时间和非专业标准。'),
     parameters={'type':'object','properties':{},'additionalProperties':False})
 RESULT_INSTRUCTION = (
-    "有评分时使用程序返回的 score、grade_label 和相关 components，必要时交代 score_cap。"
-    "说明该实验评分为非专业标准，并注明实际来源、设备与水质观测时间。"
-    "NOT_SCORABLE 时按 unscorable_reasons 说明原因。NO_DATA 时说明缺少观测。"
-    "只引用已有分数与等级，保留 limitation 中与问题有关的限制。"
+    "首句直接说明本轮能否评分。有评分时使用 score 与 grade_label 原值。"
+    "用相关 components 或命中的规则解释主要影响项；若 score_cap 实际限制了总分，"
+    "区分 weighted_score 加权分与 score 最终分，只引用程序已给出的分数、等级和上限。"
+    "NOT_SCORABLE 时明确当前不可评分，依据 unscorable_reasons 解释原因，"
+    "过期观测可与设备在线并存，不把旧观测当作当前依据，也不估算分数或等级。"
+    "NO_DATA 时说明本轮没有观测。存在观测时，根据实际字段交代来源、设备和观测时间，"
+    "说明评分仅是本窗口已评估水质规则的实验汇总，为非专业标准。\n"
+    "若被问加权分与总分为什么不同且确有封顶，按顺序说明加权分、触发封顶的最严重分项及其命中规则、"
+    "程序上限与最终分。components 的最严重 level 决定上限；rule_codes 相应规则用于说明具体风险。"
+    "回答依据时将 source_kind、device_id 与 water_quality.observed_at 放在同一句，"
+    "观测时间不使用 evaluated_at；数据过期时仍用设备标识说明是哪次旧观测。"
 )
 
 

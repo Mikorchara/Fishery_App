@@ -103,7 +103,7 @@
     "history": "qq-hybrid-history@1",
     "commit": "API_ACCEPTED_SAFE_TEXT_CAS@1",
     "implementation": {
-      "ai_service/business_tools/current_water_quality.py": "00ec4823d18999e08de5f86ef41fe7dbe94f781814aadff0a0fbeba24958b19f",
+      "ai_service/business_tools/current_water_quality.py": "f1b31161109da344191b0eafd4b102680ef9cf9cbd7555a12370aa5ee7c588fa",
       "ai_service/business_tools/registry.py": "492976534bd72c7b073f6b3188fb68835ff547c123b8411144e09d3be85033ea",
       "ai_service/channel.py": "5105132b9dcfec2aa8e8a70ef66ffa0ebdb74e6a1c87506a70d86b9f3bccd716",
       "ai_service/channel_chat_presentation.py": "98d5581cf8211fd011cd95ee37ceed4797a439100aa1f0196e4d12a4ccb41fd3",
@@ -169,7 +169,7 @@
     "deployment": "fishery-management",
     "publication": "FAKE_GATEWAY_ONLY_NO_REAL_GENERAL_APPROVAL"
   },
-  "scope_sha256": "8f3afb5cc44f08fa53951d97f92cc19c6e351274d4c6606295b4e2288853fabf",
+  "scope_sha256": "c18608279ea1b8aa0774ff20c91930baab2342b34ece9f65522a046eb7e7cce3",
   "qualification_id": null,
   "can_execute_real": false,
   "can_deliver_real": false
