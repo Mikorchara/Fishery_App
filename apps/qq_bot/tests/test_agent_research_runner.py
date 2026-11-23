@@ -13,7 +13,7 @@ from openai import AsyncOpenAI
 from apps.ai_backend.credentials import CredentialStore
 from apps.qq_bot.management_config import ROOT
 from scripts.dev import check_qq_agent as driver
-from scripts.dev.qq_agent_cases import CASES, CURRENT, HISTORY, KNOWLEDGE, SCORE
+from scripts.dev.qq_agent_cases import CASES, CURRENT, HISTORY, KNOWLEDGE, RAG_CASES, SCORE
 
 
 class AgentResearchRunnerTests(unittest.TestCase):
@@ -51,9 +51,13 @@ class AgentResearchRunnerTests(unittest.TestCase):
             body=json.loads(request.content)
             self.http.append(body)
             question=next(m['content'] for m in reversed(body['messages']) if m['role']=='user')
-            case=next(c for c in CASES if c.question==question or c.question in question)
+            case=next(c for c in (*CASES, *RAG_CASES) if c.question==question or c.question in question)
             if self.mode=='timeout' and case.id=='C01':
                 raise httpx.ReadTimeout('synthetic timeout',request=request)
+            if self.mode == 'auth_rejected' and case.id == 'R01':
+                return httpx.Response(401, json={'error': {
+                    'message': 'Synthetic authorization refusal', 'code': 'invalid_api_key',
+                }})
             requested=self.factory_plans.get(case.id,())
             observed=[m for m in body['messages'] if m['role']=='tool']
             if len(observed)<len(requested):
@@ -108,6 +112,32 @@ class AgentResearchRunnerTests(unittest.TestCase):
                     contextlib.redirect_stdout(io.StringIO()):
                 with self.assertRaisesRegex(SystemExit,code):driver.main(args)
         self.assertEqual(self.http,[])
+
+    def test_rag_suite_preflights_offline_and_reuses_real_tool_handlers(self):
+        with patch('sqlite3.connect', side_effect=AssertionError('DB forbidden')), \
+                patch.object(CredentialStore, 'status', side_effect=AssertionError('key forbidden')), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(driver.main(['--check', '--suite', 'rag']), 0)
+        plan = json.loads(output.getvalue())['plan']
+        self.assertEqual(plan['case_ids'], ['R01', 'R02', 'R03', 'R04', 'R05', 'R06'])
+        self.assertEqual(plan['max_model_requests'], 18)
+        self.assertEqual(plan['curated_knowledge']['version'], 'eel-oxygen-feeding@2')
+        self.assertNotIn('curated_knowledge', driver.build_plan(['K01']))
+
+        # The first tool call rewrites the measurement on purpose. The actual
+        # structured result must still follow the user's 7.26 mg/L question.
+        wrong_query = (KNOWLEDGE, {'query': '日本鳗鲡溶解氧 2.11 mg/L 摄食率'})
+        self.factory_plans['R01'] = (wrong_query,)
+        self.factory_plans['R06'] = (wrong_query, (HISTORY, {'lookback_minutes': 30}))
+        report = self.execute(['R01', 'R06'])
+        self.assertTrue(report['completed'], report['code'])
+        self.assertEqual([row['tool_names'] for row in report['cases']], [[KNOWLEDGE], [KNOWLEDGE, HISTORY]])
+        self.assertTrue(all(row['expected_tool_match'] and row['publication_allowed'] for row in report['cases']))
+        self.assertFalse(report['provider_network_attempted'])
+        self.assertEqual(report['qq_network_requests'], 0)
+        exact = json.loads((self.directory / 'case-1-R01.json').read_text(encoding='utf8'))
+        self.assertIn('7.26 mg/L', exact['safe_reply'])
+        self.assertIn('12.4%', exact['safe_reply'])
 
     def test_tampered_plan_invalid_budget_or_repetition_reject_before_fixture(self):
         plan=driver.build_plan(['G01'])
@@ -229,6 +259,35 @@ class AgentResearchRunnerTests(unittest.TestCase):
         self.assertTrue(second['publication_allowed'])
         self.assertEqual(report['summary']['actual_model_http_requests'],2)
         self.assertFalse(report['automatic_retry'])
+
+    def test_provider_401_stops_batch_without_counting_tool_mismatch(self):
+        self.mode = 'auth_rejected'
+        report = self.execute(['R01', 'R02'])
+
+        self.assertEqual(report['code'], 'PROVIDER_AUTHENTICATION_REJECTED')
+        self.assertFalse(report['completed'])
+        self.assertTrue(report['report_saved'])
+        self.assertTrue(report['ram_cleared'])
+        self.assertEqual(len(self.http), 1)
+        self.assertEqual([row['case_id'] for row in report['cases']], ['R01'])
+        row = report['cases'][0]
+        self.assertEqual(row['code'], 'HTTP_401')
+        self.assertTrue(row['provider_auth_rejected'])
+        self.assertIsNone(row['expected_tool_match'])
+        self.assertEqual(row['tool_executions'], 0)
+        self.assertEqual(row['sdk_resources']['state'], 'CLOSED')
+        self.assertTrue(row['sdk_resources']['thread_exited'])
+        self.assertFalse(row['local_history_committed'])
+        summary = report['summary']
+        self.assertEqual(summary['actual_model_http_requests'], 1)
+        self.assertEqual(summary['provider_auth_rejected_cases'], 1)
+        self.assertEqual(summary['model_executed'], 0)
+        self.assertEqual(summary['model_expected_tool_mismatch'], 0)
+        self.assertEqual(summary['expected_tool_mismatch'], 0)
+        self.assertEqual(summary['admission_not_model_evaluated'], 0)
+        self.assertTrue((self.directory / 'case-1-R01.json').is_file())
+        self.assertFalse((self.directory / 'case-1-R02.json').exists())
+        self.assertTrue((self.directory / 'result.json').is_file())
 
     def test_required_case_checkpoint_failure_stops_without_losing_usage_or_repeating(self):
         original=driver._private

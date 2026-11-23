@@ -8,8 +8,9 @@ import unittest
 from unittest.mock import patch
 
 from apps.qq_bot.management_config import ROOT, MARKER
-from scripts.dev.qq_agent_cases import (CASES, CATEGORIES, SCENARIOS, CURRENT, HISTORY,
-    KNOWLEDGE, SCORE, ABSENT_KNOWLEDGE_QUERY, create_fixture, refresh_fixture, validate_case_library)
+from scripts.dev.qq_agent_cases import (CASES, CATEGORIES, CURRENT, CURATED_OXYGEN_SCENARIO,
+    HISTORY, KNOWLEDGE, RAG_CASES, SCORE, ABSENT_KNOWLEDGE_QUERY, SCENARIOS, create_fixture,
+    refresh_fixture, validate_case_library)
 
 
 class AgentResearchCaseTests(unittest.TestCase):
@@ -30,7 +31,7 @@ class AgentResearchCaseTests(unittest.TestCase):
         self.assertEqual(len(CASES),44)
         self.assertEqual(len({c.id for c in CASES}),44)
         self.assertEqual(set(c.category for c in CASES),set(CATEGORIES))
-        self.assertEqual(set(c.scenario for c in CASES),set(SCENARIOS))
+        self.assertEqual(set(c.scenario for c in CASES),set(SCENARIOS)-{CURATED_OXYGEN_SCENARIO})
         self.assertEqual(validate_case_library(),CASES)
         memory=[c for c in CASES if c.conversation_id]
         self.assertEqual([c.turn for c in memory],[1,2,3,4,5])
@@ -51,6 +52,35 @@ class AgentResearchCaseTests(unittest.TestCase):
         self.assertIsNone(cases['A01'].tool_choice_matches(()))
         self.assertEqual(cases['K01'].required_tools,(KNOWLEDGE,))
 
+    def test_opt_in_rag_cases_use_curated_papers_with_separate_simulated_history(self):
+        from apps.ai_service.business_tools.fishery_knowledge import search_fishery_knowledge
+        from apps.knowledge.repository import KnowledgeRepository
+        from apps.knowledge.service import KnowledgeContentService
+
+        self.assertEqual([case.id for case in RAG_CASES], ['R01', 'R02', 'R03', 'R04', 'R05', 'R06'])
+        self.assertEqual(validate_case_library(CASES + RAG_CASES), CASES + RAG_CASES)
+        self.assertTrue(all(case.scenario == CURATED_OXYGEN_SCENARIO for case in RAG_CASES))
+        self.assertTrue(all(case.tool_choice_matches((KNOWLEDGE,)) for case in RAG_CASES[:-1]))
+        self.assertTrue(RAG_CASES[-1].tool_choice_matches((HISTORY, KNOWLEDGE)))
+        fixture = self.fixture(CURATED_OXYGEN_SCENARIO)
+        knowledge = KnowledgeContentService(KnowledgeRepository(fixture.root/'knowledge.sqlite3', read_only=True))
+        self.assertEqual(knowledge.list()['total'], 12)
+        self.assertEqual(fixture.public()['synthetic_knowledge'], 'CURATED_OXYGEN_V2_LITERATURE_AND_NO_USER_DATA')
+        expected = (('EXACT', '12.4%'), ('PARTIAL', '14.1%'), ('NO_MATCH', ''),
+                    ('NO_MATCH', ''), ('EXACT', '3.76%'), (None, '8.9%'))
+        for case, (coverage, value) in zip(RAG_CASES, expected, strict=True):
+            with self.subTest(case=case.id):
+                result = search_fishery_knowledge({'query': case.question}, service=knowledge, question=case.question)
+                self.assertEqual(result.get('curated_oxygen', {}).get('coverage'), coverage)
+                if value:
+                    self.assertTrue(any(value in item['text'] for item in result['evidence']))
+                else:
+                    self.assertEqual(result['evidence'], [])
+        history = fixture.service.query_water_history('sim-pond-1', lookback_minutes=30)
+        self.assertEqual(history['status'], 'OK')
+        self.assertEqual(history['counts']['matching_windows'], 30)
+        self.assertEqual(fixture.public()['source'], 'SIMULATOR')
+
     def test_five_scenarios_are_assessed_by_real_monitoring_domain(self):
         expected={
             'fresh':('valid','fresh','online'),
@@ -58,7 +88,7 @@ class AgentResearchCaseTests(unittest.TestCase):
             'stale':('valid','stale','offline'),
             'low_oxygen':('valid','fresh','online'),
             'no_data':('missing','unknown','never_received')}
-        for scenario in SCENARIOS:
+        for scenario in expected:
             with self.subTest(scenario=scenario):
                 fixture=self.fixture(scenario)
                 oracle=fixture.current_oracle();dq=oracle['data_quality']

@@ -108,6 +108,41 @@ class ManagementAgentTests(unittest.TestCase):
                             and '2.11' in evidence['text'] for evidence in data['evidence']))
         self.assertEqual(path.read_bytes(), before)
 
+    def test_curated_reply_and_history_use_published_evidence(self):
+        from apps.knowledge.initial import initialize_curated_knowledge
+
+        path = self.root / 'instance' / 'knowledge.sqlite3'
+        path.rename(path.with_name('offline-legacy-fixture.sqlite3'))
+        initialize_curated_knowledge(path)
+        before = path.read_bytes()
+        self.compose(failure_feedback=True)
+        self.general_text = '已经检索项目资料，整个区间的实验摄食率都是 95%。'
+        cases = (
+            ('2.11 mg/L', ('2.11 mg/L', '8.9%', '10.2331/suisan.49.1335')),
+            ('1–3 mg/L', ('2.11', '2.94', '8.9%', '12.8%', '不能据此推断整个区间')),
+            ('9–10 mg/L', ('未找到',)),
+        )
+        for concentration, expected_parts in cases:
+            with self.subTest(concentration=concentration):
+                self.plan = (('search_fishery_knowledge', {'query': f'日本鳗鲡溶解氧 {concentration} 摄食'}),)
+                question = f'请查项目资料，日本鳗鲡在溶解氧 {concentration} 时的实验摄食率是多少？'
+                result = self.ask(question)
+                self.assertEqual(result.get('history_code'), 'HISTORY_COMMITTED', result)
+                reply = self.posts[-1]['content']
+                for part in expected_parts:
+                    self.assertIn(part, reply)
+                self.assertNotIn('95%', reply)
+                if concentration == '9–10 mg/L':
+                    self.assertIn('无合格命中', reply)
+                    self.assertNotIn('10.2331/', reply)
+
+        self.plan = ()
+        rejected = self.ask('请查项目资料，日本鳗鲡在溶解氧 9–10 mg/L 时的实验摄食率是多少？')
+        self.assertEqual(rejected['code'], 'ASSISTANT_SOURCE_REQUIREMENT_UNMET', rejected)
+        self.assertEqual(self.host.store.counts()['turns'], len(cases))
+        self.assertNotIn('95%', self.posts[-1]['content'])
+        self.assertEqual(path.read_bytes(), before)
+
     def test_current_event_question_requires_new_evidence(self):
         self.compose(failure_feedback=True)
         self.general_text='我确认没有任何异常。'

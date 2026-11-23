@@ -26,7 +26,7 @@ if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 
 from apps.ai_service.runtime.release_contracts import _hash
 from apps.qq_bot.conversations import ConversationOptions
-from scripts.dev.qq_agent_cases import CASES, create_fixture, refresh_fixture
+from scripts.dev.qq_agent_cases import CASES, CURATED_OXYGEN_SCENARIO, RAG_CASES, create_fixture, refresh_fixture
 
 CONTRACT='management-qq-agent-provider-research@1'
 HISTORY_CONTRACT='local-research-context-not-qq-delivery@1'
@@ -82,7 +82,7 @@ def _case_id(case):return case.id
 
 def _selected(ids):
     names=tuple(ids)
-    lookup={_case_id(c):c for c in CASES}
+    lookup={_case_id(c):c for c in (*CASES, *RAG_CASES)}
     if not names or len(set(names))!=len(names) or any(n not in lookup for n in names):
         raise ValueError('RESEARCH_CASES_INVALID')
     return tuple(lookup[n] for n in names)
@@ -101,7 +101,7 @@ def build_plan(cases=None, repeats=1, output_tokens=2048):
     paths=('scripts/dev/check_qq_agent.py','scripts/dev/qq_agent_cases.py')
     count=len(selected)*repeats
     reserve=((CONTEXT_RESERVATION*PRICE_INPUT+Decimal(output_tokens)*PRICE_OUTPUT)*3/Decimal(1000000))
-    return dict(contract=CONTRACT,purpose='LOCAL_PROVIDER_RESEARCH_NOT_QQ_ACCEPTANCE',
+    plan = dict(contract=CONTRACT,purpose='LOCAL_PROVIDER_RESEARCH_NOT_QQ_ACCEPTANCE',
         provider=profile.service_id,model=profile.model,preset=PRESET,prompt_id=PROMPT_ID,
         runtime_scope_sha256=_hash(scope),case_ids=[c.id for c in selected],
         case_bank_sha256=_hash([asdict(c) for c in selected]),repeats=repeats,
@@ -116,6 +116,16 @@ def build_plan(cases=None, repeats=1, output_tokens=2048):
         conservative_reservation_cny=str(reserve*count),price_status='PROJECT_STATIC_ESTIMATE_NOT_CLOUD_BILL',
         content_storage='PRIVATE_SYNTHETIC_QUESTION_SAFE_REPLY_AND_MODEL_TEXT_FOR_LOCAL_REVIEW',
         implementation={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths})
+    if any(case.scenario == CURATED_OXYGEN_SCENARIO for case in selected):
+        from importlib.resources import files
+        from apps.knowledge.initial import CURATED_KNOWLEDGE_SEED, CURATED_KNOWLEDGE_VERSION, INITIAL_RESOURCES
+
+        corpus = files('apps.knowledge').joinpath(INITIAL_RESOURCES[CURATED_KNOWLEDGE_SEED])
+        plan['curated_knowledge'] = {
+            'version': CURATED_KNOWLEDGE_VERSION,
+            'sha256': hashlib.sha256(corpus.read_bytes()).hexdigest(),
+        }
+    return plan
 
 
 def _check_plan(plan):
@@ -236,6 +246,11 @@ def _tool_match(case,tools):
     return case.tool_choice_matches(tools)
 
 
+def _provider_auth_rejected(row):
+    return row.get('code') == 'HTTP_401' or any(
+        timing.get('status_code') == 401 for timing in row.get('http_client_timings', ()))
+
+
 def _trace_facts(task):
     """Read only this synthetic run's allowlisted Trace, including failed Tool steps."""
     path=task.service.traces.path
@@ -273,21 +288,24 @@ def _commit_local(coordinator,plan,result):
 def _summary(rows):
     successful=[r for r in rows if r.get('backend_completed')]
     elapsed=sorted(r['seconds_total'] for r in rows)
-    evaluated=[r for r in rows if r.get('model_http_requests',0)>0]
+    reviewed=[r for r in rows if not _provider_auth_rejected(r)]
+    evaluated=[r for r in reviewed if r.get('model_http_requests',0)>0]
     model_elapsed=sorted(r['seconds_total'] for r in evaluated)
     def percentile(values,q):
         import math
         return values[max(0,math.ceil(len(values)*q)-1)] if len(values)>=30 else None
     counts=Counter(r.get('code','UNKNOWN') for r in rows)
     return dict(executed=len(rows),backend_completed=len(successful),
-        model_executed=len(evaluated),admission_not_model_evaluated=len(rows)-len(evaluated),
+        model_executed=len(evaluated),
+        admission_not_model_evaluated=sum(not r.get('model_http_requests',0) for r in reviewed),
+        provider_auth_rejected_cases=len(rows)-len(reviewed),
         model_expected_tool_match=sum(r.get('expected_tool_match') is True for r in evaluated),
         model_expected_tool_mismatch=sum(r.get('expected_tool_match') is False for r in evaluated),
         model_expected_tool_observational=sum(r.get('expected_tool_match') is None for r in evaluated),
         publication_allowed=sum(bool(r.get('publication_allowed')) for r in rows),
-        expected_tool_match=sum(r.get('expected_tool_match') is True for r in rows),
-        expected_tool_mismatch=sum(r.get('expected_tool_match') is False for r in rows),
-        expected_tool_observational=sum(r.get('expected_tool_match') is None for r in rows),
+        expected_tool_match=sum(r.get('expected_tool_match') is True for r in reviewed),
+        expected_tool_mismatch=sum(r.get('expected_tool_match') is False for r in reviewed),
+        expected_tool_observational=sum(r.get('expected_tool_match') is None for r in reviewed),
         semantic_review_cases=sum(bool(r.get('semantic_flags')) for r in rows),
         actual_model_requests=sum(r.get('model_requests',0) for r in rows),
         actual_model_http_requests=sum(r.get('model_http_requests',0) for r in rows),
@@ -424,6 +442,9 @@ def execute_experiment(plan,directory,*,factory=None,approval_source=None,author
                                     api_accepted=False,history_code='NO_QQ_DELIVERY'))
                         row['seconds_total']=round(time.monotonic()-started,6)
                         row['http_client_timings']=http.records[http_start:]
+                        row['provider_auth_rejected']=_provider_auth_rejected(row)
+                        if row['provider_auth_rejected']:
+                            row['expected_tool_match']=None
                         row['local_review_passed']=bool(row['publication_allowed'] and row.get('expected_tool_match') is not False)
                         rows.append(row)
                         try:_private(directory/f'case-{repeat}-{case.id}.json',dict(row,question=case.question))
@@ -435,6 +456,9 @@ def execute_experiment(plan,directory,*,factory=None,approval_source=None,author
                             expected_tool_match=row.get('expected_tool_match'),model_http_requests=row['model_http_requests'],
                             tool_executions=row['tool_executions'],seconds=row['seconds_total'])
                     if stop!='RESEARCH_COMPLETED':break
+                    if row['provider_auth_rejected']:
+                        stop='PROVIDER_AUTHENTICATION_REJECTED'
+                        break
                     # No retries. Ordinary closed failures become recorded samples;
                     # unsafe resources/ownership/scope/ledger failures stop all new I/O.
                     try:host.check()
@@ -482,7 +506,7 @@ def execute_experiment(plan,directory,*,factory=None,approval_source=None,author
 def main(argv=None):
     parser=argparse.ArgumentParser(description='当前四工具QQ Agent本机Qwen研究；默认Check，不连接QQ')
     mode=parser.add_mutually_exclusive_group();mode.add_argument('--check',action='store_true');mode.add_argument('--run',action='store_true')
-    parser.add_argument('--suite',choices=('smoke','full'),default='full')
+    parser.add_argument('--suite',choices=('smoke','full','rag'),default='full')
     parser.add_argument('--cases',type=int);parser.add_argument('--repeats',type=int,default=1)
     parser.add_argument('--case-ids');parser.add_argument('--output-tokens',type=int,default=2048)
     parser.add_argument('--operator-authorized',action='store_true')
@@ -490,6 +514,7 @@ def main(argv=None):
     args=parser.parse_args(argv)
     selected=list(CASES)
     if args.case_ids:selected=list(_selected(args.case_ids.split(',')))
+    elif args.suite=='rag':selected=list(RAG_CASES)
     elif args.suite=='smoke':
         selected=[]
         for category in ('general','current','history','knowledge','score','comparison'):

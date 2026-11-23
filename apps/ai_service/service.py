@@ -35,6 +35,7 @@ from .channel import ChannelAuthorization, ChannelAssistantResult, OfflineChanne
 from .channel_presentation import QQ_PROMPT_ID, QQ_SYSTEM_INSTRUCTION
 from .channel_conversation import ChannelHistoryAuthority, ChannelHistorySnapshot, conversation_decision, PROMPT_ID as DIALOGUE_PROMPT_ID, INSTRUCTION as DIALOGUE_INSTRUCTION
 from .business_tools.current_water_quality import CURRENT_WATER_QUALITY
+from .business_tools.fishery_knowledge import SEARCH_FISHERY_KNOWLEDGE, requires_project_lookup
 from apps.ai_backend.tool_conversation import ToolExecutionMode
 
 from .score_execution import ScoreTrialConfig,load_score_config,resolve_score_trial,SCORE_TOOL_NAMES
@@ -297,6 +298,9 @@ class ManagementAssistantService:
             turn = replace(turn,source_requirement=SourceRequirement.HISTORICAL_WATER_QUERY)
         if ACTIVE_EVENTS in policy.exposed_tools and requires_active_events(turn.question):
             turn = replace(turn, source_requirement=SourceRequirement.ACTIVE_EVENTS_QUERY)
+        if (turn.source_requirement == SourceRequirement.AUTO
+                and SEARCH_FISHERY_KNOWLEDGE in policy.exposed_tools and requires_project_lookup(turn.question)):
+            turn = replace(turn, source_requirement=SourceRequirement.PROJECT_KNOWLEDGE_SEARCH)
         if value.get("confirm_network") is not True:
             raise GatewayError("NETWORK_CONFIRMATION_REQUIRED")
         if value.get("revision") != execution.profile.revision:
@@ -474,6 +478,8 @@ class ManagementAssistantService:
     def _channel_source_requirement(self, question, tools):
         if self._channel_agent and ACTIVE_EVENTS in tools and requires_active_events(question):
             return SourceRequirement.ACTIVE_EVENTS_QUERY
+        if self._channel_agent and SEARCH_FISHERY_KNOWLEDGE in tools and requires_project_lookup(question):
+            return SourceRequirement.PROJECT_KNOWLEDGE_SEARCH
         return SourceRequirement.AUTO if self._channel_agent or self._hybrid_channel() else SourceRequirement.CURRENT_OBSERVATION_QUERY
 
     def prepare_channel_turn(self, question, authorization, *, history_snapshot=None):

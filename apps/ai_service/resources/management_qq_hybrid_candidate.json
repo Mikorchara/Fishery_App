@@ -119,10 +119,10 @@
       "ai_service/hybrid_presentation.py": "02bc2768e456ac2aa69537140eb07803e47ff436f9b582785e61bddc33a04034",
       "ai_service/hybrid_trial_presentation.py": "9a2338b359be43d356f6e7dece1f8e2cb9a06a73b9089d6a2762bc3b57177f76",
       "ai_service/management_policy.py": "d2cc3c81e48a752690b43c56e09158850c0bdb7395ab6ff93f2b5877835e5b51",
-      "ai_service/runtime/assistant.py": "5011bec66ce933abd1e7435ac66fbef94b1dee0131d5689ac817cee61547cdd0",
+      "ai_service/runtime/assistant.py": "1b32ec2754ae56468947924020bb457c9520758e17a042940c9da0ae1cac030c",
       "ai_service/runtime/resources/presets.json": "30aa3ce86c42ffaf6e50adee6fbe3e3ab44cc5dccd2adfef7dd4d4d4207fce19",
       "ai_service/runtime/sources.py": "3e8cfbd0526c044c4c76de187ac49cee82b0b3d89ec4e3ceacfb532910052f9a",
-      "ai_service/service.py": "cdb443be9a65f764e8c07f4c6c518485b50d10ccd3494279b0d691eb43be5ec7",
+      "ai_service/service.py": "815e0ed6f3f9a8c8bdbd050d8a705a8d2fe83d89aae3b370700884c2a062c46c",
       "qq_bot/__init__.py": "6ce26d450305863fa4bb3681c707c6d11b09b039ae28f4bc31c49d4a890664dc",
       "qq_bot/__main__.py": "4af4fdf3c9709c5459c3632be53094cff5bbd9ea0060e72d869fc726539ba78d",
       "qq_bot/adapter.py": "1a6057beab784dee3e95861d27544c6615b1591444b1b877dfd4e52ede43fcf6",
@@ -169,7 +169,7 @@
     "deployment": "fishery-management",
     "publication": "FAKE_GATEWAY_ONLY_NO_REAL_GENERAL_APPROVAL"
   },
-  "scope_sha256": "c18608279ea1b8aa0774ff20c91930baab2342b34ece9f65522a046eb7e7cce3",
+  "scope_sha256": "0e53665fb98c723c431b70bcf91814963d404fe39307420828e3917292d74af1",
   "qualification_id": null,
   "can_execute_real": false,
   "can_deliver_real": false

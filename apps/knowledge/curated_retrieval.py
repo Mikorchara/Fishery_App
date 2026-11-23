@@ -10,7 +10,10 @@ from .evidence import KnowledgeEvidence, utcnow
 
 
 _METRIC = re.compile(r"溶解氧|溶存氧|溶氧|dissolved[ _-]+oxygen|(?<![a-z0-9_])(?-i:DO)(?![a-z0-9_])", re.I)
-_EEL = re.compile(r"鳗鲡|鳗鱼|日本鳗|anguilla|(?<![a-z])eels?(?![a-z])")
+_EEL = re.compile(
+    r"日本鳗(?:鲡|鱼)?(?![鲡鱼科目属])|\b(?:anguilla|a\.)[ \t]+japonica\b|\bjapanese eels?\b|"
+    r"(?:^|(?<=[ \t：:，、。的查问对看为是和与时])|(?<=溶氧)|(?<=一下))(?:鳗鲡|鳗鱼)(?![科目属])"
+)
 _OTHER_SPECIES = re.compile(
     r"(?:欧洲|美洲|非洲|印度|澳洲|新西兰|短鳍|花|双色|双斑)鳗|"
     r"(?:anguilla|(?<![a-z])a\.)[ \t]+(?!japonica\b)[a-z]+|european eel|american eel|"
@@ -18,21 +21,61 @@ _OTHER_SPECIES = re.compile(
     r"\b(?:salmon|trout|tilapia|carp|catfish|zebrafish|shrimp|crabs?)\b"
 )
 _OTHER_METRIC = re.compile(r"水温|氨氮|亚硝酸盐|硝酸盐|酸碱度|盐度|浊度|二氧化碳|氮气|(?<![a-z])ph(?![a-z])")
-_ON_SITE = re.compile(r"本池|我(?:家|的)?(?:这|那)?(?:口)?池|这口池|现在|当前|现场|本轮|实时|实测|今天|鱼群实际")
+_ON_SITE = re.compile(
+    r"本池|我(?:们|家|的)?(?:这|那)?(?:口)?池|这口池|现在|当前|现场|本轮|实时|今天|鱼群实际|"
+    r"\b(?:this|our|my)\s+(?:pond|farm|tank)\b"
+)
 _LITERATURE = re.compile(r"资料|文献|试验|实验|论文|研究|报告怎么说|stud(?:y|ies)|literature|paper")
+_MIXED_TASK = re.compile(
+    r"同时|另外|此外|再(?:查|问|看|告诉)|顺便|并(?:查|看|告诉|与|和)|样本(?:量|数)|"
+    r"(?:过去|最近).{0,16}(?:监测|观测)|[?？;；]\s*\S|\b(?:also|additionally)\b"
+)
+_ACTION_REQUEST = re.compile(r"怎么喂|(?:是否要|要不要|应该|需不需要|可以|能否)(?:增氧|投喂|喂鱼)|处置|措施|建议")
+_SUBJECT_JOIN = r"(?:和|与|及|或|对比|比较|相比|、|\b(?:and|or|versus|vs\.?)\b)"
+_SUBJECT_JOIN_BEFORE = re.compile(rf"{_SUBJECT_JOIN}\s*$")
+_SUBJECT_JOIN_AFTER = re.compile(rf"^\s*{_SUBJECT_JOIN}")
+_OTHER_OUTCOME = re.compile(
+    r"死亡|致死|存活|生存|成活|繁殖|产卵|孵化|浮头|病害|发病|感染|用药|治疗|"
+    r"\b(?:mortality|death|survival|reproduction|spawning|hatching|disease|treatment)\b"
+)
+_NUMBER = r"[0-9]+(?:\.[0-9]+)?"
+_RANGE_SEPARATOR = r"[-–—−~～至到]"
+_SATURATION_SUBJECT = r"(?:溶解氧|溶存氧|溶氧|氧|空气)(?:的)?\s*"
+_SATURATION_NAME = rf"{_SATURATION_SUBJECT}饱和度|(?:oxygen|air)\s+saturation"
+_SATURATION_COPULA = r"(?:为|在|处于|达到|等于|是|[:=])?"
+_SATURATION = re.compile(
+    rf"{_SATURATION_NAME}|{_SATURATION_SUBJECT}{_SATURATION_COPULA}\s*"
+    rf"(?:{_NUMBER}\s*%?\s*{_RANGE_SEPARATOR}\s*)?{_NUMBER}\s*%\s*饱和度"
+)
+_SATURATION_BEFORE = re.compile(rf"(?:{_SATURATION_NAME})\s*{_SATURATION_COPULA}\s*$")
+_SATURATION_AFTER = re.compile(rf"^\s*的?\s*(?:{_SATURATION_NAME}|饱和度)")
 _OUTCOMES = (
-    ("feeding", re.compile(r"摄食|投喂|食欲|吃食|吃料|进食|喂食|采食|feed|appetite")),
+    ("feeding", re.compile(r"摄食|投喂|食欲|食量|停食|拒食|吃食|吃料|进食|喂食|采食|feed|appetite")),
     ("growth", re.compile(r"生长|体重|增重|增肥|长势|growth|weight")),
 )
 
-_NUMBER = r"[0-9]+(?:\.[0-9]+)?"
-_UNIT = r"(?:mg\s*/\s*l(?![a-z0-9/^])|毫克\s*(?:每|/)\s*升)"
+_UNIT_END = r"(?![a-z0-9])"
+_CONCENTRATION_UNIT = rf"(?:mg\s*/\s*l|毫克\s*(?:每|/)\s*升){_UNIT_END}"
+_SATURATION_UNIT = rf"%{_UNIT_END}"
+_DIMENSION_SUFFIX = re.compile(r"^\s*(?:[/^*·⋅×%]|每(?:小?时|日|天|秒|分)|per\b|[-−–—]?\s*(?:h|hours?|s|d|days?)\b)")
 _START = r"(?<![0-9.e+\-−–—])"
-_RANGE = re.compile(
-    rf"{_START}(?P<low>{_NUMBER})(?:\s*{_UNIT})?\s*[-–—−~～至到]\s*(?P<high>{_NUMBER})\s*{_UNIT}"
+_OPERATORS = r"<=|>=|≤|≥|<|>|不低于|不高于|低于|高于|不超过|不少于"
+_NUMERIC_PATTERNS = {
+    key: (
+        re.compile(rf"{_START}(?P<low>{_NUMBER})(?:\s*{unit})?\s*{_RANGE_SEPARATOR}\s*(?P<high>{_NUMBER})\s*{unit}"),
+        re.compile(rf"{_START}(?P<op>{_OPERATORS})?\s*(?P<value>{_NUMBER})\s*{unit}"),
+    )
+    for key, unit in (("oxygen_intervals", _CONCENTRATION_UNIT), ("oxygen_saturation_intervals", _SATURATION_UNIT))
+}
+_SHORT_FOLLOWUP = re.compile(
+    rf"(?:那(?:么)?\s*)?(?:{_OPERATORS})?\s*{_NUMBER}"
+    rf"(?:\s*(?:{_CONCENTRATION_UNIT})?\s*{_RANGE_SEPARATOR}\s*{_NUMBER})?"
+    rf"\s*{_CONCENTRATION_UNIT}\s*(?:呢|吗)?[?？。]?"
 )
-_VALUE = re.compile(
-    rf"{_START}(?P<op><=|>=|≤|≥|<|>|不低于|不高于|低于|高于|不超过|不少于)?\s*(?P<value>{_NUMBER})\s*{_UNIT}"
+_GENERIC_TOPIC = re.compile(
+    r"(?:请)?(?:查(?:一下)?|查询|查看|介绍|解释|资料怎么解释|项目资料怎么解释|那项目资料怎么解释|什么是)?\s*"
+    r"(?:溶解氧|溶存氧|溶氧|dissolved[ _-]+oxygen|do)"
+    r"(?:的(?:作用|资料|研究|定义)|(?:与|和)摄食(?:的关系|有什么关系)?)?[?？。]?"
 )
 _UNCERTAIN_VALUE = re.compile(r"约|左右|上下|附近|大概|以下|以上|差不多")
 _NEGATED_SCOPE = re.compile(r"不问|别查|不要查|不用查|不是|并非|不等于|!=|≠")
@@ -76,38 +119,48 @@ class OxygenInterval:
 
 
 def _request_interval(text):
-    """Return whether numeric conditions are present and the single safe condition, if any."""
+    """Return numeric presence and one interval with its explicit unit, if supported."""
     if not _DIGIT.search(text):
         return False, None
     if _UNCERTAIN_VALUE.search(text):
         return True, None
 
-    ranges = list(_RANGE.finditer(text))
+    saturation = _SATURATION.search(text)
+    if saturation and "%" not in text:
+        return True, None
+    key = "oxygen_saturation_intervals" if saturation else "oxygen_intervals"
+    range_pattern, value_pattern = _NUMERIC_PATTERNS[key]
+    ranges = list(range_pattern.finditer(text))
     if len(ranges) > 1:
         return True, None
     if ranges:
         match = ranges[0]
+        before, after = text[:match.start()], text[match.end():]
         # Other quantities may impose conditions outside this first literature slice.
-        if _DIGIT.search(text[:match.start()] + text[match.end():]):
+        if _DIGIT.search(before + after):
             return True, None
-        if re.search(r"[<>=≤≥]|低于|高于|不超过|不少于", text[:match.start()]):
+        if (re.search(r"[<>=≤≥]|低于|高于|不超过|不少于", before)
+                or _DIMENSION_SUFFIX.match(after)
+                or saturation and not (_SATURATION_BEFORE.search(before) or _SATURATION_AFTER.match(after))):
             return True, None
         low, high = Decimal(match["low"]), Decimal(match["high"])
-        return True, OxygenInterval(low, high) if low <= high else None
+        return True, (key, OxygenInterval(low, high)) if low <= high else None
 
-    values = list(_VALUE.finditer(text))
+    values = list(value_pattern.finditer(text))
     if len(values) != 1:
         return True, None
     match = values[0]
     before, after = text[:match.start()], text[match.end():]
-    if _DIGIT.search(before + after) or before.rstrip().endswith(("-", "−", "–", "—", "+", ".", "<", ">", "=")):
+    if (_DIGIT.search(before + after) or _DIMENSION_SUFFIX.match(after)
+            or saturation and not (_SATURATION_BEFORE.search(before) or _SATURATION_AFTER.match(after))
+            or before.rstrip().endswith(("-", "−", "–", "—", "+", ".", "<", ">", "="))):
         return True, None
     value, operator = Decimal(match["value"]), match["op"]
     if operator in ("<", "低于", "<=", "≤", "不超过", "不高于"):
-        return True, OxygenInterval(None, value, False, operator in ("<=", "≤", "不超过", "不高于"))
+        return True, (key, OxygenInterval(None, value, False, operator in ("<=", "≤", "不超过", "不高于")))
     if operator in (">", "高于", ">=", "≥", "不少于", "不低于"):
-        return True, OxygenInterval(value, None, operator in (">=", "≥", "不少于", "不低于"), False)
-    return True, OxygenInterval(value, value)
+        return True, (key, OxygenInterval(value, None, operator in (">=", "≥", "不少于", "不低于"), False))
+    return True, (key, OxygenInterval(value, value))
 
 
 def _display_number(value):
@@ -115,32 +168,75 @@ def _display_number(value):
     return text.rstrip("0").rstrip(".") if "." in text else text
 
 
-def _display_interval(interval):
+def _display_interval(interval, unit):
     low, high = interval.low, interval.high
     if low == high:
-        return f"实验点 {_display_number(low)} mg/L"
+        return f"实验点 {_display_number(low)} {unit}"
     if low is None:
-        return f"{'不高于' if interval.high_inclusive else '低于'} {_display_number(high)} mg/L 的部分"
+        return f"{'不高于' if interval.high_inclusive else '低于'} {_display_number(high)} {unit} 的部分"
     if high is None:
-        return f"{'不低于' if interval.low_inclusive else '高于'} {_display_number(low)} mg/L 的部分"
+        return f"{'不低于' if interval.low_inclusive else '高于'} {_display_number(low)} {unit} 的部分"
     left = "[" if interval.low_inclusive else "("
     right = "]" if interval.high_inclusive else ")"
-    return f"{left}{_display_number(low)}, {_display_number(high)}{right} mg/L 的部分"
+    return f"{left}{_display_number(low)}, {_display_number(high)}{right} {unit} 的部分"
 
 
 def _supported_scope(card, requested):
     if requested is None:
         return 2, ""
+    key, interval = requested
     matches = [
-        overlap for data in card["oxygen_intervals"]
-        if (overlap := OxygenInterval.from_card(data).intersection(requested)) is not None
+        overlap for data in card.get(key, ())
+        if (overlap := OxygenInterval.from_card(data).intersection(interval)) is not None
     ]
-    if requested in matches:
+    if interval in matches:
         return 2, ""
     if matches:
-        display = "、".join(_display_interval(part) for part in dict.fromkeys(matches))
+        unit = "mg/L" if key == "oxygen_intervals" else "% 饱和度"
+        display = "、".join(_display_interval(part, unit) for part in dict.fromkeys(matches))
         return 1, f"本条仅提供所问区间内的{display}证据，不能据此推断整个区间。"
     return 0, ""
+
+
+def _topic(raw, text):
+    return _METRIC.search(raw) or _SATURATION.search(text) or (_EEL.search(text) and re.search(r"低氧|缺氧", text))
+
+
+def _unsupported(text):
+    return (
+        _OTHER_SPECIES.search(text) or _OTHER_METRIC.search(text) or _OTHER_OUTCOME.search(text)
+        or _NEGATED_SCOPE.search(text)
+        or any(_SUBJECT_JOIN_BEFORE.search(text[:match.start()]) or _SUBJECT_JOIN_AFTER.match(text[match.end():])
+               for match in _EEL.finditer(text))
+    )
+
+
+def _outcomes(text):
+    return {name for name, pattern in _OUTCOMES if pattern.search(text)}
+
+
+def _standalone_oxygen(raw, text):
+    return _topic(raw, text) and not (
+        _ON_SITE.search(text) or _MIXED_TASK.search(text) or _OTHER_METRIC.search(text)
+        or _ACTION_REQUEST.search(text)
+    )
+
+
+def is_standalone_oxygen_lookup(question: str) -> bool:
+    """Recognize a single oxygen topic without confirming evidence coverage."""
+    raw = normalize("NFKC", question)
+    return bool(_standalone_oxygen(raw, raw.casefold().strip()))
+
+
+def is_curated_quantitative_question(question: str) -> bool:
+    """Recognize standalone, explicit literature questions for the bounded reply path."""
+    raw = normalize("NFKC", question)
+    text = raw.casefold().strip()
+    return bool(
+        _standalone_oxygen(raw, text) and _EEL.search(text) and len(_outcomes(text)) == 1
+        and not _unsupported(text)
+        and _request_interval(text)[1] is not None
+    )
 
 
 def search_curated_oxygen(
@@ -149,27 +245,25 @@ def search_curated_oxygen(
     """Return curated evidence or None when the question is outside this structured domain."""
     raw_query = normalize("NFKC", query)
     raw_question = normalize("NFKC", intent_text) if intent_text is not None else raw_query
-    normalized_query, question = raw_query.casefold(), raw_question.casefold()
-    combined = f"{question}\n{normalized_query}"
-    if not (_METRIC.search(raw_query) or _METRIC.search(raw_question)
-            or (_EEL.search(combined) and re.search(r"低氧|缺氧", combined))):
-        return None
-    # When the caller knows the original question, a model's rewrite may not turn
-    # a request for current pond observations into a literature query.
-    if (
-        top_k < 1 or _OTHER_SPECIES.search(combined) or _OTHER_METRIC.search(combined)
-        or _NEGATED_SCOPE.search(question)
-        or (_ON_SITE.search(question) and not _LITERATURE.search(question))
-    ):
-        return ()
-
+    normalized_query, question = raw_query.casefold(), raw_question.casefold().strip()
     has_numbers, requested = _request_interval(question)
-    if not has_numbers and question != normalized_query:
-        has_numbers, requested = _request_interval(normalized_query)
-    if has_numbers and requested is None:
+    scope = question
+    if not _topic(raw_question, question):
+        if not _topic(raw_query, normalized_query):
+            return None
+        # Only a bare numeric follow-up can use the tool's topic hint. Its
+        # explicit unit and interval still come from the user's own question.
+        if requested is None or not _SHORT_FOLLOWUP.fullmatch(question):
+            return ()
+        scope = normalized_query
+    if (top_k < 1 or _unsupported(scope) or (_ON_SITE.search(question) and not _LITERATURE.search(question))
+            or not (_EEL.search(scope) or _GENERIC_TOPIC.fullmatch(scope))):
         return ()
 
-    outcomes = {name for name, pattern in _OUTCOMES if pattern.search(combined)}
+    outcomes = _outcomes(scope)
+    if has_numbers and (requested is None or not outcomes):
+        return ()
+    combined = f"{question}\n{normalized_query}"
     ranked = []
     for card in cards:
         if card["species"] != "anguilla_japonica" or (outcomes and outcomes.isdisjoint(card["outcomes"])):

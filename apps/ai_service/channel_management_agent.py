@@ -10,7 +10,7 @@ from apps.ai_backend.history_projection import DEFAULT_HISTORY_PROJECTION
 from apps.monitoring.contracts import identifier
 from .business_tools.active_events import ACTIVE_EVENTS, ACTIVE_EVENTS_DEFINITION, ACTIVE_EVENTS_PROJECTION
 from .business_tools.current_water_quality import WATER_DEFINITION, CURRENT_WATER_QUALITY
-from .business_tools.fishery_knowledge import KNOWLEDGE_DEFINITION, SEARCH_FISHERY_KNOWLEDGE
+from .business_tools.fishery_knowledge import KNOWLEDGE_BINDING_VERSION, KNOWLEDGE_DEFINITION, SEARCH_FISHERY_KNOWLEDGE
 from .business_tools.water_quality_history import HISTORY_DEFINITION, WATER_QUALITY_HISTORY
 from .business_tools.water_quality_score import SCORE_DEFINITION, WATER_QUALITY_SCORE
 from .business_tools.registry import RESULT_INSTRUCTIONS
@@ -68,7 +68,7 @@ def prepared_scope(options, output_tokens=2048):
                        'max_model_requests': 3, 'max_output_tokens': budget.max_output_tokens,
                        'turn_timeout_s': 90, 'retries': 0, 'max_request_bytes': 128*1024},
         'data_bindings': {'current': 'management-current-water@1', 'history': 'management-water-history@1',
-                          'knowledge': 'management-project-knowledge@1', 'score': 'management-water-score@1',
+                          'knowledge': KNOWLEDGE_BINDING_VERSION, 'score': 'management-water-score@1',
                           'events': {'projection': ACTIVE_EVENTS_PROJECTION, 'monitoring': 'FROZEN_TURN_DEVICE',
                                      'board': 'OPTIONAL_PROCESS_APPROVED_BOUND_REPORT_DEVICE'},
                           'instance': 'EXPLICIT_READ_ONLY_SAME_INSTANCE'},

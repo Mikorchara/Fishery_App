@@ -103,7 +103,7 @@ class KnowledgeContentService:
             return None
         try:
             corpus = json.loads(raw)
-            if corpus['version'] != 'eel-oxygen-feeding@1' or not isinstance(corpus['records'], list):
+            if corpus['version'] not in ('eel-oxygen-feeding@1', 'eel-oxygen-feeding@2') or not isinstance(corpus['records'], list):
                 raise ValueError
             cards = {card['id']: card for card in corpus['records']}
             if not cards or len(cards) != len(corpus['records']):
@@ -120,6 +120,12 @@ class KnowledgeContentService:
         return matched
 
     def search(self, query, *, top_k=5, retrieved_at=None, intent_text=None, question=None):
+        hits, _ = self.search_with_scope(query, top_k=top_k, retrieved_at=retrieved_at,
+                                         intent_text=intent_text, question=question)
+        return hits
+
+    def search_with_scope(self, query, *, top_k=5, retrieved_at=None, intent_text=None, question=None):
+        """Return evidence and whether the structured oxygen corpus handled this search."""
         with self._lock:
             revision, records, metadata=self._records()
             if self._index_revision!=revision:
@@ -138,9 +144,9 @@ class KnowledgeContentService:
             evidence = search_curated_oxygen(query, curated, top_k=top_k,
                                              retrieved_at=retrieved_at, intent_text=question)
             if evidence is not None:
-                return evidence
+                return evidence, True
         # A concurrent edit publishes a different object, never mutates this search.
-        return snapshot.search(query,top_k=top_k,retrieved_at=retrieved_at,intent_text=intent_text)
+        return snapshot.search(query,top_k=top_k,retrieved_at=retrieved_at,intent_text=intent_text), False
 
     def export(self, *, format='json', status='active'):
         """One consistent snapshot; downloads are never automatic import sources."""

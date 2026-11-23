@@ -3,7 +3,9 @@
 from datetime import datetime, timezone
 import unittest
 
-from apps.knowledge.curated_retrieval import search_curated_oxygen
+from apps.knowledge.curated_retrieval import (
+    is_curated_quantitative_question, is_standalone_oxygen_lookup, search_curated_oxygen,
+)
 
 
 _AT = datetime(2026, 11, 23, 1, tzinfo=timezone.utc)
@@ -84,7 +86,8 @@ class CuratedOxygenRetrievalTests(unittest.TestCase):
     def test_multiple_or_unsupported_units_do_not_broaden_to_a_general_study(self):
         cards = [_card("general"), _card("point", [_interval("3", "3")])]
         for condition in (
-            "1–3 ppm", "20%饱和度", "3 mg/dL", "3 mg/L/min", "约 3 mg/L",
+            "1–3 ppm", "20%饱和度", "3 mg/dL", "3 mg/L/min", "3 mg/L·h",
+            "3 mg/L · h", "3 毫克每升每小时", "约 3 mg/L",
             "-3 mg/L", "–3 mg/L", "3–1 mg/L", "1、3 mg/L", "1 mg/L 和 3 mg/L",
             "3 mg/L、水温 27°C", "1–3 mg/L 与 3–5 mg/L",
         ):
@@ -112,6 +115,101 @@ class CuratedOxygenRetrievalTests(unittest.TestCase):
                 self.assertEqual(self.search("鳗鲡溶氧摄食研究", [card], intent_text=question), ())
         result = self.search(
             "鳗鲡溶氧摄食研究", [card],
-            intent_text="项目资料怎么说，跟本池现在的情况一样吗？",
+            intent_text="日本鳗鲡的溶氧摄食试验怎么说，跟本池现在的情况一样吗？",
         )
         self.assertEqual([item.evidence_id for item in result], ["feeding"])
+
+    def test_original_topic_and_species_cannot_be_invented_by_tool_query(self):
+        card = _card("feeding", [_interval("2.11", "2.11")])
+        tool_query = "日本鳗鲡 溶解氧 2.11 mg/L 摄食率"
+        for question in (
+            "锦鲤蛋白质换料比例如何？",
+            "查马来鳗鲡溶解氧 2.11 mg/L 摄食率",
+            "查俄罗斯鲟溶解氧 2.11 mg/L 摄食率",
+            "日本鳗鲡与俄罗斯鲟在溶解氧 2.11 mg/L 时摄食如何？",
+            "俄罗斯鲟和日本鳗鲡在溶解氧 2.11 mg/L 时摄食如何？",
+            "项目资料怎么说，跟本池现在的情况一样吗？",
+        ):
+            with self.subTest(question=question):
+                self.assertEqual(self.search(tool_query, [card], intent_text=question), ())
+
+    def test_original_scope_and_outcome_filter_wrong_rewrites(self):
+        feeding = _card("feeding", [_interval("2.11", "2.11")])
+        growth = _card("growth", [_interval("2.11", "2.11")], outcomes=("growth",))
+        feeding_question = "请查日本鳗鲡溶解氧 2.11 mg/L 摄食率"
+        result = self.search("欧洲鳗鲡 pH 2.11 mg/L 增重", [feeding, growth], intent_text=feeding_question)
+        self.assertEqual([item.evidence_id for item in result], ["feeding"])
+        self.assertEqual(self.search(
+            feeding_question, [feeding], intent_text="日本鳗鲡溶解氧 2.11 mg/L 时的死亡率？",
+        ), ())
+        self.assertEqual(self.search(
+            feeding_question, [feeding], intent_text="日本鳗鲡溶解氧 2.11 mg/L 时的脂肪含量？",
+        ), ())
+        self.assertEqual(self.search(
+            feeding_question, [feeding], intent_text="日本鳗鲡溶解氧 2.11 mg/L 时会停食吗？",
+        )[0].evidence_id, "feeding")
+
+    def test_explicit_saturation_matches_own_unit_even_at_same_numeric_value(self):
+        concentration = _card("concentration", [_interval("21.1", "21.1")])
+        saturation = dict(_card("saturation"), oxygen_saturation_intervals=[_interval("21.1", "21.1")])
+        cards = [concentration, saturation]
+        for question in (
+            "日本鳗鲡溶氧饱和度 21.1% 时的摄食率？",
+            "日本鳗鲡溶氧 21.1% 饱和度下的摄食率？",
+            "日本鳗鲡在 ２１．１％氧饱和度时的摄食率？",
+        ):
+            with self.subTest(question=question):
+                result = self.search("日本鳗鲡溶氧 21.1 mg/L 摄食率", cards, intent_text=question)
+                self.assertEqual([item.evidence_id for item in result], ["saturation"])
+        result = self.search("日本鳗鲡溶氧 21.1 mg/L 摄食率", cards)
+        self.assertEqual([item.evidence_id for item in result], ["concentration"])
+        result = self.search("日本鳗鲡溶氧饱和度 20–30% 时的摄食率？", cards)
+        self.assertEqual([item.evidence_id for item in result], ["saturation"])
+        self.assertIn("21.1 % 饱和度", result[0].text)
+        self.assertIn("不能据此推断整个区间", result[0].text)
+        self.assertEqual(self.search("日本鳗鲡溶氧 21.1% 时的摄食率？", cards), ())
+        self.assertEqual(self.search("日本鳗鲡摄食率 21.1% 时氧饱和度是多少？", cards), ())
+        self.assertEqual(self.search("日本鳗鲡溶氧饱和度 21.1% 时的摄食率？", [concentration]), ())
+
+    def test_bounded_reply_requires_one_explicit_scope_and_no_field_or_other_task(self):
+        for question in (
+            "日本鳗鲡溶氧 2.11 mg/L 的摄食率是多少？",
+            "日本鳗鲡溶氧 1–3 mg/L 时会停食吗？",
+            "查日本鳗鲡溶氧 9–10 mg/L 的摄食率文献",
+            "日本鳗鲡溶氧在 ２１．１％饱和度时摄食如何？",
+        ):
+            with self.subTest(question=question):
+                self.assertTrue(is_curated_quantitative_question(question))
+        for question in (
+            "那 2–4 mg/L 呢？",
+            "日本鳗鲡溶氧 2.11 mg/L 时摄食与增重各是多少？",
+            "日本鳗鲡溶氧 2.11 mg/L 的死亡率是多少？",
+            "日本鳗鲡溶氧 2.11 mg/L 时应不应该投喂？",
+            "日本鳗鲡溶氧 2.11 mg/L 的摄食率？同时查本池溶氧",
+            "日本鳗鲡溶氧 2.11 mg/L 的摄食率和实验样本量是多少？",
+            "日本鳗鲡溶氧 2.11 mg/L 的摄食率？另外解释什么是pH",
+            "俄罗斯鲟溶氧 2.11 mg/L 的摄食率？",
+            "日本鳗鲡溶氧 2.11 mg/L·h 的摄食率？",
+            "日本鳗鲡溶氧 2.11 mg/L 与 4 mg/L 的摄食率？",
+        ):
+            with self.subTest(question=question):
+                self.assertFalse(is_curated_quantitative_question(question))
+
+    def test_standalone_lookup_can_give_negative_result_for_unsupported_scope(self):
+        for question in (
+            "请查俄罗斯鲟在溶解氧 2.11 mg/L 的摄食率。",
+            "日本鳗鲡在溶解氧 2.11 mg/L·h 时摄食如何？",
+            "日本鳗鲡在 2.11 ppm 的溶解氧下摄食如何？",
+            "日本鳗鲡溶氧 2.11 mg/L 的死亡率是多少？",
+        ):
+            with self.subTest(question=question):
+                self.assertTrue(is_standalone_oxygen_lookup(question))
+                self.assertFalse(is_curated_quantitative_question(question))
+        for question in (
+            "锦鲤蛋白质换料比例如何？",
+            "请查日本鳗鲡的溶氧资料，再查本池当前水温",
+            "溶氧试验；报告一下设备状态",
+            "日本鳗鲡溶氧 3 mg/L 时要不要投喂？",
+        ):
+            with self.subTest(question=question):
+                self.assertFalse(is_standalone_oxygen_lookup(question))

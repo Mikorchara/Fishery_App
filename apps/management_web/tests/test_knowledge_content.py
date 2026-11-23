@@ -156,6 +156,119 @@ class KnowledgeHTTPTests(unittest.TestCase):
                             for item in payload['evidence']))
         self.assertFalse(any('6–7' in item['text'] for item in payload['evidence']))
 
+    def use_curated_content(self):
+        from apps.knowledge.initial import initialize_curated_knowledge
+
+        path = self.fixture.root / 'curated-publication.sqlite3'
+        initialize_curated_knowledge(path)
+        self.install_content(KnowledgeContentService(
+            KnowledgeRepository(path, require_existing=True, read_only=True)))
+
+    def test_curated_numeric_reply_is_grounded_in_normal_and_streaming_web(self):
+        self.use_curated_content()
+        f = self.fixture
+        unsupported = '实验摄食率为 95%，整个区间均如此。'
+        rewritten = '日本鳗鲡溶解氧 2.11 mg/L 摄食'
+        cases = (
+            ('日本鳗鲡', '2.11 mg/L', None, 'OK', ('2.11 mg/L', '8.9%', '10.2331/suisan.49.1335')),
+            ('日本鳗鲡', '1–3 mg/L', None, 'OK', ('2.11', '2.94', '8.9%', '12.8%', '不能据此推断整个区间')),
+            ('日本鳗鲡', '6–7 mg/L', None, 'OK', ('6.27', '14.1%', '不能据此推断整个区间')),
+            ('日本鳗鲡', '21.1% 饱和度', None, 'OK', ('21.1%', '3.76%', '10.2331/suisan.52.597')),
+            ('日本鳗鲡', '9–10 mg/L', None, 'NO_MATCH', ('未找到',)),
+            ('俄罗斯鲟', '2.11 mg/L', rewritten, 'NO_MATCH', ('未找到',)),
+            ('日本鳗鲡', '2.11 mg/L·h', rewritten, 'NO_MATCH', ('未找到',)),
+        )
+        for streaming in (False, True):
+            for species, concentration, tool_query, expected_status, expected_parts in cases:
+                with self.subTest(streaming=streaming, species=species, concentration=concentration):
+                    arguments = json.dumps({'query': tool_query or f'{species}溶解氧 {concentration} 摄食'})
+                    plans = [tool_chunks(KNOWLEDGE, 'lookup', arguments), final_chunks(unsupported)] if streaming else [
+                        sdk_tool(KNOWLEDGE, 'lookup', arguments, f.profile.model),
+                        sdk_final(unsupported, model=f.profile.model),
+                    ]
+                    f.sdk = FakeSDK(plans, model=f.profile.model)
+                    response = f.client.post('/api/ai/messages' + ('/stream' if streaming else ''),
+                        headers=f.headers, json={**f.envelope(streaming), 'question':
+                            f'请查项目资料，{species}在溶解氧 {concentration} 时的实验摄食率是多少？'})
+                    self.assertEqual(response.status_code, 200, response.get_json(silent=True))
+                    if streaming:
+                        events = [json.loads(line[6:]) for line in response.get_data(as_text=True).splitlines()
+                                  if line.startswith('data: ')]
+                        self.assertNotIn('preview', [event['kind'] for event in events])
+                        self.assertEqual(events[-1]['kind'], 'final', events[-1])
+                        result = events[-1]['result']
+                    else:
+                        result = response.get_json()['result']
+                    response.close()
+                    self.assertTrue(result['successful_turn'], result)
+                    self.assertEqual(len(f.sdk.bodies), 2)
+                    payload = json.loads(next(message['content'] for message in f.sdk.bodies[-1]['messages']
+                                              if message['role'] == 'tool'))
+                    self.assertEqual(payload['status'], expected_status)
+                    reply = result['final_text']
+                    for part in expected_parts:
+                        self.assertIn(part, reply)
+                    self.assertNotIn('95%', reply)
+                    if expected_status == 'NO_MATCH':
+                        self.assertNotIn('%', reply)
+                        self.assertNotIn('10.2331/', reply)
+
+    def test_explicit_project_lookup_needs_a_completed_search(self):
+        self.use_curated_content()
+        f = self.fixture
+        unsupported = '我已经检索了相应的项目资料。'
+        prefixes = ('请查项目资料', '请从项目资料里查一下', '请帮我查项目资料', '请参考项目资料')
+        for streaming in (False, True):
+            for prefix in prefixes:
+                with self.subTest(streaming=streaming, prefix=prefix):
+                    plan = final_chunks(unsupported) if streaming else sdk_final(unsupported, model=f.profile.model)
+                    f.sdk = FakeSDK([plan], model=f.profile.model)
+                    response = f.client.post('/api/ai/messages' + ('/stream' if streaming else ''),
+                        headers=f.headers, json={**f.envelope(streaming), 'question':
+                            f'{prefix}，日本鳗鲡在溶解氧 2.11 mg/L 时的实验摄食率是多少？'})
+                    if streaming:
+                        self.assertEqual(response.status_code, 200)
+                        stream = response.get_data(as_text=True)
+                        events = [json.loads(line[6:]) for line in stream.splitlines() if line.startswith('data: ')]
+                        self.assertNotIn('preview', [event['kind'] for event in events])
+                        self.assertNotIn(unsupported, stream)
+                        result = events[-1]['result']
+                    else:
+                        self.assertEqual(response.status_code, 502, response.get_json(silent=True))
+                        result = response.get_json()['result']
+                    response.close()
+                    self.assertFalse(result['successful_turn'], result)
+                    self.assertEqual(result['error_code'], 'ASSISTANT_SOURCE_REQUIREMENT_UNMET')
+                    self.assertEqual(result['final_text'], '')
+
+    def test_mixed_project_and_monitoring_lookups_keep_both_results(self):
+        self.use_curated_content()
+        f = self.fixture
+        cases = (
+            (WATER, {}, '日本鳗鲡在溶解氧 2.11 mg/L 时的实验摄食率是多少？另外查当前水质。',
+             '已分别查询实验资料和当前水质。'),
+            (HISTORY, {'lookback_minutes': 30, 'metrics': ['dissolved_oxygen_mg_l']},
+             '给出日本鳗鲡在溶解氧 2.11 mg/L 时的实验摄食率，并与过去半小时的溶解氧监测数据对比。',
+             '已分别查询实验资料和过去半小时的溶解氧监测数据。'),
+        )
+        for monitoring_tool, arguments, question, reply in cases:
+            with self.subTest(monitoring_tool=monitoring_tool):
+                f.sdk = FakeSDK([
+                    sdk_tool(KNOWLEDGE, 'literature', json.dumps({'query': '日本鳗鲡溶解氧 2.11 mg/L 摄食'}),
+                             f.profile.model),
+                    sdk_tool(monitoring_tool, 'monitoring', json.dumps(arguments), f.profile.model),
+                    sdk_final(reply, model=f.profile.model),
+                ], model=f.profile.model)
+                response = f.client.post('/api/ai/messages', headers=f.headers,
+                    json={**f.envelope(), 'question': f'请查项目资料，{question}'})
+                self.assertEqual(response.status_code, 200, response.get_json(silent=True))
+                result = response.get_json()['result']
+                response.close()
+                self.assertTrue(result['successful_turn'], result)
+                self.assertEqual(result['final_text'], reply)
+                self.assertEqual([message['tool_call_id'] for message in f.sdk.bodies[-1]['messages']
+                                  if message['role'] == 'tool'], ['literature', 'monitoring'])
+
     def test_curated_card_edit_and_status_do_not_keep_old_structured_evidence(self):
         from apps.knowledge.initial import initialize_curated_knowledge
 

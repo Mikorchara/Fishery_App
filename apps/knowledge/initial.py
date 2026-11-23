@@ -22,11 +22,11 @@ INITIAL_KNOWLEDGE_VERSION = 'management-initial-knowledge@1'
 RESOURCE_SHA256 = '6aa00314094b3660bb3ef62bf856976c9e7cfb85ead88a7a8f4c388a636c012e'
 LEGACY_KNOWLEDGE_SEED = 'legacy'
 CURATED_KNOWLEDGE_SEED = 'curated-oxygen'
-CURATED_KNOWLEDGE_VERSION = 'eel-oxygen-feeding@1'
+CURATED_KNOWLEDGE_VERSION = 'eel-oxygen-feeding@2'
 CURATED_KNOWLEDGE_METADATA = 'curated_oxygen'
 INITIAL_RESOURCES = {
     LEGACY_KNOWLEDGE_SEED: 'resources/eel_knowledge_v1.json',
-    CURATED_KNOWLEDGE_SEED: 'resources/eel_oxygen_feeding_v1.json',
+    CURATED_KNOWLEDGE_SEED: 'resources/eel_oxygen_feeding_v2.json',
 }
 
 
@@ -79,7 +79,9 @@ def _validate_interval(interval):
 
 
 def _record_from_card(card, ordinal):
-    if not isinstance(card, dict) or set(card) != _CARD_FIELDS or card['species'] != 'anguilla_japonica':
+    if (not isinstance(card, dict)
+            or not _CARD_FIELDS <= set(card) <= (_CARD_FIELDS | {'oxygen_saturation_intervals'})
+            or card['species'] != 'anguilla_japonica'):
         raise ValueError()
     key = identifier(card['id'])
     if not key.startswith('builtin-'):
@@ -94,6 +96,11 @@ def _record_from_card(card, ordinal):
     for keyword in keywords:
         text(keyword, 120)
     for interval in intervals:
+        _validate_interval(interval)
+    saturation_intervals = card.get('oxygen_saturation_intervals', [])
+    if not isinstance(saturation_intervals, list):
+        raise ValueError()
+    for interval in saturation_intervals:
         _validate_interval(interval)
     source = text(card['source_url'], 512)
     parsed_source = urlsplit(source)

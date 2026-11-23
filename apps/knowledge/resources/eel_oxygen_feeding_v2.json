@@ -1,0 +1,350 @@
+{
+  "version": "eel-oxygen-feeding@2",
+  "records": [
+    {
+      "id": "builtin-ca1233b31a815027df39d8b0",
+      "title": "日本鳗鲡摄食实测点：2.11 mg/L",
+      "body": "Yamagata 等（1983）的实验 I 中，2.11 mg/L 是流水水槽的平均溶解氧，表中摄食率为 8.9%/日。同次实验的一个 7.26 mg/L 对照组为 12.4%/日。研究对象是平均体重约 2 g 的日本鳗鲡（Anguilla japonica），在 25±1 °C 的 16 L 流动淡水中饲育 22 天。摄食率数值对应各自实验水槽的测点。出处为原文第 1336 页表 1（实验 I）。",
+      "source_url": "https://doi.org/10.2331/suisan.49.1335",
+      "source_version": "1983",
+      "keywords": [
+        "日本鳗鲡",
+        "鳗鲡",
+        "Anguilla japonica",
+        "溶解氧",
+        "溶氧",
+        "摄食",
+        "摄食率",
+        "实测",
+        "2.11 mg/L"
+      ],
+      "species": "anguilla_japonica",
+      "outcomes": [
+        "feeding"
+      ],
+      "oxygen_intervals": [
+        {
+          "low": "2.11",
+          "high": "2.11",
+          "low_inclusive": true,
+          "high_inclusive": true
+        }
+      ]
+    },
+    {
+      "id": "builtin-90a5bb86fe0b6d129d417ddd",
+      "title": "日本鳗鲡摄食实测点：2.94 和 3.60 mg/L",
+      "body": "Yamagata 等（1983）的实验 III 中，平均溶解氧 2.94 mg/L 组的摄食率为 12.8%/日，3.60 mg/L 组为 12.4%/日。同次实验的一个 8.06 mg/L 对照组为 14.7%/日。研究对象是平均体重约 2 g 的日本鳗鲡（Anguilla japonica），在 25±1 °C 的 16 L 流动淡水中饲育 22 天。摄食率数值只对应这些独立水槽的测点。出处为原文第 1336 页表 1（实验 III）。",
+      "source_url": "https://doi.org/10.2331/suisan.49.1335",
+      "source_version": "1983",
+      "keywords": [
+        "日本鳗鲡",
+        "鳗鲡",
+        "Anguilla japonica",
+        "溶解氧",
+        "溶氧",
+        "摄食",
+        "摄食率",
+        "实测",
+        "2.94 mg/L",
+        "3.60 mg/L"
+      ],
+      "species": "anguilla_japonica",
+      "outcomes": [
+        "feeding"
+      ],
+      "oxygen_intervals": [
+        {
+          "low": "2.94",
+          "high": "2.94",
+          "low_inclusive": true,
+          "high_inclusive": true
+        },
+        {
+          "low": "3.60",
+          "high": "3.60",
+          "low_inclusive": true,
+          "high_inclusive": true
+        }
+      ]
+    },
+    {
+      "id": "builtin-6af79dc9cfae98c7dd2ab9b5",
+      "title": "日本鳗鲡低溶氧实验中的相对摄食率变化",
+      "body": "Yamagata 等（1983）汇总多组水槽的数据，发现约 4.0 mg/L 以下，相对摄食率随溶解氧降低呈下降趋势。相对值以各次实验的最高对照摄食率为参照。研究对象是平均体重约 2 g 的日本鳗鲡（Anguilla japonica），在 25±1 °C 的 16 L 流动淡水中饲育 22 天。约 4.0 mg/L 是这项实验的趋势转折，特定浓度的摄食率需查对应测点。出处为原文第 1337 页图 3 和结果段。",
+      "source_url": "https://doi.org/10.2331/suisan.49.1335",
+      "source_version": "1983",
+      "keywords": [
+        "日本鳗鲡",
+        "鳗鲡",
+        "Anguilla japonica",
+        "溶解氧",
+        "溶氧",
+        "低溶氧",
+        "摄食",
+        "摄食率",
+        "相对摄食率"
+      ],
+      "species": "anguilla_japonica",
+      "outcomes": [
+        "feeding"
+      ],
+      "oxygen_intervals": []
+    },
+    {
+      "id": "builtin-e0bea7d7b4b4b23de485577f",
+      "title": "日本鳗鲡低溶氧实验中的增重与饲料效率",
+      "body": "Yamagata 等（1983）报告，在约 4.5 mg/L 以上，相对增重率与相对饲料效率大致稳定。在更低的浓度下，两项指标呈下降趋势。研究对象是平均体重约 2 g 的日本鳗鲡（Anguilla japonica），在 25±1 °C 的 16 L 流动淡水中饲育 22 天。约 4.5 mg/L 是研究在这些条件下对生长的估计，查询摄食率时应使用对应的摄食测点或图 3。出处为原文第 1335 页摘要、第 1336–1337 页图 1 至图 2 对应的结果。",
+      "source_url": "https://doi.org/10.2331/suisan.49.1335",
+      "source_version": "1983",
+      "keywords": [
+        "日本鳗鲡",
+        "鳗鲡",
+        "Anguilla japonica",
+        "溶解氧",
+        "溶氧",
+        "增重",
+        "生长",
+        "饲料效率"
+      ],
+      "species": "anguilla_japonica",
+      "outcomes": [
+        "growth"
+      ],
+      "oxygen_intervals": []
+    },
+    {
+      "id": "builtin-f0b7fdc532e9f4b0b137c480",
+      "title": "日本鳗鲡在恒定溶氧饱和度下的摄食",
+      "body": "Rowchai 等（1986）的恒定溶氧实验中，低于 40% 空气饱和度时，相对摄食率和饲料转化率明显下降。约 20% 饱和度组的摄食率低于 60%–90% 饱和度组的一半。实验 1–4 使用初始体重约 2–4 g 的日本鳗鲡（Anguilla japonica），在水温 23.7–25.0 °C 的 16 L 流动淡水水槽中观察 10–20 天。数字单位为空气饱和度百分比，具体 mg/L 需另有对应浓度证据。出处为原文第 598–601 页实验 1–4、表 1 和图 2。",
+      "source_url": "https://doi.org/10.2331/suisan.52.597",
+      "source_version": "1986",
+      "keywords": [
+        "日本鳗鲡",
+        "鳗鲡",
+        "Anguilla japonica",
+        "溶解氧",
+        "溶氧",
+        "摄食",
+        "摄食率",
+        "低溶氧",
+        "恒定",
+        "饱和度"
+      ],
+      "species": "anguilla_japonica",
+      "outcomes": [
+        "feeding"
+      ],
+      "oxygen_intervals": []
+    },
+    {
+      "id": "builtin-a58f74d89aa10ae6dd91d3fc",
+      "title": "日本鳗鲡在昼夜溶氧波动中的摄食与生长",
+      "body": "Rowchai 等（1986）的实验 5–8 把日本鳗鲡（Anguilla japonica）置于 16 L 流动淡水水槽，鱼平均体重约 2–5 g，观察 8–10 天。论文报告的整体水温为 23.4–25.0 °C。在每 12 小时切换、约 90% 饱和度与低于 40% 饱和度交替的组，即使喂食安排在较高溶氧阶段，相对摄食率和生长率仍下降。这里的证据描述指定昼夜暴露条件，单次 mg/L 读数无法刻画这个暴露过程。出处为原文第 598–599 页方法、第 601–603 页图 2 和表 2。",
+      "source_url": "https://doi.org/10.2331/suisan.52.597",
+      "source_version": "1986",
+      "keywords": [
+        "日本鳗鲡",
+        "鳗鲡",
+        "Anguilla japonica",
+        "溶解氧",
+        "溶氧",
+        "摄食",
+        "摄食率",
+        "生长",
+        "昼夜波动",
+        "饱和度"
+      ],
+      "species": "anguilla_japonica",
+      "outcomes": [
+        "feeding",
+        "growth"
+      ],
+      "oxygen_intervals": []
+    },
+    {
+      "id": "builtin-f3ec9971a8423aa71a1f1c59",
+      "title": "日本鳗鲡摄食对照点：7.26 mg/L",
+      "body": "Yamagata 等（1983）的实验 I 中，该对照水槽的平均溶解氧为 7.26 mg/L，表列日摄食率为 12.4%/日。研究对象是平均体重约 2 g 的日本鳗鲡（Anguilla japonica），在 25±1 °C 的 16 L 流动淡水中饲育 22 天。摄食率对应该实验组的测点。出处为原文第 1336 页表 1（实验 I）。",
+      "source_url": "https://doi.org/10.2331/suisan.49.1335",
+      "source_version": "1983",
+      "keywords": [
+        "日本鳗鲡",
+        "鳗鲡",
+        "Anguilla japonica",
+        "溶解氧",
+        "溶氧",
+        "摄食",
+        "摄食率",
+        "7.26 mg/L",
+        "对照"
+      ],
+      "species": "anguilla_japonica",
+      "outcomes": [
+        "feeding"
+      ],
+      "oxygen_intervals": [
+        {
+          "low": "7.26",
+          "high": "7.26",
+          "low_inclusive": true,
+          "high_inclusive": true
+        }
+      ]
+    },
+    {
+      "id": "builtin-0154800aa9175881b6488594",
+      "title": "日本鳗鲡摄食对照点：8.06 mg/L",
+      "body": "Yamagata 等（1983）的实验 III 中，该对照水槽的平均溶解氧为 8.06 mg/L，表列日摄食率为 14.7%/日。研究对象是平均体重约 2 g 的日本鳗鲡（Anguilla japonica），在 25±1 °C 的 16 L 流动淡水中饲育 22 天。摄食率对应该实验组的测点。出处为原文第 1336 页表 1（实验 III）。",
+      "source_url": "https://doi.org/10.2331/suisan.49.1335",
+      "source_version": "1983",
+      "keywords": [
+        "日本鳗鲡",
+        "鳗鲡",
+        "Anguilla japonica",
+        "溶解氧",
+        "溶氧",
+        "摄食",
+        "摄食率",
+        "8.06 mg/L",
+        "对照"
+      ],
+      "species": "anguilla_japonica",
+      "outcomes": [
+        "feeding"
+      ],
+      "oxygen_intervals": [
+        {
+          "low": "8.06",
+          "high": "8.06",
+          "low_inclusive": true,
+          "high_inclusive": true
+        }
+      ]
+    },
+    {
+      "id": "builtin-edeb51d87dd8956d8d7affa4",
+      "title": "日本鳗鲡摄食实测点：4.73 mg/L",
+      "body": "Yamagata 等（1983）的实验 I 中，该实验水槽的平均溶解氧为 4.73 mg/L，表列日摄食率为 11.6%/日。研究对象是平均体重约 2 g 的日本鳗鲡（Anguilla japonica），在 25±1 °C 的 16 L 流动淡水中饲育 22 天。摄食率对应该实验组的测点。出处为原文第 1336 页表 1（实验 I）。",
+      "source_url": "https://doi.org/10.2331/suisan.49.1335",
+      "source_version": "1983",
+      "keywords": [
+        "日本鳗鲡",
+        "鳗鲡",
+        "Anguilla japonica",
+        "溶解氧",
+        "溶氧",
+        "摄食",
+        "摄食率",
+        "4.73 mg/L",
+        "实测"
+      ],
+      "species": "anguilla_japonica",
+      "outcomes": [
+        "feeding"
+      ],
+      "oxygen_intervals": [
+        {
+          "low": "4.73",
+          "high": "4.73",
+          "low_inclusive": true,
+          "high_inclusive": true
+        }
+      ]
+    },
+    {
+      "id": "builtin-3d1a2ddf2fb6cbf7f32415e3",
+      "title": "日本鳗鲡摄食实测点：6.27 mg/L",
+      "body": "Yamagata 等（1983）的实验 II 中，该实验水槽的平均溶解氧为 6.27 mg/L，表列日摄食率为 14.1%/日。研究对象是平均体重约 2 g 的日本鳗鲡（Anguilla japonica），在 25±1 °C 的 16 L 流动淡水中饲育 22 天。摄食率对应该实验组的测点。出处为原文第 1336 页表 1（实验 II）。",
+      "source_url": "https://doi.org/10.2331/suisan.49.1335",
+      "source_version": "1983",
+      "keywords": [
+        "日本鳗鲡",
+        "鳗鲡",
+        "Anguilla japonica",
+        "溶解氧",
+        "溶氧",
+        "摄食",
+        "摄食率",
+        "6.27 mg/L",
+        "实测"
+      ],
+      "species": "anguilla_japonica",
+      "outcomes": [
+        "feeding"
+      ],
+      "oxygen_intervals": [
+        {
+          "low": "6.27",
+          "high": "6.27",
+          "low_inclusive": true,
+          "high_inclusive": true
+        }
+      ]
+    },
+    {
+      "id": "builtin-16140ad1b34bdca9d72d1512",
+      "title": "日本鳗鲡的恒定溶氧摄食实测点：21.1% 饱和度",
+      "body": "Rowchai 等（1986）的实验 1 第 1 号水槽，平均溶氧为空气饱和度的 21.1%，表列摄食率为 3.76%。该组日本鳗鲡（Anguilla japonica）初始平均体重为 2.71 g。恒定溶氧组在 16 L 流动淡水水槽中观察 10–20 天，结果段报告水温 23.7–25.0 °C。溶氧和摄食率沿用原表单位，数值对应这一水槽。出处为原文第 600 页表 1（实验 1，第 1 号水槽）。",
+      "source_url": "https://doi.org/10.2331/suisan.52.597",
+      "source_version": "1986",
+      "keywords": [
+        "日本鳗鲡",
+        "鳗鲡",
+        "Anguilla japonica",
+        "溶解氧",
+        "溶氧",
+        "摄食",
+        "摄食率",
+        "恒定",
+        "饱和度",
+        "21.1%"
+      ],
+      "species": "anguilla_japonica",
+      "outcomes": [
+        "feeding"
+      ],
+      "oxygen_intervals": [],
+      "oxygen_saturation_intervals": [
+        {
+          "low": "21.1",
+          "high": "21.1",
+          "low_inclusive": true,
+          "high_inclusive": true
+        }
+      ]
+    },
+    {
+      "id": "builtin-cf59599664aefafb41be960f",
+      "title": "日本鳗鲡的恒定溶氧摄食实测点：80.0% 饱和度",
+      "body": "Rowchai 等（1986）的实验 2 第 4 号水槽，平均溶氧为空气饱和度的 80.0%，表列摄食率为 10.57%。该组日本鳗鲡（Anguilla japonica）初始平均体重为 2.78 g。恒定溶氧组在 16 L 流动淡水水槽中观察 10–20 天，结果段报告水温 23.7–25.0 °C。溶氧和摄食率沿用原表单位，数值对应这一水槽。出处为原文第 600 页表 1（实验 2，第 4 号水槽）。",
+      "source_url": "https://doi.org/10.2331/suisan.52.597",
+      "source_version": "1986",
+      "keywords": [
+        "日本鳗鲡",
+        "鳗鲡",
+        "Anguilla japonica",
+        "溶解氧",
+        "溶氧",
+        "摄食",
+        "摄食率",
+        "恒定",
+        "饱和度",
+        "80.0%"
+      ],
+      "species": "anguilla_japonica",
+      "outcomes": [
+        "feeding"
+      ],
+      "oxygen_intervals": [],
+      "oxygen_saturation_intervals": [
+        {
+          "low": "80.0",
+          "high": "80.0",
+          "low_inclusive": true,
+          "high_inclusive": true
+        }
+      ]
+    }
+  ]
+}

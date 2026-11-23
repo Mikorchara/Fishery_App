@@ -1,4 +1,6 @@
 """Knowledge Tool definition, strict query contract and bounded Evidence mapping."""
+import re
+
 from apps.ai_backend.model_gateway import ModelToolDefinition
 
 
@@ -26,7 +28,18 @@ RESULT_INSTRUCTION = (
 )
 
 
-KNOWLEDGE_BINDING_VERSION = "management-project-knowledge@1"
+KNOWLEDGE_BINDING_VERSION = "management-project-knowledge@2"
+CURATED_OXYGEN_CONTRACT = "eel-oxygen-result@1"
+_LOOKUP_VERB = r"(?:查询|检索|查阅|查找|查证|查(?:一下|一查)?|搜索|参考)(?:一下)?"
+_PROJECT_SOURCE = r"(?:项目(?:内|的)?(?:养殖)?(?:资料|知识(?:库)?)|专题库|知识库)"
+_EXPLICIT_LOOKUP = re.compile(
+    r"(?:^|[。！？!?，,；;])\s*(?:请(?:你)?\s*)?(?:麻烦(?:你)?\s*)?(?:帮我\s*)?(?:先|再)?\s*"
+    rf"(?:{_LOOKUP_VERB}\s*{_PROJECT_SOURCE}|(?:从|在)\s*{_PROJECT_SOURCE}(?:里|中|内)?\s*{_LOOKUP_VERB})"
+)
+
+
+def requires_project_lookup(question: str) -> bool:
+    return bool(_EXPLICIT_LOOKUP.search(question))
 
 # Existing query validation and bounded result mapping; retrieval remains in KnowledgeService.
 
@@ -84,21 +97,49 @@ def search_fishery_knowledge(arguments: dict, *, service, question=None) -> dict
     service reports no qualifying evidence. Service failures are not caught here.
     """
     options = {}
+    curated = False
     if question is not None:
+        from apps.knowledge.curated_retrieval import (
+            is_curated_quantitative_question, is_standalone_oxygen_lookup,
+        )
         from apps.knowledge.service import KnowledgeContentService
 
         if isinstance(service, KnowledgeContentService):
             options['question'] = question
-    evidence = service.search(arguments["query"], top_k=TOP_K, **options)
+    if options and requires_project_lookup(question) and is_standalone_oxygen_lookup(question):
+        evidence, structured = service.search_with_scope(arguments["query"], top_k=TOP_K, **options)
+        curated = structured and (not evidence or is_curated_quantitative_question(question))
+    else:
+        evidence = service.search(arguments["query"], top_k=TOP_K, **options)
     items = [{"id": item.evidence_id, "category": item.category, "source": item.source_id,
               "source_version": item.source_version, "text": _bounded_text(item.text)}
              for item in evidence]
-    return {"status": "OK" if items else "NO_MATCH",
+    result = {"status": "OK" if items else "NO_MATCH",
             # Effective backend, passed through as-is: it tells the model which
             # retrieval backend produced these items. Never inferred or composed here.
             "retrieval_mode": service.backend,
             "result_count": len(items),
             "evidence": items}
+    if curated:
+        coverage = "NO_MATCH" if not items else "PARTIAL" if any(item.score < 2 for item in evidence) else "EXACT"
+        result["curated_oxygen"] = {"contract": CURATED_OXYGEN_CONTRACT, "coverage": coverage}
+    return result
+
+
+def render_curated_oxygen_result(payload: dict) -> str | None:
+    """Render only the bounded results produced by the structured knowledge tool."""
+    scope = payload.get("curated_oxygen")
+    if not isinstance(scope, dict) or scope.get("contract") != CURATED_OXYGEN_CONTRACT:
+        return None
+    coverage = scope.get("coverage")
+    if coverage == "NO_MATCH" and payload["status"] == "NO_MATCH":
+        return "本次在专题库中未找到符合所问条件的实验资料。"
+    if coverage in ("EXACT", "PARTIAL") and payload["status"] == "OK":
+        introduction = ("本次只找到所问范围内的部分实测点。"
+                        if coverage == "PARTIAL" else "本次找到对应的实验资料。")
+        citations = [f"{item['text']}\n来源 {item['source']}" for item in payload["evidence"]]
+        return "\n\n".join([introduction, *citations])
+    return None
 
 
 def _bounded_text(text: str) -> str:

@@ -41,7 +41,7 @@
       },
       "data_bindings": {
         "water": "management-current-water@1",
-        "knowledge": "management-project-knowledge@1",
+        "knowledge": "management-project-knowledge@2",
         "knowledge_source": "legacy:eel_knowledge.json",
         "knowledge_version": "1.0",
         "retrieval_backend": "portable"
@@ -137,7 +137,7 @@
       },
       "data_bindings": {
         "water": "management-current-water@1",
-        "knowledge": "management-project-knowledge@1",
+        "knowledge": "management-project-knowledge@2",
         "knowledge_source": "legacy:eel_knowledge.json",
         "knowledge_version": "1.0",
         "retrieval_backend": "portable"
@@ -231,7 +231,7 @@
       },
       "data_bindings": {
         "water": "management-current-water@1",
-        "knowledge": "management-project-knowledge@1",
+        "knowledge": "management-project-knowledge@2",
         "knowledge_source": "management:knowledge-content",
         "knowledge_version": "managed-content@1",
         "retrieval_backend": "portable"
@@ -327,7 +327,7 @@
       },
       "data_bindings": {
         "water": "management-current-water@1",
-        "knowledge": "management-project-knowledge@1",
+        "knowledge": "management-project-knowledge@2",
         "knowledge_source": "management:knowledge-content",
         "knowledge_version": "managed-content@1",
         "retrieval_backend": "portable"

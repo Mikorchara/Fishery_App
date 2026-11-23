@@ -21,7 +21,8 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = 'management-qq-agent-research-cases@1'
 FIXTURE_CONTRACT = 'management-qq-agent-synthetic-fixture@1'
 TOOLS = (CURRENT, KNOWLEDGE, HISTORY, SCORE)
-SCENARIOS = ('fresh', 'missing', 'stale', 'low_oxygen', 'no_data')
+CURATED_OXYGEN_SCENARIO = 'curated_oxygen'
+SCENARIOS = ('fresh', 'missing', 'stale', 'low_oxygen', 'no_data', CURATED_OXYGEN_SCENARIO)
 CATEGORIES = ('general', 'current', 'history', 'knowledge', 'score', 'comparison',
               'ambiguous', 'memory', 'adversarial')
 DEVICE_ID = 'sim-pond-1'
@@ -179,6 +180,29 @@ CASES = (
 )
 
 
+# Opt-in cases leave the default research batch and its historical comparisons intact.
+RAG_CASES = (
+    ResearchCase('R01', 'knowledge', '请查项目资料，日本鳗鲡在溶解氧 7.26 mg/L 时，实验摄食率是多少？',
+        CURATED_OXYGEN_SCENARIO, KNOWLEDGE_SOURCE,
+        expectation='命中原文表 1 实验 I 的对照测点，日摄食率 12.4%，交代出处和实验条件。'),
+    ResearchCase('R02', 'knowledge', '请从项目资料里查一下，日本鳗鲡在溶解氧 6–7 mg/L 的实验摄食率。',
+        CURATED_OXYGEN_SCENARIO, KNOWLEDGE_SOURCE,
+        expectation='只找到 6.27 mg/L 的 14.1%/日，明确部分覆盖，不外推整个区间。'),
+    ResearchCase('R03', 'knowledge', '请帮我查项目资料，日本鳗鲡在溶解氧 9–10 mg/L 时的实验摄食率是多少？',
+        CURATED_OXYGEN_SCENARIO, KNOWLEDGE_SOURCE,
+        expectation='完成专题检索后说明没有匹配测点，不补估计摄食率。'),
+    ResearchCase('R04', 'knowledge', '请查项目资料，俄罗斯鲟在溶解氧 2.11 mg/L 时的实验摄食率是多少？',
+        CURATED_OXYGEN_SCENARIO, KNOWLEDGE_SOURCE,
+        expectation='专题没有该物种的匹配证据，不能把日本鳗鲡的值用于俄罗斯鲟。'),
+    ResearchCase('R05', 'knowledge', '请参考项目资料，日本鳗鲡在溶氧空气饱和度 21.1% 时的实验摄食率是多少？',
+        CURATED_OXYGEN_SCENARIO, KNOWLEDGE_SOURCE,
+        expectation='命中原表摄食率 3.76%，保留空气饱和度百分比和原表摄食率口径。'),
+    ResearchCase('R06', 'comparison', '请查项目资料，给出日本鳗鲡在溶解氧 2.11 mg/L 时的实验摄食率，并与过去半小时的溶解氧监测数据对比。',
+        CURATED_OXYGEN_SCENARIO, ((KNOWLEDGE, HISTORY),),
+        expectation='使用论文和 30 分钟历史两个来源，区分实验摄食率与模拟溶氧监测，保留覆盖限制，不推断现场摄食。'),
+)
+
+
 def validate_case_library(cases=CASES):
     ids = set()
     groups = {}
@@ -245,13 +269,16 @@ class SyntheticFixture:
                       for f in analysis.findings])
 
     def public(self):
+        knowledge_source = ('CURATED_OXYGEN_V2_LITERATURE_AND_NO_USER_DATA'
+                            if self.scenario == CURATED_OXYGEN_SCENARIO
+                            else 'BUNDLED_BACKGROUND_CORPUS_NOT_USER_DATA')
         return dict(contract=FIXTURE_CONTRACT, scenario=self.scenario, source='SIMULATOR',
             data_root=str(self.root), instance_id='management-isolated', device_id=DEVICE_ID,
             created_at=self.created_at.isoformat(),
             last_observed_at=self.last_observed_at.isoformat() if self.last_observed_at else None,
             windows_created=self.windows_created, refresh_windows=self.refresh_windows,
             water_values=dict(self.water_values),
-            synthetic_knowledge='BUNDLED_BACKGROUND_CORPUS_NOT_USER_DATA',
+            synthetic_knowledge=knowledge_source,
             known_absent_knowledge_query=ABSENT_KNOWLEDGE_QUERY,
             history_seed='30_ONE_MINUTE_WINDOWS' if self.scenario!='no_data' else 'NO_OBSERVATIONS',
             automatic_background_refresh=False, timestamps_rewritten=False)
@@ -271,6 +298,7 @@ def create_fixture(root, scenario='fresh', clock=lambda: datetime.now(timezone.u
     if (not root.resolve().is_relative_to(ROOT/'outputs') or root.exists()
             or not root.parent.is_dir()):
         raise ValueError('NEW_RESEARCH_OUTPUT_DIRECTORY_REQUIRED')
+    from apps.knowledge.initial import CURATED_KNOWLEDGE_SEED
     from apps.management_paths import ManagementPaths
     from apps.management_web.instance import initialize_instance
     from apps.management_process import ISOLATED_MARKER_CONTRACT
@@ -281,7 +309,8 @@ def create_fixture(root, scenario='fresh', clock=lambda: datetime.now(timezone.u
 
     created=_utc(clock())
     paths=ManagementPaths.resolve(ROOT,data_root=root)
-    initialize_instance(paths,initial_knowledge=True)
+    knowledge_seed = CURATED_KNOWLEDGE_SEED if scenario == CURATED_OXYGEN_SCENARIO else None
+    initialize_instance(paths, initial_knowledge=True, knowledge_seed=knowledge_seed)
     service=MonitoringService(MonitoringRepository(paths.monitoring,require_existing=True),clock=clock)
     end=created-timedelta(minutes=15) if scenario=='stale' else created
     simulation='low_oxygen' if scenario in ('stale','low_oxygen') else 'normal'

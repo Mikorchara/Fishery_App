@@ -2,7 +2,7 @@
 param(
     [switch]$Check,
     [switch]$Run,
-    [ValidateSet('smoke','full')][string]$Suite = 'full',
+    [ValidateSet('smoke','full','rag')][string]$Suite = 'full',
     [ValidateRange(1,100)][int]$Repeats = 3,
     [ValidateRange(0,44)][int]$Cases = 0,
     [string]$CaseIds = '',

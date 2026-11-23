@@ -8,6 +8,7 @@ import re
 import time
 
 from apps.ai_backend.history_projection import DEFAULT_HISTORY_PROJECTION, ProjectionId, project_retained_history
+from ..business_tools.fishery_knowledge import render_curated_oxygen_result
 from .activity import project_activity, tool_summary
 from apps.ai_backend.contracts import Mode, Status, utcnow
 from .sources import (SourceRequirement, TurnSourceLedger, TurnSourceReceipt,
@@ -301,6 +302,7 @@ class AssistantService:
                 total_latency_ms=(time.monotonic() - started) * 1000)) if handle else None)
         ledger = ledger_from_execution(run)
         code = run.error_code
+        final_text = run.generated_text
         if run.status == Status.COMPLETED:
             if run.final_finish_reason == "length":
                 code = "ASSISTANT_RESPONSE_TRUNCATED"
@@ -310,6 +312,12 @@ class AssistantService:
                 code = "ASSISTANT_RESPONSE_INCOMPLETE"
             elif not requirement_satisfied_by_ledger(request.source_requirement, ledger):
                 code = "ASSISTANT_SOURCE_REQUIREMENT_UNMET"
+            elif (request.source_requirement == SourceRequirement.PROJECT_KNOWLEDGE_SEARCH
+                  and len(ledger.entries) == 1):
+                step = run.steps[ledger.entries[0].execution_seq - 1]
+                verified = render_curated_oxygen_result(step.result.payload)
+                if verified is not None:
+                    final_text = verified
         secret = runtime.credential._for_adapter()
 
         def record_result(cancelled):
@@ -320,7 +328,7 @@ class AssistantService:
                 except GatewayError as exc:
                     final_code = exc.code
             status = Status.CANCELLED if final_code == "USER_CANCELLED" else Status.FAILED if final_code else run.status
-            text = run.generated_text if status == Status.COMPLETED else ""
+            text = final_text if status == Status.COMPLETED else ""
             if secret:
                 text = text.replace(secret, "[REDACTED]")
             result = AssistantResult(request.preset_id, status, final_code, text,
