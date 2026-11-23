@@ -10,6 +10,7 @@ import time
 from apps.ai_backend.history_projection import DEFAULT_HISTORY_PROJECTION, ProjectionId, project_retained_history
 from ..business_tools.fishery_knowledge import render_curated_oxygen_result
 from .activity import project_activity, tool_summary
+from .oxygen_history import render_oxygen_history_comparison
 from apps.ai_backend.contracts import Mode, Status, utcnow
 from .sources import (SourceRequirement, TurnSourceLedger, TurnSourceReceipt,
                                ledger_from_execution, requirement_satisfied_by_ledger)
@@ -312,10 +313,11 @@ class AssistantService:
                 code = "ASSISTANT_RESPONSE_INCOMPLETE"
             elif not requirement_satisfied_by_ledger(request.source_requirement, ledger):
                 code = "ASSISTANT_SOURCE_REQUIREMENT_UNMET"
-            elif (request.source_requirement == SourceRequirement.PROJECT_KNOWLEDGE_SEARCH
-                  and len(ledger.entries) == 1):
-                step = run.steps[ledger.entries[0].execution_seq - 1]
-                verified = render_curated_oxygen_result(step.result.payload)
+            elif request.source_requirement == SourceRequirement.PROJECT_KNOWLEDGE_SEARCH:
+                verified = render_oxygen_history_comparison(request.question, run, ledger)
+                if verified is None and len(ledger.entries) == 1:
+                    step = run.steps[ledger.entries[0].execution_seq - 1]
+                    verified = render_curated_oxygen_result(step.result.payload)
                 if verified is not None:
                     final_text = verified
         secret = runtime.credential._for_adapter()

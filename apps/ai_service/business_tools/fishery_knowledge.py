@@ -98,17 +98,21 @@ def search_fishery_knowledge(arguments: dict, *, service, question=None) -> dict
     """
     options = {}
     curated = False
+    lookup_requested = False
     if question is not None:
         from apps.knowledge.curated_retrieval import (
             is_curated_quantitative_question, is_standalone_oxygen_lookup,
+            parse_oxygen_history_comparison,
         )
         from apps.knowledge.service import KnowledgeContentService
 
         if isinstance(service, KnowledgeContentService):
-            options['question'] = question
-    if options and requires_project_lookup(question) and is_standalone_oxygen_lookup(question):
+            lookup_requested = requires_project_lookup(question)
+            comparison = parse_oxygen_history_comparison(question) if lookup_requested else None
+            options['question'] = comparison.paper_question if comparison else question
+    if lookup_requested and is_standalone_oxygen_lookup(options['question']):
         evidence, structured = service.search_with_scope(arguments["query"], top_k=TOP_K, **options)
-        curated = structured and (not evidence or is_curated_quantitative_question(question))
+        curated = structured and (not evidence or is_curated_quantitative_question(options['question']))
     else:
         evidence = service.search(arguments["query"], top_k=TOP_K, **options)
     items = [{"id": item.evidence_id, "category": item.category, "source": item.source_id,

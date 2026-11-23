@@ -119,7 +119,7 @@
       "ai_service/hybrid_presentation.py": "02bc2768e456ac2aa69537140eb07803e47ff436f9b582785e61bddc33a04034",
       "ai_service/hybrid_trial_presentation.py": "9a2338b359be43d356f6e7dece1f8e2cb9a06a73b9089d6a2762bc3b57177f76",
       "ai_service/management_policy.py": "d2cc3c81e48a752690b43c56e09158850c0bdb7395ab6ff93f2b5877835e5b51",
-      "ai_service/runtime/assistant.py": "1b32ec2754ae56468947924020bb457c9520758e17a042940c9da0ae1cac030c",
+      "ai_service/runtime/assistant.py": "b0ab65c22cc9b4853f3dc0f9c86c3a52eea3b9ea4c00dfb104c0e6f8baed0cc5",
       "ai_service/runtime/resources/presets.json": "30aa3ce86c42ffaf6e50adee6fbe3e3ab44cc5dccd2adfef7dd4d4d4207fce19",
       "ai_service/runtime/sources.py": "3e8cfbd0526c044c4c76de187ac49cee82b0b3d89ec4e3ceacfb532910052f9a",
       "ai_service/service.py": "815e0ed6f3f9a8c8bdbd050d8a705a8d2fe83d89aae3b370700884c2a062c46c",
@@ -169,7 +169,7 @@
     "deployment": "fishery-management",
     "publication": "FAKE_GATEWAY_ONLY_NO_REAL_GENERAL_APPROVAL"
   },
-  "scope_sha256": "0e53665fb98c723c431b70bcf91814963d404fe39307420828e3917292d74af1",
+  "scope_sha256": "4ce6d783aba607c6ec99a430b9c52a3dd8bddeea3dc4377a152c07d376116f25",
   "qualification_id": null,
   "can_execute_real": false,
   "can_deliver_real": false

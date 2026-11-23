@@ -10,8 +10,9 @@ from .evidence import KnowledgeEvidence, utcnow
 
 
 _METRIC = re.compile(r"溶解氧|溶存氧|溶氧|dissolved[ _-]+oxygen|(?<![a-z0-9_])(?-i:DO)(?![a-z0-9_])", re.I)
+_JAPANESE_EEL = r"(?:日本鳗(?:鲡|鱼)?(?![鲡鱼科目属])|\b(?:anguilla|a\.)[ \t]+japonica\b|\bjapanese eels?\b)"
 _EEL = re.compile(
-    r"日本鳗(?:鲡|鱼)?(?![鲡鱼科目属])|\b(?:anguilla|a\.)[ \t]+japonica\b|\bjapanese eels?\b|"
+    _JAPANESE_EEL + r"|"
     r"(?:^|(?<=[ \t：:，、。的查问对看为是和与时])|(?<=溶氧)|(?<=一下))(?:鳗鲡|鳗鱼)(?![科目属])"
 )
 _OTHER_SPECIES = re.compile(
@@ -80,6 +81,31 @@ _GENERIC_TOPIC = re.compile(
 _UNCERTAIN_VALUE = re.compile(r"约|左右|上下|附近|大概|以下|以上|差不多")
 _NEGATED_SCOPE = re.compile(r"不问|别查|不要查|不用查|不是|并非|不等于|!=|≠")
 _DIGIT = re.compile(r"[0-9]")
+_HISTORY_COMPARISON = re.compile(
+    r"(?P<paper>.+?)\s*(?:(?:,\s*(?:并\s*)?)|并\s*)(?:与|和|跟)\s*(?:最近|过去)\s*"
+    r"(?P<window>(?:10|30|60)\s*分钟|半(?:个)?小时|(?:一|1)\s*(?:个)?小时)"
+    r"\s*(?:的)?\s*(?:溶解氧|溶存氧|溶氧|DO)\s*(?:历史)?\s*(?:监测|观测)?\s*(?:数据|记录)?"
+    r"\s*(?:进行)?(?:对比|比较)\s*[。.!?]?",
+    re.I,
+)
+_PROJECT_LOOKUP_CLAUSE = re.compile(
+    r"(?:请(?:你|帮我)?\s*)?(?:(?:麻烦(?:你)?|帮我)\s*)?(?:先\s*)?"
+    r"(?:查(?:询|阅|找|证|一下|一查)?|检索|搜索|参考)\s*(?:一下\s*)?"
+    r"(?:项目(?:内|的)?(?:养殖)?(?:资料|知识(?:库)?)|专题库|知识库)"
+)
+_FEEDING_POINT_CLAUSE = re.compile(
+    rf"(?:请\s*)?(?:(?:给出|告诉我|查(?:询|一下)?)\s*)?{_JAPANESE_EEL}\s*(?:在)?\s*"
+    rf"(?:溶解氧|溶存氧|溶氧|DO)\s*(?:为|是|在|[:=])?\s*(?P<point>{_NUMBER})\s*{_CONCENTRATION_UNIT}"
+    r"\s*(?:时|(?:条件下))?\s*(?:的)?\s*(?:实验|试验)?(?:日)?摄食率\s*(?:是多少|为多少|多少)?\s*[。.!?]?",
+    re.I,
+)
+
+
+@dataclass(frozen=True)
+class OxygenHistoryComparison:
+    paper_question: str
+    point_mg_l: Decimal
+    lookback_minutes: int
 
 
 @dataclass(frozen=True)
@@ -237,6 +263,27 @@ def is_curated_quantitative_question(question: str) -> bool:
         and not _unsupported(text)
         and _request_interval(text)[1] is not None
     )
+
+
+def parse_oxygen_history_comparison(question: str) -> OxygenHistoryComparison | None:
+    """Recognize one published feeding point compared with an explicit history window."""
+    match = _HISTORY_COMPARISON.fullmatch(normalize("NFKC", question).strip())
+    if not match:
+        return None
+    paper_question = match["paper"].strip()
+    # A single leading project-lookup clause may introduce the point query.
+    # Match the full point clause so a second request cannot be lost when we render it.
+    clauses = paper_question.split(",")
+    if (len(clauses) > 2 or len(clauses) == 2 and not _PROJECT_LOOKUP_CLAUSE.fullmatch(clauses[0].strip())
+            or not is_curated_quantitative_question(paper_question)):
+        return None
+    point = _FEEDING_POINT_CLAUSE.fullmatch(clauses[-1].strip())
+    if not point:
+        return None
+    window = match["window"]
+    minutes = (int(re.match(r"[0-9]+", window)[0]) if window.endswith("分钟")
+               else 30 if window.startswith("半") else 60)
+    return OxygenHistoryComparison(paper_question, Decimal(point["point"]), minutes)
 
 
 def search_curated_oxygen(

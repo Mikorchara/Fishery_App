@@ -248,7 +248,7 @@ class KnowledgeHTTPTests(unittest.TestCase):
             (WATER, {}, '日本鳗鲡在溶解氧 2.11 mg/L 时的实验摄食率是多少？另外查当前水质。',
              '已分别查询实验资料和当前水质。'),
             (HISTORY, {'lookback_minutes': 30, 'metrics': ['dissolved_oxygen_mg_l']},
-             '给出日本鳗鲡在溶解氧 2.11 mg/L 时的实验摄食率，并与过去半小时的溶解氧监测数据对比。',
+             '日本鳗鲡在溶解氧 2.11 mg/L 时的实验摄食率是多少？另外列出过去半小时的溶氧历史。',
              '已分别查询实验资料和过去半小时的溶解氧监测数据。'),
         )
         for monitoring_tool, arguments, question, reply in cases:
@@ -268,6 +268,62 @@ class KnowledgeHTTPTests(unittest.TestCase):
                 self.assertEqual(result['final_text'], reply)
                 self.assertEqual([message['tool_call_id'] for message in f.sdk.bodies[-1]['messages']
                                   if message['role'] == 'tool'], ['literature', 'monitoring'])
+
+    def test_exact_oxygen_comparison_only_publishes_matching_results_in_normal_and_streaming(self):
+        self.use_curated_content()
+        f = self.fixture
+        question = ('请查项目资料，给出日本鳗鲡在溶解氧 2.11 mg/L 时的实验摄食率，'
+                    '并与过去30分钟的溶解氧监测数据对比。')
+        unsupported = '实验摄食率为95%。当前现场溶氧充足，摄食不受低氧抑制。'
+        knowledge_args = json.dumps({'query': '日本鳗鲡 溶解氧 2.11 mg/L 摄食'})
+        cases = (
+            (30, 'dissolved_oxygen_mg_l', True),
+            (10, 'dissolved_oxygen_mg_l', False),
+            (30, 'temperature_c', False),
+        )
+        for streaming in (False, True):
+            for lookback, metric, matching in cases:
+                with self.subTest(streaming=streaming, lookback=lookback, metric=metric):
+                    history_args = json.dumps({'lookback_minutes': lookback, 'metrics': [metric]})
+                    calls = [(KNOWLEDGE, 'literature', knowledge_args), (HISTORY, 'history', history_args)]
+                    if streaming:
+                        plans = [tool_chunks(*call) for call in calls] + [final_chunks(unsupported)]
+                    else:
+                        plans = [sdk_tool(*call, f.profile.model) for call in calls]
+                        plans.append(sdk_final(unsupported, model=f.profile.model))
+                    f.sdk = FakeSDK(plans, model=f.profile.model)
+                    response = f.client.post('/api/ai/messages' + ('/stream' if streaming else ''),
+                        headers=f.headers, json={**f.envelope(streaming), 'question': question})
+                    self.assertEqual(response.status_code, 200, response.get_json(silent=True))
+                    if streaming:
+                        stream = response.get_data(as_text=True)
+                        events = [json.loads(line[6:]) for line in stream.splitlines() if line.startswith('data: ')]
+                        self.assertNotIn('preview', [event['kind'] for event in events])
+                        self.assertNotIn('95%', stream)
+                        self.assertEqual(events[-1]['kind'], 'final', events[-1])
+                        result = events[-1]['result']
+                    else:
+                        result = response.get_json()['result']
+                    response.close()
+                    self.assertTrue(result['successful_turn'], result)
+                    self.assertEqual(len(f.sdk.bodies), 3)
+                    payloads = {message['tool_call_id']: json.loads(message['content'])
+                                for message in f.sdk.bodies[-1]['messages'] if message['role'] == 'tool'}
+                    self.assertEqual(payloads['literature']['status'], 'OK')
+                    self.assertEqual(payloads['history']['status'], 'PARTIAL')
+                    self.assertEqual(set(payloads['history']['metrics']), {metric})
+                    reply = result['final_text']
+                    for evidence in ('2.11 mg/L', '8.9%', '10.2331/suisan.49.1335'):
+                        self.assertIn(evidence, reply)
+                    for fabricated in ('95%', '现场溶氧充足', '摄食不受低氧抑制'):
+                        self.assertNotIn(fabricated, reply)
+                    if matching:
+                        for expected in ('模拟', '北京时间', '07:30', '08:00', '均值', '6.4', '部分覆盖', '高于'):
+                            self.assertIn(expected, reply)
+                    else:
+                        self.assertIn('无法比较', reply)
+                        self.assertNotIn('6.4 mg/L', reply)
+                        self.assertNotIn('高于', reply)
 
     def test_curated_card_edit_and_status_do_not_keep_old_structured_evidence(self):
         from apps.knowledge.initial import initialize_curated_knowledge

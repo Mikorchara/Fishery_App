@@ -143,6 +143,34 @@ class ManagementAgentTests(unittest.TestCase):
         self.assertNotIn('95%', self.posts[-1]['content'])
         self.assertEqual(path.read_bytes(), before)
 
+    def test_curated_oxygen_comparison_uses_verified_paper_and_history_for_qq(self):
+        from apps.knowledge.initial import initialize_curated_knowledge
+
+        path = self.root / 'instance' / 'knowledge.sqlite3'
+        path.rename(path.with_name('offline-legacy-fixture.sqlite3'))
+        initialize_curated_knowledge(path)
+        self.compose()
+        self.plan = (
+            ('search_fishery_knowledge', {'query': '日本鳗鲡 溶解氧 2.11 mg/L 摄食'}),
+            ('get_water_quality_history', {'lookback_minutes': 30, 'metrics': ['dissolved_oxygen_mg_l']}),
+        )
+        self.general_text = '实验摄食率为95%。当前现场溶氧充足，摄食不受低氧抑制。'
+        question = ('请查项目资料，给出日本鳗鲡在溶解氧 2.11 mg/L 时的实验摄食率，'
+                    '并与过去半小时的溶解氧监测数据对比。')
+        result = self.ask(question)
+        self.assertEqual(result.get('history_code'), 'HISTORY_COMMITTED', result)
+        self.assertEqual((len(self.posts), len(self.http)), (1, 3))
+        payloads = [json.loads(message['content']) for message in self.http[-1]['messages']
+                    if message['role'] == 'tool']
+        self.assertEqual([payload['status'] for payload in payloads], ['OK', 'PARTIAL'])
+        self.assertEqual(payloads[-1]['source_kind'], 'simulator')
+        reply = self.posts[-1]['content'].split('\n\n本轮来源', 1)[0]
+        for evidence in ('2.11 mg/L', '8.9%', '10.2331/suisan.49.1335', '模拟', '北京时间',
+                         '均值', '部分覆盖', '高于'):
+            self.assertIn(evidence, reply)
+        for fabricated in ('95%', '现场溶氧充足', '摄食不受低氧抑制'):
+            self.assertNotIn(fabricated, reply)
+
     def test_current_event_question_requires_new_evidence(self):
         self.compose(failure_feedback=True)
         self.general_text='我确认没有任何异常。'

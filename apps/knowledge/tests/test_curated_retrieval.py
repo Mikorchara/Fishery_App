@@ -1,10 +1,12 @@
 """Synthetic evidence cases for curated oxygen scope and ranking."""
 
 from datetime import datetime, timezone
+from decimal import Decimal
 import unittest
 
 from apps.knowledge.curated_retrieval import (
-    is_curated_quantitative_question, is_standalone_oxygen_lookup, search_curated_oxygen,
+    is_curated_quantitative_question, is_standalone_oxygen_lookup,
+    parse_oxygen_history_comparison, search_curated_oxygen,
 )
 
 
@@ -194,6 +196,37 @@ class CuratedOxygenRetrievalTests(unittest.TestCase):
         ):
             with self.subTest(question=question):
                 self.assertFalse(is_curated_quantitative_question(question))
+
+    def test_comparison_parser_separates_paper_point_from_history_window(self):
+        paper = "请查项目资料，给出日本鳗鲡在溶解氧 2.11 mg/L 时的实验摄食率"
+        for window, minutes in (("10 分钟", 10), ("３０分钟", 30), ("60分钟", 60),
+                                ("半小时", 30), ("一小时", 60)):
+            with self.subTest(window=window):
+                result = parse_oxygen_history_comparison(
+                    f"{paper}，并与过去{window}的溶解氧监测数据对比。"
+                )
+                self.assertIsNotNone(result)
+                self.assertEqual(result.point_mg_l, Decimal("2.11"))
+                self.assertEqual(result.lookback_minutes, minutes)
+                self.assertEqual(result.paper_question, paper.replace("，", ","))
+
+    def test_comparison_parser_leaves_other_metrics_and_intents_to_general_path(self):
+        paper = "请查项目资料，给出日本鳗鲡在溶解氧 2.11 mg/L 时的实验摄食率"
+        valid_history = "，并与过去半小时的溶解氧监测数据对比。"
+        for question in (
+            paper,
+            paper.replace("2.11 mg/L", "1–3 mg/L") + valid_history,
+            paper.replace("2.11 mg/L", "21.1%") + valid_history,
+            paper.replace("日本鳗鲡", "俄罗斯鲟") + valid_history,
+            paper.replace("实验摄食率", "实验摄食率并说明原因") + valid_history,
+            paper.replace("请查项目资料", "请查项目资料并说明增氧机原理") + valid_history,
+            paper + valid_history + "然后说明该怎么投喂。",
+            paper + valid_history.replace("过去半小时的溶解氧", "本池当前溶解氧"),
+            paper + valid_history.replace("半小时", "20 分钟"),
+            paper + valid_history.replace("过去半小时的溶解氧", "过去半小时的水温"),
+        ):
+            with self.subTest(question=question):
+                self.assertIsNone(parse_oxygen_history_comparison(question))
 
     def test_standalone_lookup_can_give_negative_result_for_unsupported_scope(self):
         for question in (
