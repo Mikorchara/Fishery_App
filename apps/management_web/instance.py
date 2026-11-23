@@ -98,8 +98,20 @@ def validate_instance(paths):
     check_database(paths.knowledge, 'KNOWLEDGE')
 
 
-def initialize_instance(paths, *, initial_knowledge=False):
-    """Publish a new instance; optional bundled references, never user data."""
+def initialize_instance(paths, *, initial_knowledge=False, knowledge_seed=None):
+    """Publish a new instance and return its count of bundled knowledge records."""
+    from apps.knowledge.initial import (CURATED_KNOWLEDGE_SEED, CURATED_KNOWLEDGE_VERSION,
+        INITIAL_KNOWLEDGE_VERSION, LEGACY_KNOWLEDGE_SEED, initialize_curated_knowledge,
+        initialize_initial_knowledge)
+
+    if knowledge_seed not in (None, LEGACY_KNOWLEDGE_SEED, CURATED_KNOWLEDGE_SEED):
+        raise InstanceError('INVALID_KNOWLEDGE_SEED')
+    if initial_knowledge and knowledge_seed is None:
+        knowledge_seed = LEGACY_KNOWLEDGE_SEED
+    seeds = {
+        LEGACY_KNOWLEDGE_SEED: (initialize_initial_knowledge, INITIAL_KNOWLEDGE_VERSION),
+        CURATED_KNOWLEDGE_SEED: (initialize_curated_knowledge, CURATED_KNOWLEDGE_VERSION),
+    }
     root = paths.data_root
     if root is None:
         raise InstanceError('EXPLICIT_DATA_ROOT_REQUIRED')
@@ -116,18 +128,17 @@ def initialize_instance(paths, *, initial_knowledge=False):
         candidate = ManagementPaths.resolve(root.parent, data_root=stage)
         from apps.monitoring.repository import MonitoringRepository
         MonitoringRepository(candidate.monitoring)
-        if initial_knowledge:
-            from apps.knowledge.initial import initialize_initial_knowledge
-            initialize_initial_knowledge(candidate.knowledge)
-        repository = KnowledgeRepository(candidate.knowledge, require_existing=initial_knowledge)
+        count = 0
+        if knowledge_seed is not None:
+            initializer, seed_version = seeds[knowledge_seed]
+            count = initializer(candidate.knowledge)['builtin_count']
+        repository = KnowledgeRepository(candidate.knowledge, require_existing=knowledge_seed is not None)
         with repository.connection(write=True) as db:
-            if not initial_knowledge:
+            if knowledge_seed is None:
                 db.execute('INSERT INTO knowledge_metadata VALUES (?,?)', ('migration_version','unified-knowledge@2'))
             db.execute('INSERT INTO knowledge_metadata VALUES (?,?)', ('initialization_version','management-instance@1'))
-            if initial_knowledge:
-                from apps.knowledge.initial import INITIAL_KNOWLEDGE_VERSION
-                db.execute('INSERT INTO knowledge_metadata VALUES (?,?)',
-                           ('initial_knowledge_version', INITIAL_KNOWLEDGE_VERSION))
+            if knowledge_seed is not None:
+                db.execute('INSERT INTO knowledge_metadata VALUES (?,?)', ('initial_knowledge_version', seed_version))
         candidate.policy_directory.mkdir()
         candidate.traces.parent.mkdir()
         validate_instance(candidate)
@@ -137,6 +148,7 @@ def initialize_instance(paths, *, initial_knowledge=False):
         # Windows rename refuses an existing target, including an empty directory.
         os.rename(stage, root)
         stage = None
+        return count
     except (OSError, sqlite3.Error):
         raise InstanceError('INSTANCE_STORAGE_ERROR') from None
     except KnowledgeError as error:

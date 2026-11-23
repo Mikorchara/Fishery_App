@@ -21,8 +21,13 @@ WATER,KNOWLEDGE,HISTORY=fixture.WATER,fixture.KNOWLEDGE,fixture.HISTORY
 class KnowledgeHTTPTests(unittest.TestCase):
     def setUp(self):
         self.fixture=fixture.UnifiedToolsTests();self.fixture.setUp();self.addCleanup(self.fixture.doCleanups)
-        f=self.fixture;seed(f.root/'knowledge.sqlite3');self.content=KnowledgeContentService(KnowledgeRepository(f.root/'knowledge.sqlite3'))
-        old=f.backend
+        f=self.fixture;seed(f.root/'knowledge.sqlite3');self.old=f.backend
+        self.install_content(KnowledgeContentService(KnowledgeRepository(f.root/'knowledge.sqlite3')))
+
+    def install_content(self, content):
+        f=self.fixture
+        self.content=content
+        old=self.old
         f.backend=ManagementAssistantService(f.monitoring,credentials=old.credentials,traces=old.traces,
             policy_directory=old.policy_store.directory,knowledge=self.content,
             gateway_factory=lambda:OpenAICompatibleAdapter(async_client_factory=f.sdk.factory),
@@ -33,7 +38,6 @@ class KnowledgeHTTPTests(unittest.TestCase):
         self.client=f.client
         self.token=self.client.get('/api/knowledge').get_json()['write_token']
         self.headers={'X-Management-Knowledge':self.token}
-        self.old=old
 
     def create(self):
         response=self.client.post('/api/knowledge',json=VALUE,headers=self.headers)
@@ -130,6 +134,45 @@ class KnowledgeHTTPTests(unittest.TestCase):
                 safe=json.dumps(result)+f.backend.traces.path.read_text(encoding='utf-8')
                 self.assertNotIn(VALUE['body'],safe)
                 self.assertTrue(all(c.closed and (not c.stream or c.stream.closed) for c in f.sdk.clients))
+
+    def test_curated_web_uses_original_conditions_even_when_model_query_changes_them(self):
+        from apps.knowledge.initial import initialize_curated_knowledge
+
+        f = self.fixture
+        path = f.root / 'curated.sqlite3'
+        initialize_curated_knowledge(path)
+        self.install_content(KnowledgeContentService(KnowledgeRepository(path, require_existing=True)))
+        args = json.dumps({'query': '日本鳗鲡溶氧 6–7 mg/L 摄食'}, ensure_ascii=False)
+        f.sdk = FakeSDK([
+            sdk_tool(KNOWLEDGE, 'curated-search', args, f.profile.model),
+            sdk_final('源文片段已核对。', model=f.profile.model),
+        ], model=f.profile.model)
+        original = '请查项目资料，日本鳗鲡溶解氧在 2.11 mg/L 的实验摄食率。'
+        response = f.client.post('/api/ai/messages', headers=f.headers, json={**f.envelope(), 'question': original})
+        self.assertTrue(response.get_json()['result']['successful_turn'], response.get_json())
+        payload = json.loads(next(item['content'] for item in f.sdk.bodies[1]['messages'] if item['role'] == 'tool'))
+        self.assertEqual(payload['status'], 'OK')
+        self.assertTrue(any('2.11' in item['text'] and item['source'] == 'https://doi.org/10.2331/suisan.49.1335'
+                            for item in payload['evidence']))
+        self.assertFalse(any('6–7' in item['text'] for item in payload['evidence']))
+
+    def test_curated_card_edit_and_status_do_not_keep_old_structured_evidence(self):
+        from apps.knowledge.initial import initialize_curated_knowledge
+
+        path = self.fixture.root / 'curated-edits.sqlite3'
+        initialize_curated_knowledge(path)
+        self.install_content(KnowledgeContentService(KnowledgeRepository(path, require_existing=True)))
+        query = '日本鳗鲡溶解氧 2.11 mg/L 摄食'
+        original, = self.content.search(query)
+        card = self.content.get(original.evidence_id)
+        disabled = self.content.set_status(card['id'], {'version': card['version'], 'status': 'DISABLED'})
+        self.assertEqual(self.content.search(query), ())
+        restored = self.content.set_status(card['id'], {'version': disabled['version'], 'status': 'ACTIVE'})
+        self.assertEqual(self.content.search(query)[0].source_id, original.source_id)
+        edited = self.content.edit(card['id'], {**VALUE, 'version': restored['version']})
+        self.assertEqual(self.content.search(query), ())
+        self.assertEqual(self.content.search(VALUE['title'])[0].source_id, edited['source_id'])
+        self.assertEqual(edited['original_source_id'], original.source_id)
 
     def test_current_history_paths_still_use_monitoring_and_do_not_search_knowledge(self):
         f=self.fixture

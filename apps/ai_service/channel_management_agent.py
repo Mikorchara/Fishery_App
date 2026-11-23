@@ -58,6 +58,7 @@ def prepared_scope(options, output_tokens=2048):
              'apps/ai_service/business_tools/registry.py', 'apps/ai_service/business_tools/fishery_knowledge.py',
              'apps/ai_service/business_tools/water_quality_history.py', 'apps/ai_service/business_tools/water_quality_score.py',
              'apps/knowledge/repository.py', 'apps/knowledge/service.py', 'apps/knowledge/retrieval.py',
+             'apps/knowledge/curated_retrieval.py',
              'apps/qq_bot/knowledge_source.py', 'apps/qq_bot/agent_conversations.py',
              'apps/ai_service/active_event_execution.py', 'apps/ai_service/business_tools/active_events.py',
              'apps/monitoring/event_cycles.py', 'apps/monitoring/event_families.py',

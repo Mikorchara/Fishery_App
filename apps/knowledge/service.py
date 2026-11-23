@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import threading
 import json
 
+from .curated_retrieval import search_curated_oxygen
 from .retrieval import KnowledgeService
 from .repository import KnowledgeError, identifier
 
@@ -43,6 +44,7 @@ class KnowledgeContentService:
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self._lock = threading.RLock()
         self._index_revision, self._index = None, None
+        self._curated_cards = None
 
     def _records(self):
         return self.repository.snapshot()
@@ -94,18 +96,49 @@ class KnowledgeContentService:
             self.clock().astimezone(timezone.utc).isoformat())
         return self.get(key)
 
-    def search(self, query, *, top_k=5, retrieved_at=None, intent_text=None):
+    @staticmethod
+    def _curated_snapshot(records, metadata):
+        raw = metadata.get('curated_oxygen')
+        if raw is None:
+            return None
+        try:
+            corpus = json.loads(raw)
+            if corpus['version'] != 'eel-oxygen-feeding@1' or not isinstance(corpus['records'], list):
+                raise ValueError
+            cards = {card['id']: card for card in corpus['records']}
+            if not cards or len(cards) != len(corpus['records']):
+                raise ValueError
+            matched = tuple(
+                cards[row['id']] for row in records
+                if row['id'] in cards and row['status'] == 'ACTIVE'
+                and row['source_id'] == cards[row['id']]['source_url']
+                and row['source_version'] == cards[row['id']]['source_version']
+                and row['title'] == cards[row['id']]['title'] and row['body'] == cards[row['id']]['body']
+            )
+        except (KeyError, TypeError, ValueError):
+            raise KnowledgeError('KNOWLEDGE_STORAGE_ERROR') from None
+        return matched
+
+    def search(self, query, *, top_k=5, retrieved_at=None, intent_text=None, question=None):
         with self._lock:
             revision, records, metadata=self._records()
             if self._index_revision!=revision:
+                curated = self._curated_snapshot(records, metadata)
+                curated_ids = {card['id'] for card in curated or ()}
                 chunks=[{'id':item['evidence_id'],'type':item['chunk_type'],
                     'text':item['body'] if item['text_style']=='body' else item['title']+'。\n'+item['body'],
                     'keywords':item['keywords'],'source_id':item['source_id'],'source_version':item['source_version'],
-                    'source_title':item['title']} for item in records if item['status']=='ACTIVE']
+                    'source_title':item['title']} for item in records
+                        if item['status']=='ACTIVE' and item['id'] not in curated_ids]
                 index=KnowledgeService(chunks,disease_names=metadata['disease_names'],
                     source_id=self.source_id,source_version=str(revision),backend=self.backend)
-                self._index,self._index_revision=index,revision
-            snapshot=self._index
+                self._index, self._index_revision, self._curated_cards = index, revision, curated
+            snapshot, curated = self._index, self._curated_cards
+        if curated is not None:
+            evidence = search_curated_oxygen(query, curated, top_k=top_k,
+                                             retrieved_at=retrieved_at, intent_text=question)
+            if evidence is not None:
+                return evidence
         # A concurrent edit publishes a different object, never mutates this search.
         return snapshot.search(query,top_k=top_k,retrieved_at=retrieved_at,intent_text=intent_text)
 

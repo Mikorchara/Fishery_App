@@ -25,7 +25,7 @@ RESULT_INSTRUCTIONS = MappingProxyType({
 
 def bind_tools(monitoring, device_id, knowledge, *, formal=None, include_history=False,
                include_knowledge=True, include_score=False, include_active_events=False,
-               board_device_id=None, include_result_instructions=True):
+               board_device_id=None, include_result_instructions=True, knowledge_question=None):
     # Internal composition only. Existing Web callers retain their two/three
     # tools and Knowledge requirement; no channel/authorization entry is added.
     if any(type(flag) is not bool for flag in (
@@ -44,10 +44,13 @@ def bind_tools(monitoring, device_id, knowledge, *, formal=None, include_history
     entries = [ToolDefinition(water_definition,
         partial(current_water_quality.water_payload, monitoring, device_id))]
     if include_knowledge:
-        entries.append(formal.lookup(fishery_knowledge.KNOWLEDGE_DEFINITION.name) if formal else ToolDefinition(
-            fishery_knowledge.KNOWLEDGE_DEFINITION,
-            partial(fishery_knowledge.search_fishery_knowledge, service=knowledge),
-            validate_arguments=fishery_knowledge.validate_arguments))
+        search = partial(fishery_knowledge.search_fishery_knowledge, service=knowledge, question=knowledge_question)
+        if formal:
+            entry = formal.lookup(fishery_knowledge.KNOWLEDGE_DEFINITION.name)
+            entries.append(replace(entry, handler=search) if knowledge_question is not None else entry)
+        else:
+            entries.append(ToolDefinition(fishery_knowledge.KNOWLEDGE_DEFINITION, search,
+                                          validate_arguments=fishery_knowledge.validate_arguments))
     if include_history:
         definition = (formal.lookup(water_quality_history.WATER_QUALITY_HISTORY).model_definition
                       if formal else water_quality_history.HISTORY_DEFINITION)

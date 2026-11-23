@@ -176,7 +176,7 @@ class ManagementAssistantService:
         return self.tool_authorization()
 
     def _configuration(self, preset_id, device_id, *, transport=ToolModelTransport.NORMAL,
-                       policy_snapshot=None, execution_profile=None, budget_document=None):
+                       policy_snapshot=None, execution_profile=None, budget_document=None, knowledge_question=None):
         if not isinstance(transport, ToolModelTransport):
             raise GatewayError('INVALID_ASSISTANT_REQUEST')
         if preset_id not in PRESETS:
@@ -209,7 +209,8 @@ class ManagementAssistantService:
             include_history=historical or candidate or unified or scoring or (active_events and unified_available),
             include_score=scoring,
             include_active_events=active_events,
-            board_device_id=self._active_event_config.device_report_device_id if active_events else None)
+            board_device_id=self._active_event_config.device_report_device_id if active_events else None,
+            knowledge_question=knowledge_question)
         selected = ToolPolicy("assistant", True, snapshot.selected_tools)
         bound = {definition.name for definition in registry.model_definitions()}
         names = ACTIVE_EVENT_TOOL_NAMES if active_events else SCORE_TOOL_NAMES if scoring else (
@@ -291,7 +292,7 @@ class ManagementAssistantService:
         snapshot = self.management_policy.snapshot()
         execution_profile = value.get('execution_profile')
         profile, policy, execution, registry = self._configuration(turn.preset_id, device_id,transport=transport,
-            policy_snapshot=snapshot,execution_profile=execution_profile)
+            policy_snapshot=snapshot,execution_profile=execution_profile, knowledge_question=turn.question)
         if execution_profile == HISTORY_PROFILE:
             turn = replace(turn,source_requirement=SourceRequirement.HISTORICAL_WATER_QUERY)
         if ACTIVE_EVENTS in policy.exposed_tools and requires_active_events(turn.question):
@@ -486,7 +487,7 @@ class ManagementAssistantService:
         snapshot = self.management_policy.snapshot()
         self._check_channel(authorization, snapshot.revision)
         self.monitoring.bind(authorization.device_id)
-        registry = self._channel_registry(authorization,snapshot)
+        registry = self._channel_registry(authorization,snapshot, knowledge_question=question)
         tools = registry.registered_names()
         policy = ToolPolicy('assistant', True, tools)
         profile = assistant_profile(authorization.preset_id)
@@ -496,13 +497,14 @@ class ManagementAssistantService:
         request = AssistantRequest(authorization.preset_id, question, history_snapshot.history if history_snapshot else (), source_requirement=self._channel_source_requirement(question, tools))
         return PreparedAssistantTurn(request, authorization.device_id, self.epoch, profile, policy, registry, decision, snapshot.revision, snapshot.source, authorization, history_snapshot)
 
-    def _channel_registry(self, authorization, snapshot):
+    def _channel_registry(self, authorization, snapshot, *, knowledge_question=None):
         if self._channel_agent:
             from .channel_management_agent import TOOLS
             names=tuple(name for name in TOOLS if name in authorization.tools and name in snapshot.selected_tools)
             registry=bind_tools(self.monitoring,authorization.device_id,self.knowledge,
                 include_history=True,include_knowledge=True,include_score=True,include_active_events=ACTIVE_EVENTS in names,
-                board_device_id=self._channel_trial.event_board_device_id if ACTIVE_EVENTS in names and self._channel_trial else None)
+                board_device_id=self._channel_trial.event_board_device_id if ACTIVE_EVENTS in names and self._channel_trial else None,
+                knowledge_question=knowledge_question)
         else:
             registry=bind_tools(self.monitoring,authorization.device_id,None,include_knowledge=False,
                 include_result_instructions=False)

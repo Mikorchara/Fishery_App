@@ -90,6 +90,24 @@ class ManagementAgentTests(unittest.TestCase):
             self.assertEqual(body['max_tokens'],4096)
             self.assertEqual([d['function']['name'] for d in body['tools']],list(TOOLS))
 
+    def test_curated_knowledge_uses_readonly_instance_and_original_question(self):
+        from apps.knowledge.initial import initialize_curated_knowledge
+
+        path = self.root / 'instance' / 'knowledge.sqlite3'
+        path.rename(path.with_name('offline-legacy-fixture.sqlite3'))
+        initialize_curated_knowledge(path)
+        before = path.read_bytes()
+        self.compose()
+        self.plan = (('search_fishery_knowledge', {'query': '日本鳗鲡溶氧 6–7 mg/L 摄食'}),)
+        self.general_text = '本轮取得了针对具体浓度的实验资料。'
+        result = self.ask('请查项目养殖资料，日本鳗鲡的实验水溶解氧在 2.11 mg/L 时摄食率如何？')
+        self.assertEqual(result.get('history_code'), 'HISTORY_COMMITTED', result)
+        data = json.loads(next(item['content'] for item in self.http[-1]['messages'] if item['role'] == 'tool'))
+        self.assertEqual(data['status'], 'OK')
+        self.assertTrue(any(evidence['source'] == 'https://doi.org/10.2331/suisan.49.1335'
+                            and '2.11' in evidence['text'] for evidence in data['evidence']))
+        self.assertEqual(path.read_bytes(), before)
+
     def test_current_event_question_requires_new_evidence(self):
         self.compose(failure_feedback=True)
         self.general_text='我确认没有任何异常。'

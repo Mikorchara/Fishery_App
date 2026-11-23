@@ -70,7 +70,7 @@ def validate_arguments(arguments: dict) -> dict:
     return {"query": query}
 
 
-def search_fishery_knowledge(arguments: dict, *, service) -> dict:
+def search_fishery_knowledge(arguments: dict, *, service, question=None) -> dict:
     """Map one validated query to bounded background evidence.
 
     ``arguments`` is already normalized by the tool's declared argument contract:
@@ -83,7 +83,13 @@ def search_fishery_knowledge(arguments: dict, *, service) -> dict:
     Returns ``OK`` with bounded items, or ``NO_MATCH`` with an empty list when the
     service reports no qualifying evidence. Service failures are not caught here.
     """
-    evidence = service.search(arguments["query"], top_k=TOP_K)
+    options = {}
+    if question is not None:
+        from apps.knowledge.service import KnowledgeContentService
+
+        if isinstance(service, KnowledgeContentService):
+            options['question'] = question
+    evidence = service.search(arguments["query"], top_k=TOP_K, **options)
     items = [{"id": item.evidence_id, "category": item.category, "source": item.source_id,
               "source_version": item.source_version, "text": _bounded_text(item.text)}
              for item in evidence]

@@ -2,17 +2,18 @@
 
 # 管理知识业务包
 
-运行时文本的唯一权威存储是显式实例的 `knowledge.sqlite3`，四个日常入口使用 `outputs/qq-m3-real-test/knowledge.sqlite3`。`resources/` 随源码和安装包提供31条初始背景资料，只由显式首次初始化导入，不覆盖已有库；平常启动和检索不读取该JSON。旧 `apps/knowledge_data` 仅为历史兼容路径。
+显式实例的 `knowledge.sqlite3` 是运行时文本的权威存储。`resources/` 提供默认的 31 条背景资料，以及有独立来源的溶解氧与摄食专题。首次初始化时可明确选择资料集。日常启动和检索读取 SQLite。旧 `apps/knowledge_data` 仅为历史兼容路径。
 
 | 文件 | 职责 |
 |---|---|
 | repository.py | SQLite schema v2、事务、CAS、容量与完整快照 |
 | service.py | 内容 CRUD、统一检索快照、Markdown/JSON 导出 |
 | retrieval.py | 选择性迁入的原 TF-IDF 排名，算法/参数不变 |
+| curated_retrieval.py | 匹配专题资料的物种、适用条件和实验测点，标明区间覆盖限制 |
 | evidence.py | 管理侧独立 KnowledgeEvidence；不依赖旧领域合同 |
 | legacy_import.py | 仅显式迁移/隔离资格夹具用的旧 JSON 分块转换 |
 | migration.py | 只读计划、备份、校验、幂等和不覆盖发布；SQLite 备份 |
-| initial.py / resources/ | 新实例的31条项目背景资料初始化；非专业养殖标准 |
+| initial.py / resources/ | 首次初始化默认资料或可选专题资料 |
 | __main__.py | 默认 dry-run 的维护者迁移/备份入口 |
 | tests/ | 隔离数据库、旧检索 parity、失败/并发、导出与持久化 |
 

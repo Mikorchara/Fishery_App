@@ -9,9 +9,25 @@
 AI Knowledge Handler → apps.knowledge.retrieval → 本地 KnowledgeEvidence
 ```
 
-SQLite 是管理端运行时唯一权威文本来源。运行数据、备份位于所选实例（旧apps/knowledge_data只是兼容路径），不进入 wheel。`apps/knowledge/resources` 中的固定背景资料随包提供，仅在显式首次初始化时导入31条；管理端正常启动、CRUD、检索不加载该JSON或 `fishery_ai.knowledge` / 旧 Evidence。旧 Prototype 原实现与资源完全不动。
+SQLite 是管理端运行时唯一权威文本来源。运行数据、备份位于所选实例，旧 `apps/knowledge_data` 只是兼容路径。`apps/knowledge/resources` 随包提供默认的 31 条背景资料和可选的溶解氧专题资料。明确执行首次初始化时才会读取对应资源。管理端启动、编辑和检索使用 SQLite。
 
 **新电脑按根目录“开始使用”运行 `Initialize-Management.ps1`，一次建立唯一日常实例并导入31条背景资料，不需要旧机器的数据库或Prototype。原 `--init-data` 仍可显式建立空库。下文迁移仅供已授权的旧数据维护，不是新部署必经步骤。已有库缺失或损坏须停下核查，不能用空库掩盖。**
+
+## 有来源的溶解氧资料
+
+`eel-oxygen-feeding@1` 收录 6 条可回查资料，覆盖日本鳗鲡的溶解氧与摄食、恒定暴露和昼夜波动实验，以及实验结果的适用范围。每条资料保留标题、出处和版本。新版排除旧库中把氧浓度分档直接归为停食或正常摄食的结论，以及没有可追溯出处的处理和用药建议。其他主题等找到可核对的来源后再纳入。旧资料的取舍和逐条来源见[专题资源说明](../../apps/knowledge/resources/README.md)。
+
+检索用用户原话中的物种、浓度、单位和区间筛选证据。查询 2.11 mg/L 可找到论文表 1 中日摄食率为 8.9% 的实验点。查询 1–3 mg/L 只返回这一范围内有记录的实验点，并标明覆盖限制。没有匹配测点或完整区间证据时，如实说明覆盖情况。以饱和度百分比报告的研究保留原单位。当前池况仍由监测工具查询。[Yamagata 等（1983）](https://doi.org/10.2331/suisan.49.1335) · [Rowchai 等（1986）](https://doi.org/10.2331/suisan.52.597)
+
+在项目根目录用一个新目录创建审阅实例，再打开网页里的「资料与知识库」。
+
+```powershell
+$fisheryReviewRoot = Join-Path (Get-Location).Path 'outputs/rag-oxygen-review'
+.\.venv\Scripts\python.exe -I -m apps.management_setup --data-root $fisheryReviewRoot --knowledge-seed curated-oxygen
+.\.venv\Scripts\python.exe -I -m apps.management_web --data-root $fisheryReviewRoot --port 8767
+```
+
+已经建好的专题实例可直接运行最后一条命令，把 `$fisheryReviewRoot` 改为该实例的绝对路径。专题的首次初始化要求一个新目录。日常实例若要采用专题版，先确认要保留的用户知识，再安排独立迁移。Web 和 QQ 使用同一个检索服务。QQ 保护范围包含本次修改的文件，升级后的首次 QQ 启动可能要求核对并保存现有设置。[QQ 代码指纹与恢复启动](QQ_BOT.md#代码指纹与恢复启动)
 
 ## SQLite 格式与版本
 
@@ -21,7 +37,7 @@ Schema `PRAGMA user_version=2`：
 |---|---|
 | `knowledge_records` | 当前知识块：ID、标题、分类、正文、记录版本、状态、更新时间、原始来源、当前内容来源、Evidence ID、原分类/关键词/稳定排序信息 |
 | `knowledge_revision` | 整库修订号，在同一写事务内增加，驱动索引重建 |
-| `knowledge_metadata` | 迁移来源摘要、迁移版本、原排名使用的病名词表；不再需要运行时 JSON |
+| `knowledge_metadata` | 迁移来源摘要、迁移版本、原排名使用的病名词表，以及可选专题的版本与适用条件 |
 
 - 内置导入共 **31 块**，稳定 ID 仍是 `builtin-` + 原 chunk ID 的 SHA-256 前24位；Evidence ID 与原资源一致。用户 ID 原样保留。
 - `origin=builtin/user` 描述创建来源；导入后两种内容都可编辑、停用、软删除、恢复。
@@ -32,7 +48,7 @@ Schema `PRAGMA user_version=2`：
 
 ## 检索、并发与模型范围
 
-唯一管理检索实现在 `apps/knowledge/retrieval.py`，选择性迁入已验证 TF-IDF 算法；扩展词、char_wb 2–4、2000词项、排名加权、0.04阈值及 tie ordering 不变。旧分块转换单独放 `legacy_import.py`，不是第二套检索算法。业务 Tool 名称、Description、Schema、top_k=3、800字+省略号、NO_MATCH、Policy、Ledger、Commit Gate 均不变。
+常规资料继续使用 `apps/knowledge/retrieval.py` 的 TF-IDF 排名，含扩展词、char_wb 2–4、2000 词项、排名加权和 0.04 阈值。专题资料使用 `apps/knowledge/curated_retrieval.py` 按结构化条件匹配。专题信息与启用条目使用同一数据库快照。专题匹配仅使用启用且内容和来源与原始条目一致的资料，编辑版本只进入常规索引。业务 Tool 的参数合同、最多 3 条结果和每条 800 字上限继续适用。
 
 检索事务一次捕获完整启用集合与修订号。构造新索引后发布引用，进行中的检索持有原完整对象；不原地替换一半内容。不把原条目与修改后的替代条目同时加入索引。停用/删除后，下次检索排除；重启继续读同一库。
 
@@ -110,6 +126,8 @@ $knowledgePlan = .\.venv\Scripts\python.exe -m apps.knowledge --dry-run | Conver
 - 未实现：导出文件再导入、任意文件上传、PDF/Embedding/向量库、历史正文回滚、生产身份权限、全量审计日志、跨进程索引服务器。知识库仍有限容量，TF-IDF相关性及800字片段限制不变。
 
 ## 离线验证
+
+溶解氧专题版（2026-11-23）通过完整管理回归，共 1075 项 Python 测试和 163 项 Node 测试。独立审阅实例的网页读取到全部 6 条资料。Web 与 QQ 的模型模拟用例验证检索保留用户原话的浓度，专项用例覆盖精确测点、区间部分覆盖、无匹配、资料停用与编辑。真实 Qwen 回答质量和 QQ 送达留待联调验证。
 
 专项：`python -m unittest apps.knowledge.tests.test_content apps.knowledge.tests.test_unified_store apps.management_web.tests.test_knowledge_content`；前端：`node --test apps/management_web/tests/knowledge-ui.test.mjs`；管理回归：`python scripts/dev/run_tests.py management`；FAST：`python scripts/dev/run_tests.py fast`。
 
