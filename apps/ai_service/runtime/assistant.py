@@ -8,12 +8,15 @@ import re
 import time
 
 from apps.ai_backend.history_projection import DEFAULT_HISTORY_PROJECTION, ProjectionId
-from ..business_tools.active_events import ACTIVE_EVENTS, render_empty_event_scope
+from ..business_tools.active_events import (ACTIVE_EVENTS, behavior_event_evidence_kind,
+    render_behavior_event_evidence, render_empty_event_scope)
 from ..business_tools.current_water_quality import CURRENT_WATER_QUALITY
 from ..business_tools.fishery_knowledge import render_curated_oxygen_result
 from .activity import project_activity, tool_summary
-from .event_notice import EventNotice, event_metric_query, render_current_metric
-from .history_selection import project_turn_history
+from .event_history import event_history_for_turn, event_history_instruction, render_event_history
+from .event_notice import EventNotice, current_result_entry, event_metric_query, render_current_metric
+from .history_comparison import CLARIFICATION, OXYGEN, HistoryComparison, render_comparison
+from .history_selection import current_oxygen_for_turn, project_turn_history
 from .history_summary import history_summary_for_turn, render_history_summary
 from .oxygen_history import render_oxygen_history_comparison
 from apps.ai_backend.contracts import Mode, Status, utcnow
@@ -113,10 +116,12 @@ class AssistantRequest:
     conversation_id: str | None = field(default=None, repr=False)
     source_requirement: SourceRequirement = SourceRequirement.AUTO  # Internal only; not a Web input.
     event_notice: EventNotice | None = field(default=None, repr=False)  # Frozen server capability only.
+    history_comparison: HistoryComparison | None = field(default=None, repr=False)  # Authenticated channel history only.
 
     def __post_init__(self):
         if (not isinstance(self.source_requirement, SourceRequirement)
-                or self.event_notice is not None and not isinstance(self.event_notice, EventNotice)):
+                or self.event_notice is not None and not isinstance(self.event_notice, EventNotice)
+                or self.history_comparison is not None and not isinstance(self.history_comparison, HistoryComparison)):
             raise AssistantError()
         if not isinstance(self.preset_id, str) or self.preset_id not in ALLOWED_PRESET_IDS:
             raise AssistantError("ASSISTANT_PRESET_NOT_ALLOWED")
@@ -294,28 +299,46 @@ class AssistantService:
                 or runtime.default_response_mode != "normal" or runtime.max_retries != 0
                 or runtime.capabilities.tool_calling != Support.SUPPORTED):
             raise AssistantError("ASSISTANT_PRESET_NOT_ALLOWED")
-        builder = AssistantContextBuilder()
-        native = (builder.build(request) if self._execution_mode == ToolExecutionMode.SINGLE_ROUND else
-                  builder.build(request, execution_mode=self._execution_mode))
+        comparison = request.history_comparison
+        context_request = request
+        if comparison is not None and comparison.prior_index is not None and comparison.prior_index < len(request.history) - 2:
+            context_request = replace(request, history=(request.history[comparison.prior_index], *request.history[-2:]))
+        native = AssistantContextBuilder().build(context_request, execution_mode=self._execution_mode)
+        native = replace(native, history_turns_received=len(request.history))
         prompt=self._multi_round_prompt or self._single_round_prompt
         notice = request.event_notice
         policy = self.coordinator.policy
         water_allowed = policy.allows(CURRENT_WATER_QUALITY)
+        current_oxygen = current_oxygen_for_turn(request, water_allowed=water_allowed)
+        readout = current_oxygen or comparison is not None and comparison.metric is not None
+        clarification = comparison is not None and comparison.metric is None
         history_summary = history_summary_for_turn(request, policy)
+        event_history = event_history_for_turn(request, policy)
+        behavior_evidence = (request.source_requirement == SourceRequirement.ACTIVE_EVENTS_QUERY
+                             and behavior_event_evidence_kind(request.question) is not None)
         event_metric = None
         if (request.source_requirement == SourceRequirement.AUTO and not request.history
                 and water_allowed and policy.allows(ACTIVE_EVENTS)):
             event_metric = event_metric_query(request.question)
-        if prompt is not None or notice is not None or history_summary is not None:
+        if prompt is not None or notice is not None or history_summary is not None or readout or clarification or behavior_evidence or event_history is not None:
             instruction = prompt[1] if prompt is not None else native.model_request.messages[0].content
             if notice is not None:
                 instruction = instruction + "\n\n" + notice.instruction(water_allowed)
             if history_summary is not None:
                 instruction = instruction + "\n\n" + history_summary.instruction()
+            if readout:
+                instruction += ('\n\n本轮需要绑定设备的当前水质读数。只调用已授权的 '
+                                'get_current_water_quality，参数为空对象。旧对话自述和历史监测不能代替本轮查询。')
+            if clarification:
+                instruction += f'\n\n本轮只询问用户选择哪项指标，回答「{CLARIFICATION}」，无需执行任何工具。'
+            if behavior_evidence:
+                instruction += '\n\n本轮需要板端行为事件证据。使用 get_active_events，参数为空对象。'
+            if event_history is not None:
+                instruction += '\n\n' + event_history_instruction(event_history)
             # Server-owned channel instruction, never a request/Tool parameter.
             native=replace(native,model_request=replace(native.model_request,messages=(
                 ModelMessage('system',instruction),*native.model_request.messages[1:])))
-        context, _ = project_turn_history(request, native, self._history_projection, water_allowed=water_allowed)
+        context, _ = project_turn_history(context_request, native, self._history_projection, water_allowed=water_allowed)
         handle = current_handle()
         run = self.coordinator.run_request(context.model_request, runtime,
             on_progress=handle.report_phase if handle else None,
@@ -335,6 +358,25 @@ class AssistantService:
                 code = "ASSISTANT_SOURCE_REQUIREMENT_UNMET"
             elif notice is not None:
                 final_text = notice.render(run, ledger, water_allowed=water_allowed)
+            elif clarification:
+                if ledger.entries:
+                    code = "ASSISTANT_SOURCE_REQUIREMENT_UNMET"
+                else:
+                    final_text = CLARIFICATION
+            elif readout:
+                entry = current_result_entry(ledger)
+                if entry is None:
+                    code = "ASSISTANT_SOURCE_REQUIREMENT_UNMET"
+                elif comparison is not None:
+                    final_text = render_comparison(comparison, run, entry)
+                else:
+                    final_text = render_current_metric(run, entry, OXYGEN)
+            elif event_history is not None:
+                verified = render_event_history(event_history, run, ledger)
+                if verified is None:
+                    code = "ASSISTANT_SOURCE_REQUIREMENT_UNMET"
+                else:
+                    final_text = verified
             elif history_summary is not None:
                 verified = next((text for entry in ledger.entries if entry.receipt.history_query_completed
                     if (text := render_history_summary(history_summary, run, entry)) is not None), None)
@@ -342,6 +384,10 @@ class AssistantService:
                     code = "ASSISTANT_SOURCE_REQUIREMENT_UNMET"
                 else:
                     final_text = verified
+            elif behavior_evidence:
+                entry = next(e for e in ledger.entries if e.receipt.active_events_query_completed)
+                step = run.steps[entry.execution_seq - 1]
+                final_text = render_behavior_event_evidence(request.question, step.result.payload)
             elif (request.source_requirement == SourceRequirement.ACTIVE_EVENTS_QUERY
                     and not request.history and len(ledger.entries) == 1):
                 step = run.steps[ledger.entries[0].execution_seq - 1]
@@ -350,8 +396,7 @@ class AssistantService:
                     final_text = verified
             elif event_metric is not None:
                 event = next((entry for entry in ledger.entries if entry.receipt.active_events_query_completed), None)
-                water = next((entry for entry in ledger.entries if entry.receipt.tool_name == CURRENT_WATER_QUALITY
-                              and entry.receipt.observation_query_completed), None)
+                water = current_result_entry(ledger)
                 if event is None or water is None:
                     code = "ASSISTANT_SOURCE_REQUIREMENT_UNMET"
                 else:

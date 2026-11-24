@@ -268,10 +268,21 @@ class QQAICoordinator:
                             history.authority.validate(history, history.scope_sha256)
                 authorization = ChannelAuthorization(self.monitoring.config.instance_id, grant.device_id, binding, revision, self.config.preset_id, grant.tools, self.config.budget, check)
                 service = self.service
+                original_focus = None
+                offer = None
                 try:
                     if self._conversation_host is not None:
                         self._conversation_host.require_turn()
                     if history_key is not None:
+                        if getattr(self.session_run, 'web_agent', False):
+                            from apps.ai_service.business_tools.current_water_quality import CURRENT_WATER_QUALITY
+                            selected_tools = self.service.management_policy.snapshot().selected_tools
+                            water_allowed = CURRENT_WATER_QUALITY in grant.tools and CURRENT_WATER_QUALITY in selected_tools
+                            offer, continuation = self.conversations.clarification_candidate(history_key, history_focus,
+                                water_allowed=water_allowed)
+                            if continuation is not None:
+                                original_focus = history_focus
+                                question = history_focus = continuation
                         history = self.conversations.snapshot(history_key, focus=history_focus)
                     if self.session_run is not None:
                         service = self.session_run.begin(history, message=message)
@@ -282,13 +293,17 @@ class QQAICoordinator:
                     plan = QQAIPlan(uuid.uuid4().hex, prepared, self._requests.create(), context, service)
                     if trial is not None:
                         trial.reserve_admission(plan.handle)
+                    if offer is not None and not self.conversations.consume_clarification(history_key, offer):
+                        plan.handle.cancel()
+                        raise BotError('CONVERSATION_REVISION_CHANGED')
                 except Exception as error:
                     if history is not None:
                         self.conversations.release(history)
                     if self._conversation_host is not None and service is not self.service:
                         self._conversation_host.admission_failed(service._channel_trial, getattr(error, 'code', 'AI_ADMISSION_FAILED'))
                     raise BotError(getattr(error, 'code', 'AI_ADMISSION_FAILED')) from None
-                self._tasks[plan.id] = dict(plan=plan, deadline=deadline, state='ADMITTED', result=None)
+                self._tasks[plan.id] = dict(plan=plan, deadline=deadline, state='ADMITTED', result=None,
+                    original_focus=original_focus)
                 return plan
         result = self._ingress.admit_offline(raw, transport_app_id=transport_app_id, operation=operation)
         if not isinstance(result, QQAIPlan):
@@ -370,7 +385,19 @@ class QQAICoordinator:
                     if not result.publication.history_allowed:
                         return 'HISTORY_NOT_COMMITTED_PRESENTATION'
                     times, flags = result.history_metadata()
-                    return self.conversations.commit(snapshot, turn_id=plan.context.delivery_key, text=text, text_sha256=receipt.text_sha256, accepted_at=receipt.accepted_at, source_times=times, source_flags=flags)
+                    history_kwargs = {}
+                    if getattr(self.session_run, 'web_agent', False):
+                        from apps.ai_service.business_tools.current_water_quality import CURRENT_WATER_QUALITY
+                        from apps.ai_service.runtime.history_comparison import CLARIFICATION, comparison_for_history
+                        choice = None
+                        if (result.branch == 'general' and result.model_text == CLARIFICATION
+                                and plan.prepared.policy.allows(CURRENT_WATER_QUALITY)):
+                            choice = comparison_for_history(snapshot.question, snapshot.history, snapshot.identity[4])
+                        history_kwargs = dict(clarification_offered=choice is not None and choice.metric is None,
+                            original_focus=self._tasks[plan.id]['original_focus'])
+                    return self.conversations.commit(snapshot, turn_id=plan.context.delivery_key, text=text,
+                        text_sha256=receipt.text_sha256, accepted_at=receipt.accepted_at, source_times=times,
+                        source_flags=flags, **history_kwargs)
                 source = result.source
                 return self.conversations.commit(snapshot, turn_id=plan.context.delivery_key, text=text, text_sha256=receipt.text_sha256, accepted_at=receipt.accepted_at, source_times=tuple((t for t in (source.observed_at, source.received_at, source.evaluated_at) if t)), source_flags=(source.source_kind, source.quality, source.freshness, source.connectivity))
             except Exception:

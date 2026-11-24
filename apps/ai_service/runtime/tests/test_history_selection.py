@@ -90,9 +90,10 @@ class TurnHistorySelectionWebTests(unittest.TestCase):
         for streaming in (False, True):
             for question, history_sent in (("当前溶解氧是多少？", 0), ("跟上次比呢？", 1)):
                 with self.subTest(streaming=streaming, question=question):
-                    plans = ([tool_chunks(CURRENT_WATER_QUALITY), final_chunks()] if streaming else [
+                    wrong = '我查到当前溶解氧是 5.9 mg/L。'
+                    plans = ([tool_chunks(CURRENT_WATER_QUALITY), final_chunks(wrong)] if streaming else [
                         sdk_tool(CURRENT_WATER_QUALITY, model=self.profile.model),
-                        sdk_final(model=self.profile.model),
+                        sdk_final(wrong, model=self.profile.model),
                     ])
                     self.configure(plans)
                     body = self.body(streaming=streaming, question=question)
@@ -119,3 +120,17 @@ class TurnHistorySelectionWebTests(unittest.TestCase):
                     self.assertEqual(len(first_messages), 2 + history_sent)
                     tool_result = json.loads(self.sdk.bodies[-1]["messages"][-1]["content"])
                     self.assertEqual(tool_result["water_quality"]["dissolved_oxygen_mg_l"], 2.2)
+                    if not history_sent:
+                        self.assertIn('2.2 mg/L', result['final_text'])
+                        self.assertIn('北京时间', result['final_text'])
+                        self.assertNotIn('5.9 mg/L', result['final_text'])
+                        if streaming:
+                            self.assertFalse(any(row['kind'] == 'preview' for row in rows))
+
+    def test_explicit_current_readout_without_current_receipt_cannot_publish(self):
+        self.configure([sdk_final('当前溶解氧为 5.9 mg/L。', model=self.profile.model)])
+        response = self.client.post('/api/ai/messages', headers=self.headers,
+            json=self.body(question='当前溶解氧是多少？'))
+        result = response.get_json()['result']
+        self.assertEqual(result['error_code'], 'ASSISTANT_SOURCE_REQUIREMENT_UNMET')
+        self.assertEqual(result['final_text'], '')

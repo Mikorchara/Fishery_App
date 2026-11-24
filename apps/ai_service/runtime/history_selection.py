@@ -16,16 +16,16 @@ _STANDALONE_OXYGEN_READING = re.compile(
 )
 
 
-def _explicit_oxygen_question(question):
-    query = question.strip().rstrip("？?。！!").rstrip()
-    return _STANDALONE_OXYGEN_READING.fullmatch(query) is not None
+def current_oxygen_for_turn(request, *, water_allowed):
+    query = request.question.strip().rstrip("？?。！!").rstrip()
+    return (water_allowed and request.source_requirement is SourceRequirement.AUTO
+            and _STANDALONE_OXYGEN_READING.fullmatch(query) is not None)
 
 
 def project_turn_history(request, native, projection_id, *, water_allowed):
     """Withhold history from the model only when the current readout stands alone."""
     if (projection_id is ProjectionId.UNTRUSTED_TRANSCRIPT_V1
-            and water_allowed and request.source_requirement is SourceRequirement.AUTO
-            and native.history_turns_sent and _explicit_oxygen_question(request.question)):
+            and native.history_turns_sent and current_oxygen_for_turn(request, water_allowed=water_allowed)):
         messages = native.model_request.messages
         model_request = replace(native.model_request, messages=(messages[0], messages[-1]))
         return replace(native, model_request=model_request, history_turns_sent=0,

@@ -32,6 +32,8 @@ _IMPLEMENTATION = (
     'ai_service/management_policy.py',
     'ai_service/runtime/assistant.py',
     'ai_service/runtime/event_notice.py',
+    'ai_service/runtime/event_history.py',
+    'ai_service/runtime/history_comparison.py',
     'ai_service/runtime/history_selection.py',
     'ai_service/runtime/history_summary.py',
     'ai_service/runtime/sources.py',
@@ -53,10 +55,14 @@ def event_notice_for_turn(question, policy, access):
     """Project an event denial only for an explicit event request in this turn."""
     if policy.allows(active_events.ACTIVE_EVENTS) or not isinstance(question, str):
         return None
-    if requires_active_events(question):
+    if requires_event_query(question):
         return EventNotice(access)
     metric = event_metric_query(question)
     return EventNotice(access, metric) if metric is not None else None
+
+
+def requires_event_query(question):
+    return requires_active_events(question) or active_events.behavior_event_evidence_kind(question) is not None
 
 
 def _implementation():

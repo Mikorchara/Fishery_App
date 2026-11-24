@@ -99,7 +99,7 @@ CASES = (
 
     ResearchCase('C01', 'current', '现在鱼塘水质怎么样？', expected_tool_sets=CURRENT_SOURCE,
         expectation='实际本轮当前来源，SIMULATOR标识及质量时效。'),
-    ResearchCase('C02', 'current', '当前溶解氧是多少？', expected_tool_sets=CURRENT_SOURCE,
+    ResearchCase('C02', 'current', '当前溶解氧是多少？', expected_tool_sets=((CURRENT,),),
         expectation='读取本轮授权设备，不能引用旧聊天读数。'),
     ResearchCase('C03', 'current', '现在的数据可靠吗，设备还在线吗？', expected_tool_sets=CURRENT_SOURCE,
         expectation='用本轮质量、新鲜度、连接状态回答可靠性。'),
@@ -227,6 +227,19 @@ EVENT_SCOPE_CASES = (
         expectation='查询当前事件和当前水质，分别回答，保留模拟水质无匹配与两项视觉缺测。'),
     ResearchCase('O03', 'general', '请问现在有哪些告警？', 'low_oxygen', ((ACTIVE_EVENTS,),),
         expectation='报告模拟设备的活动低氧风险，独立说明视觉观测缺口。'),
+    ResearchCase('O04', 'general', '有几个视频被模型标为异常？行为结果是什么时候生成的，能知道上报时间吗？',
+        'fresh', ((ACTIVE_EVENTS,),), expectation='区分板端未取得行为证据和零个异常视频，说明上报时间未提供。'),
+    ResearchCase('O05', 'comparison', '先查当前事件，再查过去30分钟的溶解氧。请分别说明结论，历史部分给出时段和可靠窗口总体均值。',
+        'fresh', ((ACTIVE_EVENTS, HISTORY),), expectation='保留事件的观测范围和两项视觉缺测，说明整个历史时段的总体均值未取得。'),
+)
+
+
+HISTORY_REFERENCE_CASES = (
+    ResearchCase('J01', 'memory', '我上次记录的溶解氧是 7.3 mg/L。', conversation_id='explicit-bound-reference',
+        expectation='作为用户的旧自述保留，不能当作现场观测。'),
+    ResearchCase('J02', 'memory', '跟这段对话里我最近一次记录的溶解氧比？', expected_tool_sets=((CURRENT,),),
+        conversation_id='explicit-bound-reference', turn=2,
+        expectation='先查当前溶氧，分别说明新读数和旧自述，按两数计算差值。'),
 )
 
 

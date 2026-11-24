@@ -62,12 +62,10 @@ def event_metric_query(question):
     return _CURRENT_METRIC_IDS[metric['metric'].lower()] if metric else None
 
 
-def render_current_metric(execution, entry, metric):
-    """Use the same valid, fresh, online reading in either event reply path."""
-    label, unit, *_ = METRICS[metric]
-    unavailable = f"本轮未取得可用于核实当前{label}的模拟水质观测。"
+def current_metric_data(execution, entry, metric):
+    """Return a usable reading from an attested current-water receipt."""
     if entry is None or metric not in entry.receipt.available_fields:
-        return unavailable
+        return None
 
     observation = entry.receipt
     payload = execution.steps[entry.execution_seq - 1].result.payload
@@ -77,12 +75,24 @@ def render_current_metric(execution, entry, metric):
             or observation.quality not in (Quality.VALID, Quality.PARTIAL)
             or payload.get("connectivity") != "online"
             or payload.get("metrics", {}).get(metric, {}).get("quality") != "valid"):
-        return unavailable
+        return None
+    return payload['device_id'], payload['water_quality'][metric], timestamp(observation.observed_at)
 
-    value = payload["water_quality"][metric]
-    observed = timestamp(observation.observed_at).astimezone(_BEIJING)
+
+def current_result_entry(ledger):
+    return next((entry for entry in ledger.entries
+                 if entry.receipt.tool_name == CURRENT_WATER_QUALITY and entry.receipt.observation_query_completed), None)
+
+
+def render_current_metric(execution, entry, metric):
+    label, unit, *_ = METRICS[metric]
+    data = current_metric_data(execution, entry, metric)
+    if data is None:
+        return f"本轮未取得可用于核实当前{label}的模拟水质观测。"
+    device_id, value, observed_at = data
+    observed = observed_at.astimezone(_BEIJING)
     reading = f"{value} {unit}" if unit else str(value)
-    return (f"模拟水质设备 {payload['device_id']} 的最新有效观测显示，{label}为 {reading}。"
+    return (f"模拟水质设备 {device_id} 的最新有效观测显示，{label}为 {reading}。"
             f"观测时间为北京时间 {observed:%Y-%m-%d %H:%M:%S}。")
 
 
@@ -113,7 +123,5 @@ class EventNotice:
             label = METRICS[self.metric][0]
             return f"{text}\n\n当前水质查询在本轮未获授权，无法核实当前{label}。"
 
-        entry = next((entry for entry in ledger.entries
-                     if entry.receipt.tool_name == CURRENT_WATER_QUALITY
-                     and entry.receipt.observation_query_completed), None)
+        entry = current_result_entry(ledger)
         return f"{text}\n\n{render_current_metric(execution, entry, self.metric)}"

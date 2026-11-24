@@ -440,3 +440,14 @@ class ActiveEventAssistantTests(unittest.TestCase):
         result = response.get_json()['result']
         self.assertEqual(result['error_code'], 'ASSISTANT_SOURCE_REQUIREMENT_UNMET')
         self.assertEqual(result['final_text'], '')
+
+    def test_behavior_followup_publishes_board_limit_from_the_actual_receipt(self):
+        question = '有几个视频被模型标为异常？行为结果是什么时候生成的，能知道上报时间吗？'
+        wrong = '该设备没有异常视频，刚刚已成功上报。'
+        self.configure([tool_chunks(ACTIVE_EVENTS), final_chunks(wrong)], board_device_id='board-1')
+        result, rows = self.send_case(question, streaming=True)
+        self.assertIn('get_active_events', self.sdk.bodies[0]['messages'][0]['content'])
+        self.assertIn('未取得设备报告 board-1 中可核实的行为模型结果', result['final_text'])
+        self.assertIn('本轮结果未提供行为上报时间', result['final_text'])
+        self.assertNotIn(wrong, result['final_text'])
+        self.assertFalse(any(row['kind'] == 'preview' for row in rows))

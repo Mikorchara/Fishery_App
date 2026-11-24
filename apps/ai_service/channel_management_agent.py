@@ -58,6 +58,8 @@ def prepared_scope(options, output_tokens=2048):
              'apps/ai_service/runtime/assistant.py', 'apps/ai_service/runtime/sources.py',
              'apps/ai_service/runtime/oxygen_history.py',
              'apps/ai_service/runtime/event_notice.py',
+             'apps/ai_service/runtime/event_history.py',
+             'apps/ai_service/runtime/history_comparison.py',
              'apps/ai_service/runtime/history_selection.py',
              'apps/ai_service/runtime/history_summary.py',
              'apps/ai_service/business_tools/registry.py', 'apps/ai_service/business_tools/fishery_knowledge.py',

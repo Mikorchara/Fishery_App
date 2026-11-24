@@ -2,6 +2,7 @@
 from collections import Counter
 from datetime import timedelta, timezone
 import json
+import re
 
 from apps.ai_backend.model_gateway import ModelToolDefinition
 from apps.monitoring.contracts import identifier, timestamp
@@ -59,6 +60,65 @@ _STATE_PRIORITY = {'ACTIVE': 2, 'NEEDS_REVIEW': 1, 'INDETERMINATE': 0}
 _SEVERITIES = ('unknown', 'info', 'warning', 'critical')
 _FRESHNESS = ('unknown', 'stale', 'fresh')
 _BEIJING = timezone(timedelta(hours=8))
+_BEHAVIOR_RESULT = r'(?:(?:当前|现在|这次)(?:的)?)?(?:板端)?行为(?:模型)?结果'
+_BEHAVIOR_EVIDENCE_FIELDS = (
+    ('video_count', re.compile(
+        rf'(?:{_BEHAVIOR_RESULT}中)?(?:有)?(?:几个|多少(?:个)?)视频(?:被)?模型(?:标为|标记为)异常')),
+    ('version_time', re.compile(
+        rf'{_BEHAVIOR_RESULT}(?:的?(?:版本|生成)时间(?:是(?:什么时候|多少))?|(?:是)?什么时候生成(?:的)?)')),
+    ('report_time', re.compile(
+        rf'{_BEHAVIOR_RESULT}(?:的?上报时间(?:是(?:什么时候|多少))?|(?:是)?什么时候上报(?:的)?)')),
+)
+_FOLLOWUP_REPORT_TIME = re.compile(r'(?:能知道|能查到|可以知道|能否知道)?上报时间(?:吗)?')
+
+
+def behavior_event_evidence_kind(question):
+    """Match explicit questions about the returned behavior result, without other intents."""
+    if not isinstance(question, str):
+        return None
+    fields = []
+    for clause in (part.strip() for part in re.split(r'[，,。.;；?？!！]+', question.strip().rstrip('。.?？!！'))):
+        field = next((name for name, pattern in _BEHAVIOR_EVIDENCE_FIELDS if pattern.fullmatch(clause)), None)
+        if field is None and fields and _FOLLOWUP_REPORT_TIME.fullmatch(clause):
+            field = 'report_time'
+        if field is None or field in fields:
+            return None
+        fields.append(field)
+    return tuple(fields)
+
+
+def render_behavior_event_evidence(question, payload):
+    """Render only the requested fields of the authenticated event result."""
+    fields = behavior_event_evidence_kind(question)
+    if fields is None:
+        return None
+    boards = [source['device_id'] for source in payload['sources'] if source['source_kind'] == 'device_report']
+    if not boards:
+        return '本轮查询未包含设备报告，暂时无法核实行为结果。'
+
+    items = [item for item in payload['items'] if item['code'] == BEHAVIOR and item['device_id'] in boards]
+    lines = []
+    for item in items:
+        evidence = item['evidence']
+        details = [f"设备报告 {item['device_id']} 的行为模型结果待复核。"]
+        if 'video_count' in fields:
+            details.append(f"该版本有 {evidence['abnormal_video_count']} 个视频被模型标为异常。")
+        if 'version_time' in fields or len(items) > 1:
+            version = timestamp(evidence['result_timestamp']).astimezone(_BEIJING)
+            details.append(f'行为结果版本时间为北京时间 {version:%Y-%m-%d %H:%M:%S}。')
+        if item['freshness'] == 'stale':
+            details.append('该版本已过期，当前状态暂时无法核实。')
+        elif item['freshness'] == 'unknown':
+            details.append('该版本的新鲜度未知，当前状态暂时无法核实。')
+        lines.append(''.join(details))
+    if not items:
+        source = '、'.join(boards)
+        lines.append(f'本轮未取得设备报告 {source} 中可核实的行为模型结果。')
+    if payload['omitted_count']:
+        lines.append(f"本轮事件查询另有 {payload['omitted_count']} 条记录未展开。")
+    if 'report_time' in fields:
+        lines.append('本轮结果未提供行为上报时间。')
+    return '\n'.join(lines)
 
 
 def _observation_state(source_kind, observation):

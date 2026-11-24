@@ -7,6 +7,7 @@ import threading
 
 from .runtime.assistant import AssistantRequest, AssistantService, assistant_profile
 from .runtime.event_notice import EventAccess
+from .runtime.history_comparison import comparison_for_history
 from apps.ai_backend.assistant_activity import safe_code
 from apps.ai_backend.credentials import CredentialStore
 from apps.ai_backend.execution import RequestHandle, request_scope, turn_deadline_scope, current_handle
@@ -43,7 +44,7 @@ from .score_execution import ScoreTrialConfig,load_score_config,resolve_score_tr
 from .business_tools.registry import WATER_QUALITY_SCORE
 from .business_tools.active_events import ACTIVE_EVENTS
 from .active_event_execution import (ActiveEventTrialConfig,
-    ACTIVE_EVENT_TOOL_NAMES, event_notice_for_turn, requires_active_events, resolve_active_event_trial)
+    ACTIVE_EVENT_TOOL_NAMES, event_notice_for_turn, requires_event_query, resolve_active_event_trial)
 
 PRESETS = ("dashscope-qwen38-flash-r1", "ollama-qwen35-4b-r1")
 
@@ -304,7 +305,7 @@ class ManagementAssistantService:
             policy_snapshot=snapshot,execution_profile=execution_profile, knowledge_question=turn.question)
         if execution_profile == HISTORY_PROFILE:
             turn = replace(turn,source_requirement=SourceRequirement.HISTORICAL_WATER_QUERY)
-        if ACTIVE_EVENTS in policy.exposed_tools and requires_active_events(turn.question):
+        if ACTIVE_EVENTS in policy.exposed_tools and requires_event_query(turn.question):
             turn = replace(turn, source_requirement=SourceRequirement.ACTIVE_EVENTS_QUERY)
         if (turn.source_requirement == SourceRequirement.AUTO
                 and SEARCH_FISHERY_KNOWLEDGE in policy.exposed_tools and requires_project_lookup(turn.question)):
@@ -488,7 +489,7 @@ class ManagementAssistantService:
         return type(self._channel_trial) in (HybridQwenTurn, ManagementLiveTurn, ContinuousManagementTurn)
 
     def _channel_source_requirement(self, question, tools):
-        if self._channel_agent and ACTIVE_EVENTS in tools and requires_active_events(question):
+        if self._channel_agent and ACTIVE_EVENTS in tools and requires_event_query(question):
             return SourceRequirement.ACTIVE_EVENTS_QUERY
         if self._channel_agent and SEARCH_FISHERY_KNOWLEDGE in tools and requires_project_lookup(question):
             return SourceRequirement.PROJECT_KNOWLEDGE_SEARCH
@@ -497,6 +498,11 @@ class ManagementAssistantService:
     def _channel_event_notice(self, question, policy):
         if self._channel_agent:
             return event_notice_for_turn(question, policy, EventAccess.NOT_AUTHORIZED)
+        return None
+
+    def _channel_comparison(self, question, policy, history_snapshot, device_id):
+        if self._channel_agent and history_snapshot is not None and policy.allows(CURRENT_WATER_QUALITY):
+            return comparison_for_history(question, history_snapshot.history, device_id)
         return None
 
     def prepare_channel_turn(self, question, authorization, *, history_snapshot=None):
@@ -519,7 +525,8 @@ class ManagementAssistantService:
             raise GatewayError('INVALID_CHANNEL_HISTORY')
         request = AssistantRequest(authorization.preset_id, question, history_snapshot.history if history_snapshot else (),
             source_requirement=self._channel_source_requirement(question, tools),
-            event_notice=self._channel_event_notice(question, policy))
+            event_notice=self._channel_event_notice(question, policy),
+            history_comparison=self._channel_comparison(question, policy, history_snapshot, authorization.device_id))
         return PreparedAssistantTurn(request, authorization.device_id, self.epoch, profile, policy, registry, decision, snapshot.revision, snapshot.source, authorization, history_snapshot)
 
     def _channel_registry(self, authorization, snapshot, *, knowledge_question=None):
@@ -564,6 +571,9 @@ class ManagementAssistantService:
         if prepared.request.event_notice != self._channel_event_notice(prepared.request.question, prepared.policy):
             raise GatewayError('INVALID_CHANNEL_CANDIDATE')
         history = prepared.channel_history
+        if prepared.request.history_comparison != self._channel_comparison(
+                prepared.request.question, prepared.policy, history, authorization.device_id):
+            raise GatewayError('INVALID_CHANNEL_CANDIDATE')
         expected = self._history_decision(prepared.profile, prepared.policy, prepared.registry, authorization, history, prepared.policy_revision) if history is not None else self._channel_trial.decision(prepared.profile, prepared.policy, prepared.registry, authorization, epoch=self.epoch, policy_revision=prepared.policy_revision) if self._channel_trial is not None else candidate_decision(prepared.profile, prepared.policy, prepared.registry, device_id=prepared.device_id, epoch=self.epoch, policy_revision=prepared.policy_revision, authorization=authorization)
         if prepared.execution != expected or prepared.profile != assistant_profile(authorization.preset_id) or prepared.device_id != authorization.device_id or (prepared.request.preset_id != authorization.preset_id) or (prepared.request.history if history is None else prepared.request.history != history.history or prepared.request.question != history.question) or (prepared.request.source_requirement != self._channel_source_requirement(prepared.request.question, prepared.policy.exposed_tools)) or (not self._channel_agent and prepared.registry.registered_names() != (CURRENT_WATER_QUALITY,)) or (prepared.policy.exposed_tools != prepared.registry.registered_names()):
             raise GatewayError('INVALID_CHANNEL_CANDIDATE')

@@ -5,7 +5,9 @@ import json
 import unittest
 from uuid import uuid4
 
-from apps.ai_service.business_tools.active_events import active_events_payload, result_metadata
+from apps.ai_service.business_tools.active_events import (
+    active_events_payload, behavior_event_evidence_kind, render_behavior_event_evidence, result_metadata,
+)
 from apps.monitoring.device_events import APPEARANCE, BEHAVIOR, GAP
 from apps.monitoring.tests import test_device_events as fixtures
 
@@ -121,6 +123,58 @@ class ActiveEventsToolTests(unittest.TestCase):
         fake['sources'][0]['observations'][0]['notes'] = '禁止透传的自由文本'
         self.assertIsNone(result_metadata(fake))
         self.assertIsNone(result_metadata({**result, 'status': 'NO_DATA'}))
+
+    def test_behavior_followup_does_not_take_over_other_questions(self):
+        for question, fields in (
+            ('有几个视频被模型标为异常？', ('video_count',)),
+            ('当前行为模型结果的版本时间是什么时候？', ('version_time',)),
+            ('板端行为结果什么时候上报？', ('report_time',)),
+            ('有几个视频被模型标为异常？行为结果是什么时候生成的，能知道上报时间吗？',
+             ('video_count', 'version_time', 'report_time')),
+            ('现在有哪些活动事件？', None),
+            ('有几个视频被模型标为异常？现在的溶解氧是多少？', None),
+            ('上一次行为结果是什么时候生成的？', None),
+            ('能知道上报时间吗？', None),
+            (None, None),
+        ):
+            with self.subTest(question=question):
+                self.assertEqual(behavior_event_evidence_kind(question), fields)
+
+    def test_behavior_followup_uses_the_matching_board_evidence_and_version(self):
+        self.oxygen(2.2)
+        version = self.now.astimezone(timezone(timedelta(hours=8))).strftime('%Y-%m-%d %H:%M:%S')
+        self.submit_peak(1, appearance=True, behavior=dict(
+            report_id='behavior-private-id', result_timestamp=self.now.isoformat(), new_result=True,
+            aggregation_policy='independent_video_results', result_semantics='snapshot_not_additive',
+            results=[dict(video='private/file.mp4', is_abnormal=True)]))
+        question = '有几个视频被模型标为异常？行为结果是什么时候生成的，能知道上报时间吗？'
+        result = self.query('board-1')
+        self.assertTrue(result_metadata(result)['active_events_query_completed'])
+        self.assertTrue(any(item['channel'] == 'water' for item in result['items']))
+        reply = render_behavior_event_evidence(question, result)
+        self.assertIn('设备报告 board-1 的行为模型结果待复核', reply)
+        self.assertIn('1 个视频被模型标为异常', reply)
+        self.assertIn(f'行为结果版本时间为北京时间 {version}', reply)
+        self.assertIn('本轮结果未提供行为上报时间', reply)
+        for unrelated in ('溶解氧', '腹水', 'sim-pond-1', 'private/file.mp4'):
+            self.assertNotIn(unrelated, reply)
+        self.assertNotIn('版本时间', render_behavior_event_evidence('有几个视频被模型标为异常？', result))
+        self.now += timedelta(minutes=3)
+        stale_reply = render_behavior_event_evidence(question, self.query('board-1'))
+        self.assertIn(f'行为结果版本时间为北京时间 {version}', stale_reply)
+        self.assertIn('该版本已过期，当前状态暂时无法核实', stale_reply)
+
+    def test_behavior_followup_preserves_missing_result_and_source_limits(self):
+        self.oxygen(2.2)
+        self.submit_peak(1, appearance=True)
+        question = '板端行为结果什么时候上报？'
+        hidden = render_behavior_event_evidence(question, self.query())
+        self.assertIn('本轮查询未包含设备报告', hidden)
+        self.assertNotIn('board-1', hidden)
+        missing = render_behavior_event_evidence(question, self.query('board-1'))
+        self.assertIn('本轮未取得设备报告 board-1 中可核实的行为模型结果', missing)
+        self.assertIn('本轮结果未提供行为上报时间', missing)
+        self.assertNotIn('0 个视频', missing)
 
 
 if __name__ == '__main__':

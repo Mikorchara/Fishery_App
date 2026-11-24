@@ -28,7 +28,7 @@ from apps.ai_service.runtime.release_contracts import _hash
 from apps.qq_bot.conversations import ConversationOptions
 from scripts.dev.qq_agent_cases import (CASES, CURATED_OXYGEN_SCENARIO, EVENT_NOTICE_CASES,
     EVENT_NOTICE_SELECTED_TOOLS, EVENT_RESTRICTED_SCENARIO, EVENT_SCOPE_BOARD_ID, EVENT_SCOPE_CASES,
-    RAG_CASES, create_fixture,
+    HISTORY_REFERENCE_CASES, RAG_CASES, create_fixture,
     event_notice_fixture_metadata, refresh_fixture)
 
 CONTRACT='management-qq-agent-provider-research@1'
@@ -85,7 +85,7 @@ def _case_id(case):return case.id
 
 def _selected(ids):
     names=tuple(ids)
-    lookup={_case_id(c):c for c in (*CASES, *RAG_CASES, *EVENT_NOTICE_CASES, *EVENT_SCOPE_CASES)}
+    lookup={_case_id(c):c for c in (*CASES, *RAG_CASES, *EVENT_NOTICE_CASES, *EVENT_SCOPE_CASES, *HISTORY_REFERENCE_CASES)}
     if not names or len(set(names))!=len(names) or any(n not in lookup for n in names):
         raise ValueError('RESEARCH_CASES_INVALID')
     return tuple(lookup[n] for n in names)
