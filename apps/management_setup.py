@@ -6,7 +6,8 @@ from pathlib import Path
 import shutil
 import tempfile
 
-from apps.knowledge.initial import CURATED_KNOWLEDGE_SEED, INITIAL_RESOURCES, LEGACY_KNOWLEDGE_SEED
+from apps.knowledge.initial import (COMBINED_KNOWLEDGE_SEED, CURATED_KNOWLEDGE_SEED,
+                                    INITIAL_RESOURCES, KNOWLEDGE_SEEDS, LEGACY_KNOWLEDGE_SEED)
 from apps.management_paths import ManagementPaths
 from apps.management_process import ISOLATED_MARKER_CONTRACT
 from apps.management_web.__main__ import project_root
@@ -23,7 +24,7 @@ def daily_root(workspace=None):
 def initialize_daily(workspace=None, *, data_root=None, knowledge_seed=LEGACY_KNOWLEDGE_SEED):
     """Publish only a NEW daily instance. Existing data is never opened or changed."""
     workspace = Path(ROOT if workspace is None else workspace).absolute()
-    if data_root is None and knowledge_seed == CURATED_KNOWLEDGE_SEED:
+    if data_root is None and knowledge_seed != LEGACY_KNOWLEDGE_SEED:
         raise InstanceError('EXPLICIT_DATA_ROOT_REQUIRED')
     if data_root is not None and not Path(data_root).is_absolute():
         raise InstanceError('DATA_ROOT_MUST_BE_ABSOLUTE')
@@ -69,22 +70,25 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description='首次初始化日常实例；不需要QQ或模型密钥，不联网')
     parser.add_argument('--check', action='store_true', help='Metadata only; no database or credential reads')
     parser.add_argument('--data-root', type=Path, help='明确指定新实例的绝对目录')
-    parser.add_argument('--knowledge-seed', choices=INITIAL_RESOURCES, default=LEGACY_KNOWLEDGE_SEED,
-                        help='首次初始化使用的资料集，curated-oxygen 需要明确的新目录')
+    parser.add_argument('--knowledge-seed', choices=KNOWLEDGE_SEEDS, default=LEGACY_KNOWLEDGE_SEED,
+                        help='首次初始化使用的资料集；专题及组合资料集需要明确的新目录')
     args = parser.parse_args(argv)
     try:
-        if args.data_root is None and args.knowledge_seed == CURATED_KNOWLEDGE_SEED:
+        if args.data_root is None and args.knowledge_seed != LEGACY_KNOWLEDGE_SEED:
             raise InstanceError('EXPLICIT_DATA_ROOT_REQUIRED')
         if args.data_root is not None and not args.data_root.is_absolute():
             raise InstanceError('DATA_ROOT_MUST_BE_ABSOLUTE')
         if args.check:
             from importlib.resources import files
-            resource = files('apps.knowledge').joinpath(INITIAL_RESOURCES[args.knowledge_seed])
+            package = files('apps.knowledge')
+            resource_keys = ((LEGACY_KNOWLEDGE_SEED, CURATED_KNOWLEDGE_SEED)
+                             if args.knowledge_seed == COMBINED_KNOWLEDGE_SEED else (args.knowledge_seed,))
             destination = daily_root() if args.data_root is None else ManagementPaths.resolve(
                 ROOT, data_root=args.data_root).data_root
             result = dict(code='MANAGEMENT_SETUP_CHECKED', data_root=str(destination),
                           data_directory_exists=destination.exists(),
-                          initial_knowledge_available=resource.is_file(),
+                          initial_knowledge_available=all(package.joinpath(INITIAL_RESOURCES[key]).is_file()
+                                                          for key in resource_keys),
                           credential_checked=False, database_opened=False, network_requests=0)
         else:
             result = initialize_daily(data_root=args.data_root, knowledge_seed=args.knowledge_seed)

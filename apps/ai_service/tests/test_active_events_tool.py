@@ -1,6 +1,6 @@
 """Event Tool coverage against isolated Monitoring fixtures."""
 from copy import deepcopy
-from datetime import timedelta
+from datetime import timedelta, timezone
 import json
 import unittest
 from uuid import uuid4
@@ -31,6 +31,37 @@ class ActiveEventsToolTests(unittest.TestCase):
         self.assertEqual(result['status'], 'NO_MATCH')
         self.assertEqual(result['items'], [])
         self.assertEqual(result_metadata(result)['active_events_status'], 'NO_ACTIVE_EVENTS')
+
+    def test_scope_distinguishes_report_timing_from_completed_visual_assessment(self):
+        self.oxygen(6.2)
+        missing = self.query('board-1')
+        self.assertEqual(missing['observation_scope'][-1], dict(source_kind='device_report', device_id='board-1',
+            channel='visual', state='MISSING', observed_at=None))
+
+        self.assertEqual(self.submit_peak(1)['status'], 'no_signal')
+        fresh = self.query('board-1')
+        self.assertEqual(fresh['status'], 'NO_MATCH')
+        self.assertEqual(fresh['observation_scope'][-1], dict(source_kind='device_report', device_id='board-1',
+            channel='visual', state='REPORT_ONLY',
+            observed_at=self.now.astimezone(timezone(timedelta(hours=8))).isoformat()))
+
+        self.sim.skip_windows(12, duration_s=10)
+        self.oxygen(6.2)
+        stale = self.query('board-1')
+        self.assertEqual(stale['status'], 'NO_MATCH')
+        self.assertEqual(stale['observation_scope'][0]['state'], 'ASSESSED')
+        self.assertEqual(stale['observation_scope'][-1]['state'], 'STALE')
+        self.assertEqual(stale['observation_scope'][-1]['observed_at'], fresh['observation_scope'][-1]['observed_at'])
+
+        fake = deepcopy(fresh)
+        fake['observation_scope'][-1]['state'] = 'ASSESSED'
+        self.assertIsNone(result_metadata(fake))
+        fake = deepcopy(fresh)
+        fake['observation_scope'].reverse()
+        self.assertIsNone(result_metadata(fake))
+        fake = deepcopy(fresh)
+        fake['observation_scope'][-1]['observed_at'] = (self.now-timedelta(seconds=122)).isoformat()
+        self.assertIsNone(result_metadata(fake))
 
     def test_selected_simulator_device_includes_visual_and_one_water_risk_cycle(self):
         self.oxygen(4.2)
@@ -66,6 +97,9 @@ class ActiveEventsToolTests(unittest.TestCase):
         self.assertEqual(items[BEHAVIOR]['state'], 'NEEDS_REVIEW')
         self.assertEqual(items[BEHAVIOR]['freshness'], 'stale')
         self.assertEqual(items[BEHAVIOR]['evidence']['abnormal_video_count'], 1)
+        self.assertTrue(items[BEHAVIOR]['evidence']['result_timestamp'].endswith('+08:00'))
+        self.assertTrue(items[APPEARANCE]['last_observed_at'].endswith('+08:00'))
+        self.assertTrue(items[GAP]['evidence']['last_window_end'].endswith('+08:00'))
         self.assertEqual(items[GAP]['state'], 'ACTIVE')
         self.assertEqual(items[GAP]['evidence']['threshold_seconds'], 180)
         encoded = json.dumps(result, ensure_ascii=False)

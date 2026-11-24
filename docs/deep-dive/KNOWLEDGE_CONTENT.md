@@ -31,6 +31,19 @@ $fisheryReviewRoot = Join-Path (Get-Location).Path 'outputs/rag-oxygen-v2-review
 
 已经建好的专题实例可直接运行最后一条命令，把 `$fisheryReviewRoot` 改为该实例的绝对路径。专题的首次初始化要求一个新目录。日常实例若要采用专题版，先确认要保留的用户知识，再安排独立迁移。Web 和 QQ 使用同一个检索服务。QQ 保护范围包含本次修改的文件，升级后的首次 QQ 启动可能要求核对并保存现有设置。[QQ 代码指纹与恢复启动](QQ_BOT.md#代码指纹与恢复启动)
 
+### 使用背景资料与溶氧专题的新实例
+
+在项目根目录可显式选择 `legacy-plus-curated-oxygen`，将原有 31 条背景资料和 12 条带出处的溶氧专题一并初始化到新目录。普通项目资料走常规检索。明确查阅项目资料且命中溶氧专题条件时，使用结构化检索结果。初始化会拒绝已有目标目录。现有日常库采用专题资料前，先核对已有条目和定制内容，再单独安排迁移。
+
+```powershell
+$fisheryRagReview = Join-Path (Get-Location).Path 'outputs/rag-combined-review'
+.\.venv\Scripts\python.exe -I -m apps.management_setup --data-root $fisheryRagReview --knowledge-seed legacy-plus-curated-oxygen --check
+.\.venv\Scripts\python.exe -I -m apps.management_setup --data-root $fisheryRagReview --knowledge-seed legacy-plus-curated-oxygen
+.\.venv\Scripts\python.exe -I -m apps.management_web --data-root $fisheryRagReview --port 8767
+```
+
+用命令行在隔离目录初始化并只读核对 43 条资料。用「请查项目资料，日本鳗鲡在 7.26 mg/L 溶解氧时，摄食率是多少？」验证结构化精确命中。9–10 mg/L 的同类问题返回无匹配。普通水温管理问题仍可命中背景资料。对已有内容的演练使用合成副本，新增专题后核对原有已编辑和停用记录、元数据及源库哈希。[合成副本演练](../../outputs/rag-edited-rehearsal-588ef613/report.json)
+
 ## SQLite 格式与版本
 
 Schema `PRAGMA user_version=2`：

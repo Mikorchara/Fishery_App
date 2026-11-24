@@ -7,6 +7,7 @@ from unittest.mock import patch
 from apps.ai_backend.tests.support import FakeSDK,sdk_tool,sdk_final,tool_chunks,final_chunks
 from apps.ai_backend.openai_compatible_adapter import OpenAICompatibleAdapter
 import apps.ai_service.tests.test_unified_tools as fixture
+from apps.ai_service.business_tools.fishery_knowledge import RESULT_INSTRUCTION
 from apps.ai_service.service import ManagementAssistantService
 from apps.knowledge.tests.support import seed
 from apps.knowledge.repository import KnowledgeRepository
@@ -124,6 +125,9 @@ class KnowledgeHTTPTests(unittest.TestCase):
                     sdk_tool(KNOWLEDGE,'k1',arguments,f.profile.model),sdk_final(model=f.profile.model)]
                 result=f.send((KNOWLEDGE,),streaming,plans=plans)
                 self.assertTrue(result['successful_turn'],result)
+                first_system, result_system = (body['messages'][0]['content'] for body in f.sdk.bodies)
+                self.assertNotIn(RESULT_INSTRUCTION, first_system)
+                self.assertEqual(result_system.count(RESULT_INSTRUCTION), 1)
                 payload=json.loads(next(m['content'] for m in f.sdk.bodies[1]['messages'] if m['role']=='tool'))
                 evidence=next(h for h in payload['evidence'] if h['id']==item['id'])
                 self.assertEqual(evidence['source_version'],'1');self.assertEqual(evidence['source'],item['source_id'])
@@ -134,6 +138,26 @@ class KnowledgeHTTPTests(unittest.TestCase):
                 safe=json.dumps(result)+f.backend.traces.path.read_text(encoding='utf-8')
                 self.assertNotIn(VALUE['body'],safe)
                 self.assertTrue(all(c.closed and (not c.stream or c.stream.closed) for c in f.sdk.clients))
+
+    def test_ordinary_no_match_keeps_result_guidance_and_search_receipt(self):
+        f = self.fixture
+        self.create()
+        query = 'QZXVZZZZ8888'
+        reply = '本次检索未找到符合条件的项目资料。'
+        plans = [sdk_tool(KNOWLEDGE, 'no-match', json.dumps({'query': query}), f.profile.model),
+                 sdk_final(reply, model=f.profile.model)]
+        result = f.send((KNOWLEDGE,), plans=plans)
+        self.assertTrue(result['successful_turn'], result)
+        self.assertEqual(result['final_text'], reply)
+        first, followup = f.sdk.bodies
+        self.assertNotIn('结论限于本次检索', first['messages'][0]['content'])
+        self.assertIn('结论限于本次检索', followup['messages'][0]['content'])
+        payload = json.loads(next(message['content'] for message in followup['messages'] if message['role'] == 'tool'))
+        self.assertEqual(payload['status'], 'NO_MATCH')
+        self.assertEqual(payload['evidence'], [])
+        receipt = f.captured[0].source_ledger.entries[0].receipt
+        self.assertTrue(receipt.project_search_completed)
+        self.assertFalse(receipt.has_project_evidence)
 
     def test_curated_web_uses_original_conditions_even_when_model_query_changes_them(self):
         from apps.knowledge.initial import initialize_curated_knowledge

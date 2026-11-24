@@ -33,7 +33,7 @@
         "search_fishery_knowledge",
         "get_water_quality_history"
       ],
-      "tool_definitions_sha256": "a11ff7b79a28ada26d3b408c6f8301fbb21173bbafc5514de974cba824fe9feb"
+      "tool_definitions_sha256": "860773c25c086b0d4d3531a4d5ad0a09da47947b09a516df7436c443816033e8"
     },
     "data_bindings": {
       "water": "management-current-water@1",
@@ -97,7 +97,7 @@
         "search_fishery_knowledge",
         "get_water_quality_history"
       ],
-      "tool_definitions_sha256": "a11ff7b79a28ada26d3b408c6f8301fbb21173bbafc5514de974cba824fe9feb",
+      "tool_definitions_sha256": "860773c25c086b0d4d3531a4d5ad0a09da47947b09a516df7436c443816033e8",
       "model_transport": "STREAMING",
       "assembler_version": "openai-tool-stream-assembler@1"
     },

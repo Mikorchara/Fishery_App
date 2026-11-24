@@ -21,10 +21,12 @@ KNOWLEDGE_PARAMETERS = {
 
 KNOWLEDGE_DEFINITION = ModelToolDefinition(SEARCH_FISHERY_KNOWLEDGE, KNOWLEDGE_DESCRIPTION, KNOWLEDGE_PARAMETERS)
 RESULT_INSTRUCTION = (
-    "把 evidence 当作项目背景资料，仅引用相关条目的内容和实际来源。"
-    "说明匹配内容与用户问题的关系，保留原资料的条件和适用范围。"
-    "NO_MATCH 表示本轮在项目资料中未检索到符合条件的条目。"
-    "背景资料无法证明当前水质、现场状况或疾病诊断。"
+    "先回答项目资料能支持的结论。仅引用 evidence 中直接相关的条目及其 source，保留适用对象、条件和不确定性。"
+    "用户询问资料版本时，引用 source_version 原值。只匹配部分问题时，分别说明资料支持的结论和尚缺的证据。"
+    "只有相邻主题时，说明本轮未找到直接支持所问结论的资料，省略无关条目。"
+    "NO_MATCH 表示本轮检索未找到符合条件的条目。结论限于本次检索，不编造内容或来源。"
+    "项目资料只作背景。判断当前池塘的水质、摄食变化或疾病须有相应的本轮现场证据，模拟记录只说明其模拟对象。"
+    "仅在用户询问处置时引用相关建议。"
 )
 
 

@@ -1,5 +1,6 @@
 """Read-only event summaries for server-bound Monitoring devices."""
 from collections import Counter
+from datetime import timedelta, timezone
 import json
 
 from apps.ai_backend.model_gateway import ModelToolDefinition
@@ -10,30 +11,33 @@ from apps.monitoring.rules import VISUAL_RULES
 
 
 ACTIVE_EVENTS = 'get_active_events'
-ACTIVE_EVENTS_PROJECTION = 'management-active-events@1'
+ACTIVE_EVENTS_PROJECTION = 'management-active-events@3'
 MAX_ACTIVE_EVENT_ITEMS = 10
 MAX_ACTIVE_EVENT_CYCLES = 512  # Two repository snapshots of at most 256 records each.
 MAX_ACTIVE_EVENT_RESULT_BYTES = 8192
 ACTIVE_EVENTS_DEFINITION = ModelToolDefinition(
     ACTIVE_EVENTS,
-    '用户问当前有哪些告警、异常或事件，且未将范围限定为水质时，优先用本工具。'
-    '明确只问当前水质告警且本轮已授权当前水质工具时，用当前水质工具。'
-    '只读查询本轮绑定设备的活动事件、待核实事件和待复核的行为结果。若已授权设备报告，也可返回该设备的外观异常、行为异常和报告中断。'
-    '只使用程序返回的来源、事件状态及时间。NO_MATCH 表示已查询范围内没有符合条件的事件，NO_DATA 表示该范围没有观测。'
-    '两者都不能证明鱼群健康或无风险。行为文件可能过期，报告中断不证明设备离线。按 evidence 和观察时间如实说明。'
-    '设备由服务端固定，参数必须为 {}。',
+    '用户问当前有哪些事件、异常或告警，且未限定为水质时，优先用本工具。'
+    '只问当前水质读数或水质告警时，用已授权的 get_current_water_quality。'
+    '返回已绑定来源的活动事件、待核实与待复核记录，以及各通道的观测范围和限制。'
+    '板端外观、行为和报告中断仅在相应设备报告已获授权时纳入。设备由服务端固定，参数必须为 {}。',
     {'type': 'object', 'properties': {}, 'additionalProperties': False},
 )
 RESULT_INSTRUCTION = (
-    "按设备分开报告事件，区分 simulator 模拟记录和 device_report 设备报告。"
-    "将 ACTIVE、INDETERMINATE、NEEDS_REVIEW 分别解释为活动、待核实、待复核。只把 ACTIVE 计入活动风险。"
-    "依据 last_observed_at 和各来源的观测时间与新鲜度说明缺测和过期，evaluated_at 是评估时间。"
-    "NO_MATCH 表示本次查询范围内无符合条件的事件，NO_DATA 表示该范围无观测。零条活动风险无法证明健康或风险已消退。"
-    "omitted_count 大于零时说明结果已截断。设备报告中断仅描述报告更新，无法据此判断设备离线。"
-    "abnormal_video_count 是被模型标为异常的视频数量，result_timestamp 是行为结果版本时间。"
-    "如问到行为上报时间，说明本次事件结果未提供。"
-    "外观与行为信号需人工核查，仅凭这些信号无法确诊疾病。"
-    "这次查询只读事件信息，确认、删除、结束事件或操作设备均需另行处理。"
+    "先答用户问的事件或证据。只把 ACTIVE 计为活动风险，INDETERMINATE 写作待核实，NEEDS_REVIEW 写作行为待复核。"
+    "空结果先读 observation_scope。有 ASSESSED 通道时，结论句用「本次在〔有效观测的实际来源和通道〕范围内未查到匹配事件」。"
+    "结论句必须含该范围，只写一次。NO_DATA 或没有 ASSESSED 通道的空结果，说明缺少足够的有效观测，暂时无法核实。"
+    "PARTIAL 表示覆盖不完整，MISSING 表示缺测，STALE 表示过期，UNUSABLE 表示无法用于当前判断。逐项保留会影响结论的限制。"
+    "REPORT_ONLY 表示板端较新报告可查，外观与行为的完整观测范围仍未知。"
+    "simulator 的 visual 是模拟视觉，只有 device_report 才是板端报告。只陈述本轮列出的来源。"
+    "通道无匹配、缺测或过期，不能推断其他通道正常、风险消退或鱼群健康。"
+    "同时问当前读数等其他事实时，继续获取获准且必要的来源，分别回答；历史只用于理解所指内容。"
+    "用中文说明来源和设备。事件工具的时刻已是北京时间（UTC+08:00），直接引用年月日与钟点，勿再换算。"
+    "同一时间只写一次。last_observed_at 是事件观测时间，evaluated_at 是查询评估时间。"
+    "用户未问内部字段时，省略字段名、状态码和规则码。"
+    "行为 result_timestamp 是结果版本时间，abnormal_video_count 是被模型标为异常的视频数；结果未提供行为上报时间。"
+    "报告中断只表示报告未更新，设备连接情况需另有证据。外观和行为信号用于人工核查，不能确诊疾病。结果截断时交代未展开条数。"
+    "查询只读。确认、删除、结束事件和操作设备需另行处理。"
 )
 
 _WATER_TITLES = {code: value[1] for code, value in FAMILIES.items()}
@@ -54,6 +58,72 @@ _STATE_COUNTS = {'ACTIVE': 'active_count', 'NEEDS_REVIEW': 'review_count', 'INDE
 _STATE_PRIORITY = {'ACTIVE': 2, 'NEEDS_REVIEW': 1, 'INDETERMINATE': 0}
 _SEVERITIES = ('unknown', 'info', 'warning', 'critical')
 _FRESHNESS = ('unknown', 'stale', 'fresh')
+_BEIJING = timezone(timedelta(hours=8))
+
+
+def _observation_state(source_kind, observation):
+    if observation['observed_at'] is None:
+        return 'MISSING'
+    if observation['freshness'] == 'stale':
+        return 'STALE'
+    if observation['freshness'] != 'fresh':
+        return 'UNUSABLE'
+    if source_kind == 'device_report':
+        return 'REPORT_ONLY'
+    if observation['connectivity'] != 'online':
+        return 'UNUSABLE'
+    return {'valid': 'ASSESSED', 'partial': 'PARTIAL'}.get(observation['quality'], 'UNUSABLE')
+
+
+def _observation_scope(sources):
+    return [dict(source_kind=source['source_kind'], device_id=source['device_id'],
+                 channel=observation['channel'], state=_observation_state(source['source_kind'], observation),
+                 observed_at=observation['observed_at'])
+            for source in sources for observation in source['observations']]
+
+
+def _observation_time(value):
+    observed = timestamp(value).astimezone(_BEIJING)
+    return f'（北京时间 {observed:%Y-%m-%d %H:%M:%S}）'
+
+
+def _event_timestamp(value):
+    return timestamp(value).astimezone(_BEIJING).isoformat() if value is not None else None
+
+
+def render_empty_event_scope(payload):
+    """Render a validated, empty event receipt for a standalone event question."""
+    if payload['status'] not in ('NO_MATCH', 'NO_DATA'):
+        return None
+    assessed, limits = [], []
+    for scope in payload['observation_scope']:
+        board = scope['source_kind'] == 'device_report'
+        water = scope['channel'] == 'water'
+        label = '板端视觉' if board else '模拟水质' if water else '模拟视觉'
+        label += f"（{scope['device_id']}）"
+        state = scope['state']
+        if state == 'ASSESSED':
+            assessed.append(label + _observation_time(scope['observed_at']))
+            continue
+        if state == 'REPORT_ONLY':
+            observed = _observation_time(scope['observed_at'])
+            limits.append(f'{label}有较新的报告{observed}，当前外观和行为的完整观测范围仍未知。')
+            continue
+        reason = {'PARTIAL': '观测覆盖不完整', 'MISSING': '缺少观测',
+                  'STALE': '最新报告已过期' if board else '观测已过期',
+                  'UNUSABLE': '观测无法用于当前判断'}[state]
+        if state == 'STALE':
+            reason += _observation_time(scope['observed_at'])
+        subject = '外观和行为异常' if board else '水质事件' if water else '视觉异常'
+        coverage = '全面' if state == 'PARTIAL' else ''
+        limits.append(f'{label}{reason}，暂时无法{coverage}核实{subject}。')
+    if assessed:
+        verdict = f'本次在{"、".join(assessed)}的有效观测范围内未查到匹配事件。'
+    elif payload['status'] == 'NO_DATA':
+        verdict = '本次缺少观测，暂时无法核实当前事件。'
+    else:
+        verdict = '本次缺少足够的有效观测，暂时无法核实当前事件。'
+    return '\n\n'.join((verdict, *limits))
 
 
 def _title(source, channel, code):
@@ -73,10 +143,10 @@ def _evidence(event, code):
                 labels.append(dict(label=label, targets=item['targets']))
         return dict(kind='appearance_peak', labels=labels, other_label_count=len(raw['labels'])-len(labels))
     if code == BEHAVIOR:
-        return dict(kind='behavior_version', result_timestamp=raw['result_timestamp'],
+        return dict(kind='behavior_version', result_timestamp=_event_timestamp(raw['result_timestamp']),
             abnormal_video_count=len(raw['abnormal_videos']))
     if code == GAP:
-        return dict(kind='report_gap', last_window_end=raw['last_window_end'],
+        return dict(kind='report_gap', last_window_end=_event_timestamp(raw['last_window_end']),
             threshold_seconds=raw['threshold_seconds'])
     return None
 
@@ -99,8 +169,8 @@ def _item(event, source):
     quality = event.get('current_data_quality') or {}
     return dict(source_kind=source['source_kind'], device_id=source['device_id'],
         channel=channel, code=code, title=title, state='NEEDS_REVIEW' if code == BEHAVIOR else lifecycle,
-        severity=event.get('severity', 'unknown'), occurred_at=event['occurred_at'],
-        last_observed_at=event.get('last_observed_at'), freshness=quality.get('freshness', 'unknown'),
+        severity=event.get('severity', 'unknown'), occurred_at=_event_timestamp(event['occurred_at']),
+        last_observed_at=_event_timestamp(event.get('last_observed_at')), freshness=quality.get('freshness', 'unknown'),
         evidence=_evidence(event, code))
 
 
@@ -116,14 +186,16 @@ def active_events_payload(monitoring, device_id, *, board_device_id=None):
     for source, events in scopes:
         current = [item for event in events if (item := _item(event, source)) is not None]
         counts = Counter(item['state'] for item in current)
-        sources.append({**source, **{key: counts[state] for state, key in _STATE_COUNTS.items()}})
+        observations = [dict(row, observed_at=_event_timestamp(row['observed_at'])) for row in source['observations']]
+        sources.append({**source, 'observations': observations, **{key: counts[state] for state, key in _STATE_COUNTS.items()}})
         items.extend(current)
     items.sort(key=lambda item: (_STATE_PRIORITY[item['state']],
         _SEVERITIES.index(item['severity']), timestamp(item['last_observed_at'] or item['occurred_at'])), reverse=True)
     observed = any(o['observed_at'] for source in sources for o in source['observations'])
     payload = dict(projection_version=ACTIVE_EVENTS_PROJECTION,
         status='OK' if items else 'NO_MATCH' if observed else 'NO_DATA',
-        query_completed=True, evaluated_at=now.isoformat(), sources=sources,
+        query_completed=True, evaluated_at=_event_timestamp(now.isoformat()), sources=sources,
+        observation_scope=_observation_scope(sources),
         items=items[:MAX_ACTIVE_EVENT_ITEMS], total_count=len(items),
         omitted_count=max(0, len(items)-MAX_ACTIVE_EVENT_ITEMS))
     if result_metadata(payload) is None:
@@ -164,7 +236,7 @@ def result_metadata(payload):
     """Validate the versioned result and return bounded source receipt metadata."""
     try:
         if (type(payload) is not dict or set(payload) != {'projection_version', 'status', 'query_completed',
-                'evaluated_at', 'sources', 'items', 'total_count', 'omitted_count'}
+                'evaluated_at', 'sources', 'observation_scope', 'items', 'total_count', 'omitted_count'}
                 or payload['projection_version'] != ACTIVE_EVENTS_PROJECTION
                 or payload['query_completed'] is not True or not _count(payload['total_count'])
                 or not _count(payload['omitted_count'])
@@ -195,7 +267,8 @@ def result_metadata(payload):
                         or item['quality'] not in ('valid', 'partial', 'invalid', 'missing', 'unknown')
                         or item['freshness'] not in _FRESHNESS
                         or item['connectivity'] not in ('online', 'offline', 'never_received', 'unknown')
-                        or (expected_kind == 'device_report' and item['connectivity'] != 'unknown')
+                        or (expected_kind == 'device_report' and (item['connectivity'] != 'unknown'
+                            or (item['observed_at'] is not None and item['quality'] != 'unknown')))
                         or (item['observed_at'] is None and
                             (item['quality'] != 'missing' or item['freshness'] != 'unknown'))):
                     return None
@@ -205,7 +278,7 @@ def result_metadata(payload):
                 return None
         observed = any(item['observed_at'] for source in sources for item in source['observations'])
         status = 'OK' if payload['total_count'] else 'NO_MATCH' if observed else 'NO_DATA'
-        if (payload['status'] != status
+        if (payload['status'] != status or payload['observation_scope'] != _observation_scope(sources)
                 or sum(sum(counts.values()) for counts in source_counts.values()) != payload['total_count']):
             return None
         for item in payload['items']:

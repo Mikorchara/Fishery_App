@@ -9,8 +9,8 @@ from unittest.mock import patch
 
 from apps.qq_bot.management_config import ROOT, MARKER
 from scripts.dev.qq_agent_cases import (CASES, CATEGORIES, CURRENT, CURATED_OXYGEN_SCENARIO,
-    HISTORY, KNOWLEDGE, RAG_CASES, SCORE, ABSENT_KNOWLEDGE_QUERY, SCENARIOS, create_fixture,
-    refresh_fixture, validate_case_library)
+    EVENT_NOTICE_CASES, EVENT_RESTRICTED_SCENARIO, HISTORY, KNOWLEDGE, RAG_CASES, SCORE,
+    ABSENT_KNOWLEDGE_QUERY, SCENARIOS, create_fixture, refresh_fixture, validate_case_library)
 
 
 class AgentResearchCaseTests(unittest.TestCase):
@@ -67,7 +67,7 @@ class AgentResearchCaseTests(unittest.TestCase):
         self.assertEqual(knowledge.list()['total'], 12)
         self.assertEqual(fixture.public()['synthetic_knowledge'], 'CURATED_OXYGEN_V2_LITERATURE_AND_NO_USER_DATA')
         expected = (('EXACT', '12.4%'), ('PARTIAL', '14.1%'), ('NO_MATCH', ''),
-                    ('NO_MATCH', ''), ('EXACT', '3.76%'), (None, '8.9%'))
+                    ('NO_MATCH', ''), ('EXACT', '3.76%'), ('EXACT', '8.9%'))
         for case, (coverage, value) in zip(RAG_CASES, expected, strict=True):
             with self.subTest(case=case.id):
                 result = search_fishery_knowledge({'query': case.question}, service=knowledge, question=case.question)
@@ -80,6 +80,34 @@ class AgentResearchCaseTests(unittest.TestCase):
         self.assertEqual(history['status'], 'OK')
         self.assertEqual(history['counts']['matching_windows'], 30)
         self.assertEqual(fixture.public()['source'], 'SIMULATOR')
+
+    def test_opt_in_event_notice_cases_only_restrict_new_research_grants(self):
+        from apps.ai_service.management_policy import ManagementToolPolicyStore
+        from apps.qq_bot.ai_configuration import load_ai_config
+        from scripts.dev.check_qq_agent import _configure, build_plan
+
+        selected = (CURRENT, KNOWLEDGE, HISTORY)
+        cases = CASES + RAG_CASES + EVENT_NOTICE_CASES
+        self.assertEqual(validate_case_library(cases), cases)
+        self.assertEqual([case.id for case in EVENT_NOTICE_CASES], ['P01', 'P02', 'P03'])
+        for case, tool_names in zip(EVENT_NOTICE_CASES, [(), (CURRENT,), (CURRENT,)], strict=True):
+            self.assertEqual(case.scenario, EVENT_RESTRICTED_SCENARIO)
+            self.assertTrue(case.tool_choice_matches(tool_names))
+            self.assertFalse(case.tool_choice_matches((KNOWLEDGE,)))
+
+        plan = build_plan(EVENT_NOTICE_CASES)
+        fixture = self.fixture(EVENT_RESTRICTED_SCENARIO)
+        request = _configure(fixture, self.root, 2048)
+        grant = load_ai_config(request.inputs.ai_config).grants[0]
+        policy = ManagementToolPolicyStore(request.inputs.policy_directory, None).snapshot()
+        self.assertEqual(grant.tools, selected)
+        self.assertEqual(policy.selected_tools, selected)
+        self.assertEqual(policy.source, 'MANAGEMENT_OVERRIDE')
+        self.assertEqual(plan['event_notice_fixture'], fixture.public()['event_notice_fixture'])
+        self.assertFalse(plan['event_notice_fixture']['active_event_query_authorized'])
+        self.assertEqual(plan['qq_network_requests'], 0)
+        self.assertNotIn('event_notice_fixture', build_plan())
+        self.assertIsNotNone(fixture.current_oracle()['water_values']['dissolved_oxygen_mg_l'])
 
     def test_five_scenarios_are_assessed_by_real_monitoring_domain(self):
         expected={

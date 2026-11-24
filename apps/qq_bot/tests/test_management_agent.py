@@ -180,6 +180,108 @@ class ManagementAgentTests(unittest.TestCase):
         self.assertIn('未取得事件查询结果',self.posts[-1]['content'])
         self.assertEqual(self.host.store.counts()['turns'],0)
 
+    def test_event_scope_replaces_unbounded_empty_result_and_keeps_qq_source(self):
+        self.compose(event_board_device_id='board-1')
+        self.plan = (('get_active_events', {}),)
+        self.general_text = '当前没有任何异常，板端视觉也正常。'
+
+        done = self.ask('请问现在发生什么事件了吗？')
+
+        self.assertEqual(done.get('history_code'), 'HISTORY_COMMITTED', done)
+        self.assertEqual((len(self.http), len(self.posts)), (2, 1))
+        self.assertEqual(self.host.turns[-1]['source_kinds'], ['get_active_events'])
+        first, second = self.http
+        instruction = RESULT_INSTRUCTIONS['get_active_events']
+        self.assertNotIn(instruction, first['messages'][0]['content'])
+        self.assertIn(instruction, second['messages'][0]['content'])
+        tool_message = next(message for message in second['messages'] if message['role'] == 'tool')
+        payload = json.loads(tool_message['content'])
+        self.assertEqual(payload['status'], 'NO_MATCH')
+        self.assertEqual([(row['device_id'], row['channel'], row['state']) for row in payload['observation_scope']],
+                         [('sim-pond-1', 'water', 'ASSESSED'), ('sim-pond-1', 'visual', 'ASSESSED'),
+                          ('board-1', 'visual', 'MISSING')])
+
+        reply = self.posts[0]['content']
+        body, source = reply.split('\n\n本轮来源（北京时间 UTC+08）：\n', 1)
+        self.assertIn('模拟水质（sim-pond-1）', body)
+        self.assertIn('模拟视觉（sim-pond-1）', body)
+        self.assertIn('板端视觉（board-1）缺少观测，暂时无法核实外观和行为异常', body)
+        self.assertIn('北京时间', body)
+        self.assertNotIn(self.general_text, reply)
+        self.assertEqual(reply.count('未查到匹配事件'), 1)
+        self.assertIn('事件查询 · 评估', source)
+        self.assertIn('SIMULATOR · sim-pond-1', source)
+        self.assertIn('设备报告 · board-1：报告窗口 尚无观测', source)
+        self.assertNotIn('活动 0 条', source)
+        self.assertNotIn('未查到', source)
+
+    def test_event_notice_respects_qq_member_grant(self):
+        ai_path = self.path.parent / 'ai.json'
+        config = json.loads(ai_path.read_text(encoding='utf8'))
+        config['grants'][0]['tools'].remove('get_active_events')
+        ai_path.write_text(json.dumps(config), encoding='utf8')
+        self.request = load_request(self.path)
+        self.compose()
+        self.general_text = '当前没有任何活动事件，当前溶解氧为 99 mg/L。'
+        reason = '当前事件查询工具在本轮未获授权，无法核实当前事件。'
+
+        result = self.ask('现在有什么活动事件？')
+
+        self.assertEqual(result.get('history_code'), 'HISTORY_COMMITTED', result)
+        self.assertEqual(self.host.turns[-1]['tool_executions'], 0)
+        self.assertEqual(self.host.turns[-1]['source_kinds'], [])
+        reply = self.posts[-1]['content'].split('\n\n本轮来源', 1)[0]
+        self.assertIn(reason, reply)
+        self.assertNotIn('没有任何活动事件', reply)
+        self.assertNotIn('99 mg/L', reply)
+        body, = self.http
+        system = body['messages'][0]['content']
+        self.assertIn(reason, system)
+        self.assertNotIn('get_current_water_quality', system)
+        self.assertNotIn('get_active_events', [tool['function']['name'] for tool in body['tools']])
+
+        before = len(self.http)
+        self.plan = (('get_current_water_quality', {}),)
+        self.general_text = '已取得本轮模拟水质观测。'
+        result = self.ask('请查一下当前水质怎么样？')
+
+        self.assertEqual(result.get('history_code'), 'HISTORY_COMMITTED', result)
+        self.assertEqual(self.host.turns[-1]['source_kinds'], ['get_current_water_quality'])
+        self.assertEqual(self.http[before]['messages'][0]['content'], INSTRUCTION)
+        self.assertNotIn(reason, self.posts[-1]['content'])
+
+    def test_event_notice_with_current_oxygen_uses_real_qq_receipt(self):
+        path = self.path.parent / 'policy' / 'management_assistant_policy.json'
+        policy = json.loads(path.read_text(encoding='utf8'))
+        policy['selected_tools'].remove('get_active_events')
+        path.write_text(json.dumps(policy), encoding='utf8')
+        self.request = load_request(self.path)
+        self.compose()
+        self.plan = (('get_current_water_quality', {}),)
+        self.general_text = '当前没有任何活动事件，当前溶解氧为 99 mg/L。'
+        reason = '当前事件查询工具在本轮未获授权，无法核实当前事件。'
+
+        result = self.ask('现在有什么活动事件？顺便查一下当前溶解氧是多少？')
+
+        self.assertEqual(result.get('history_code'), 'HISTORY_COMMITTED', result)
+        self.assertEqual(self.host.turns[-1]['tool_executions'], 1)
+        self.assertEqual(self.host.turns[-1]['source_kinds'], ['get_current_water_quality'])
+        self.assertEqual(len(self.http), 2)
+        for body in self.http:
+            system = body['messages'][0]['content']
+            self.assertIn(reason, system)
+            self.assertIn('get_current_water_quality', system)
+            self.assertNotIn('get_active_events', [tool['function']['name'] for tool in body['tools']])
+        observed = json.loads(next(message['content'] for message in self.http[-1]['messages']
+                                   if message['role'] == 'tool'))
+        self.assertEqual(observed['status'], 'OK')
+        value = observed['water_quality']['dissolved_oxygen_mg_l']
+        reply = self.posts[-1]['content'].split('\n\n本轮来源', 1)[0]
+        for expected in (reason, '模拟水质', 'sim-pond-1', '北京时间', f'{value:g} mg/L'):
+            self.assertIn(expected, reply)
+        for unsupported in ('没有任何活动事件', '99 mg/L'):
+            self.assertNotIn(unsupported, reply)
+
     def test_device_mode_board_is_bound_to_approval_and_query(self):
         from datetime import datetime, timezone
         from types import SimpleNamespace

@@ -13,6 +13,7 @@ from typing import Callable
 import uuid
 
 from apps.ai_service.business_tools.current_water_quality import CURRENT_WATER_QUALITY as CURRENT
+from apps.ai_service.business_tools.active_events import ACTIVE_EVENTS
 from apps.ai_service.business_tools.fishery_knowledge import SEARCH_FISHERY_KNOWLEDGE as KNOWLEDGE
 from apps.ai_service.business_tools.water_quality_history import WATER_QUALITY_HISTORY as HISTORY
 from apps.ai_service.business_tools.water_quality_score import WATER_QUALITY_SCORE as SCORE
@@ -23,6 +24,10 @@ FIXTURE_CONTRACT = 'management-qq-agent-synthetic-fixture@1'
 TOOLS = (CURRENT, KNOWLEDGE, HISTORY, SCORE)
 CURATED_OXYGEN_SCENARIO = 'curated_oxygen'
 SCENARIOS = ('fresh', 'missing', 'stale', 'low_oxygen', 'no_data', CURATED_OXYGEN_SCENARIO)
+EVENT_RESTRICTED_SCENARIO = 'event_restricted'
+EVENT_NOTICE_SELECTED_TOOLS = (CURRENT, KNOWLEDGE, HISTORY)
+EVENT_SCOPE_BOARD_ID = 'research-board-1'
+_RESEARCH_TOOLS = (*TOOLS, ACTIVE_EVENTS)
 CATEGORIES = ('general', 'current', 'history', 'knowledge', 'score', 'comparison',
               'ambiguous', 'memory', 'adversarial')
 DEVICE_ID = 'sim-pond-1'
@@ -44,13 +49,13 @@ class ResearchCase:
     def allowed_tools(self):
         if self.expected_tool_sets is None:
             return TOOLS
-        return tuple(name for name in TOOLS if any(name in group for group in self.expected_tool_sets))
+        return tuple(name for name in _RESEARCH_TOOLS if any(name in group for group in self.expected_tool_sets))
 
     @property
     def required_tools(self):
         if self.expected_tool_sets is None:
             return ()
-        return tuple(name for name in TOOLS if all(name in group for group in self.expected_tool_sets))
+        return tuple(name for name in _RESEARCH_TOOLS if all(name in group for group in self.expected_tool_sets))
 
     def tool_choice_matches(self, actual_tools):
         """None means deliberately exploratory; it is not silently counted as PASS."""
@@ -203,19 +208,41 @@ RAG_CASES = (
 )
 
 
+EVENT_NOTICE_CASES = (
+    ResearchCase('P01', 'general', '请问现在有什么活动事件？', EVENT_RESTRICTED_SCENARIO,
+        expectation='明确当前未授权查询活动事件，不能核实事件状态，也不能用其他工具代查。'),
+    ResearchCase('P02', 'current', '帮我看看目前的水质有哪些告警。', EVENT_RESTRICTED_SCENARIO,
+        ((CURRENT,),), expectation='查询当前水质并按结果交代告警状态，不附加与问题无关的活动事件权限说明。'),
+    ResearchCase('P03', 'comparison', '现在有什么活动事件？顺便查一下当前溶解氧是多少？',
+        EVENT_RESTRICTED_SCENARIO, ((CURRENT,),),
+        expectation='明确当前未授权查询活动事件，并报告本轮查到的模拟溶解氧数值和单位。'),
+)
+
+
+EVENT_SCOPE_CASES = (
+    ResearchCase('O01', 'general', '当前发生了什么事件？', 'fresh', ((ACTIVE_EVENTS,),),
+        expectation='限定模拟水质无匹配，交代模拟视觉和已绑定板端视觉均缺测。'),
+    ResearchCase('O02', 'comparison', '先查现在有哪些活动事件，再告诉我当前的溶解氧读数。',
+        'fresh', ((ACTIVE_EVENTS, CURRENT),),
+        expectation='查询当前事件和当前水质，分别回答，保留模拟水质无匹配与两项视觉缺测。'),
+    ResearchCase('O03', 'general', '请问现在有哪些告警？', 'low_oxygen', ((ACTIVE_EVENTS,),),
+        expectation='报告模拟设备的活动低氧风险，独立说明视觉观测缺口。'),
+)
+
+
 def validate_case_library(cases=CASES):
     ids = set()
     groups = {}
     for case in cases:
         if (type(case) is not ResearchCase or case.id in ids or case.category not in CATEGORIES
-                or case.scenario not in SCENARIOS or not case.question.strip()
+                or case.scenario not in (*SCENARIOS, EVENT_RESTRICTED_SCENARIO) or not case.question.strip()
                 or len(case.question.encode('utf8')) > 8192 or type(case.turn) is not int or case.turn < 1):
             raise ValueError('INVALID_RESEARCH_CASE')
         ids.add(case.id)
         if case.expected_tool_sets is not None:
             if not case.expected_tool_sets or any(
                     type(group) is not tuple or len(group)>2 or len(group)!=len(set(group))
-                    or not set(group)<=set(TOOLS) for group in case.expected_tool_sets):
+                    or not set(group)<=set(_RESEARCH_TOOLS) for group in case.expected_tool_sets):
                 raise ValueError('INVALID_RESEARCH_CASE_TOOLS')
         if case.conversation_id:
             groups.setdefault(case.conversation_id, []).append(case.turn)
@@ -272,7 +299,7 @@ class SyntheticFixture:
         knowledge_source = ('CURATED_OXYGEN_V2_LITERATURE_AND_NO_USER_DATA'
                             if self.scenario == CURATED_OXYGEN_SCENARIO
                             else 'BUNDLED_BACKGROUND_CORPUS_NOT_USER_DATA')
-        return dict(contract=FIXTURE_CONTRACT, scenario=self.scenario, source='SIMULATOR',
+        value = dict(contract=FIXTURE_CONTRACT, scenario=self.scenario, source='SIMULATOR',
             data_root=str(self.root), instance_id='management-isolated', device_id=DEVICE_ID,
             created_at=self.created_at.isoformat(),
             last_observed_at=self.last_observed_at.isoformat() if self.last_observed_at else None,
@@ -282,6 +309,14 @@ class SyntheticFixture:
             known_absent_knowledge_query=ABSENT_KNOWLEDGE_QUERY,
             history_seed='30_ONE_MINUTE_WINDOWS' if self.scenario!='no_data' else 'NO_OBSERVATIONS',
             automatic_background_refresh=False, timestamps_rewritten=False)
+        if self.scenario == EVENT_RESTRICTED_SCENARIO:
+            value['event_notice_fixture'] = event_notice_fixture_metadata()
+        return value
+
+
+def event_notice_fixture_metadata():
+    return dict(active_event_query_authorized=False, selected_tools=list(EVENT_NOTICE_SELECTED_TOOLS),
+                policy_scope='NEW_ISOLATED_RESEARCH_QQ_AGENT_CONFIGURATION')
 
 
 def create_fixture(root, scenario='fresh', clock=lambda: datetime.now(timezone.utc)):
@@ -292,7 +327,7 @@ def create_fixture(root, scenario='fresh', clock=lambda: datetime.now(timezone.u
     actual supplied clock. Stale data ends 15 minutes before that clock; it is
     never refreshed. No producer thread or periodic timestamp update is started.
     """
-    if scenario not in SCENARIOS or not callable(clock):
+    if scenario not in (*SCENARIOS, EVENT_RESTRICTED_SCENARIO) or not callable(clock):
         raise ValueError('INVALID_RESEARCH_SCENARIO')
     root=Path(root).absolute()
     if (not root.resolve().is_relative_to(ROOT/'outputs') or root.exists()

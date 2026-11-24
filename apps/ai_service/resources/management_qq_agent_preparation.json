@@ -38,7 +38,7 @@
         "score_current_water_quality",
         "get_active_events"
       ],
-      "tool_definitions_sha256": "8beed7edbef101dac034ccac80d7bc1be36c64958dc03ff29013f73d4a7bdc33"
+      "tool_definitions_sha256": "d28552fbb1ad9842965d8fa7855604f22960e1ea01ec3c12f6b82f7759ac9bca"
     },
     "sdk": {
       "adapter": "apps.ai_backend.openai_compatible_adapter.OpenAICompatibleAdapter",
@@ -118,10 +118,10 @@
       "ai_service/hybrid_presentation.py": "02bc2768e456ac2aa69537140eb07803e47ff436f9b582785e61bddc33a04034",
       "ai_service/hybrid_trial_presentation.py": "9a2338b359be43d356f6e7dece1f8e2cb9a06a73b9089d6a2762bc3b57177f76",
       "ai_service/management_policy.py": "d2cc3c81e48a752690b43c56e09158850c0bdb7395ab6ff93f2b5877835e5b51",
-      "ai_service/runtime/assistant.py": "b0ab65c22cc9b4853f3dc0f9c86c3a52eea3b9ea4c00dfb104c0e6f8baed0cc5",
+      "ai_service/runtime/assistant.py": "1f0a8f73707b85655b217eb08720f5e1cc13869544b844da7309998d1f6c50ff",
       "ai_service/runtime/resources/presets.json": "30aa3ce86c42ffaf6e50adee6fbe3e3ab44cc5dccd2adfef7dd4d4d4207fce19",
       "ai_service/runtime/sources.py": "3e8cfbd0526c044c4c76de187ac49cee82b0b3d89ec4e3ceacfb532910052f9a",
-      "ai_service/service.py": "815e0ed6f3f9a8c8bdbd050d8a705a8d2fe83d89aae3b370700884c2a062c46c",
+      "ai_service/service.py": "478fc76824e27ffe352a88e8cdc90b2a547cdfc0359e6726421a9b8b2d0450bd",
       "qq_bot/__init__.py": "6ce26d450305863fa4bb3681c707c6d11b09b039ae28f4bc31c49d4a890664dc",
       "qq_bot/__main__.py": "4af4fdf3c9709c5459c3632be53094cff5bbd9ea0060e72d869fc726539ba78d",
       "qq_bot/adapter.py": "1a6057beab784dee3e95861d27544c6615b1591444b1b877dfd4e52ede43fcf6",
@@ -201,15 +201,19 @@
       "apps/ai_service/channel_natural_presentation.py": "cbdd8a6cf6dc7a7c4d268163d0ba9174b501b5b163d50b4246c9225141c69cfd",
       "apps/ai_service/qq_settings.py": "e42e99006abce969aa97315b528091781449d41ee4edc8b494cbf58affb57a8b",
       "apps/qq_bot/management_configuration_bridge.py": "343e4e9361f7df778f84c2d7477957e89ce8bacd024cf17d3892d9f6c4be89ca",
-      "apps/ai_service/channel_management_agent.py": "fe1fc2443861e5d86cd6b5aea8acdbf07d6184a8e3442f457753e43848afe2af",
-      "apps/ai_service/channel_agent_presentation.py": "2dfc62f950f620afc51f82d2b75864f4ab992e20992ef09baac9edb94bf726f2",
+      "apps/ai_service/channel_management_agent.py": "d16eeef0b18d49ad58951a7094cc33b8bd0451d687e040ed3b373938e55fb2c7",
+      "apps/ai_service/channel_agent_presentation.py": "b16ca42644989127215cd1ffebbd97cb8f07bdc207d22eaa8a1d5422187ab9b9",
+      "apps/ai_service/service.py": "478fc76824e27ffe352a88e8cdc90b2a547cdfc0359e6726421a9b8b2d0450bd",
       "apps/ai_backend/tool_conversation.py": "89daef0baabe8ea27c344c5c2f52a17b9d8c80a0ebdc9b26573fb54b69bde006",
       "apps/ai_backend/tools/contracts.py": "cdd4ab78e875594f78a11897b3a3033dc01924393d02054069625e7cdd79af68",
-      "apps/ai_service/runtime/assistant.py": "b0ab65c22cc9b4853f3dc0f9c86c3a52eea3b9ea4c00dfb104c0e6f8baed0cc5",
+      "apps/ai_service/runtime/assistant.py": "1f0a8f73707b85655b217eb08720f5e1cc13869544b844da7309998d1f6c50ff",
       "apps/ai_service/runtime/sources.py": "3e8cfbd0526c044c4c76de187ac49cee82b0b3d89ec4e3ceacfb532910052f9a",
       "apps/ai_service/runtime/oxygen_history.py": "bed5ff1621580ed6c047bbde3648d1dfcb6b5a78fbe9a5a557b9e32814a384ae",
+      "apps/ai_service/runtime/event_notice.py": "9ad326fbae194a27897b3cd96c220bf110cd55c0ef8a98bdc7336b627b1e9e09",
+      "apps/ai_service/runtime/history_selection.py": "e6618c6543c2015afeac4bccf68364649e439e0f4e2621a6092fe711fea3b926",
+      "apps/ai_service/runtime/history_summary.py": "a51ef6afbb3fb21501efc9a9c39ff9a3527ccee74b634234aa26d51ae7527be9",
       "apps/ai_service/business_tools/registry.py": "492976534bd72c7b073f6b3188fb68835ff547c123b8411144e09d3be85033ea",
-      "apps/ai_service/business_tools/fishery_knowledge.py": "263c4b3fd00a46d77afa17390b6d9b52eb4044df1df4a7e4a28d210da236cc58",
+      "apps/ai_service/business_tools/fishery_knowledge.py": "5c35bbfb9394051df0104a8eded0a1202df66cff16e4231a71a43b5c89838ee5",
       "apps/ai_service/business_tools/water_quality_history.py": "1d1317322f6b07e0c595a5e8ebc793a51c766716c277600225f7643ae4711f22",
       "apps/ai_service/business_tools/water_quality_score.py": "164beff120aa7b008f5d6abe9eefc9e0c28ab7473d46de15ed87033275bfba85",
       "apps/knowledge/repository.py": "2b51beff434554f75dbc9ccc802faf3687063ced8f6bde9aaf760f9184cad901",
@@ -218,8 +222,8 @@
       "apps/knowledge/curated_retrieval.py": "0aaa2ec39a60e97d11dbae7b50da6536e4bbf22a6ad68b5c39d683eb5d3725c6",
       "apps/qq_bot/knowledge_source.py": "d3ae9951fa523ba1d359f8929302ea7c5621d7ade126869a48b2e16e00e492f0",
       "apps/qq_bot/agent_conversations.py": "91ee652bc35e7f68d72fa9b01c310f64645c7d7575b8aa3c76472c564ed94743",
-      "apps/ai_service/active_event_execution.py": "d69a27a85736e323cd25530d18720960c217c067b3b013750159854d576b038f",
-      "apps/ai_service/business_tools/active_events.py": "e08b8ef64c1db991b66c7b7fbcf588dcfc320941a7fac22ede26ec8789c3af90",
+      "apps/ai_service/active_event_execution.py": "058b65f4f9894e2d5c58c29a4ffbf408eb03af6aa518d1c30491ad0314896751",
+      "apps/ai_service/business_tools/active_events.py": "ce1b98111e4f438e59ec16cbb1e987a339809891eead39c12225dbd5e4d889c9",
       "apps/monitoring/event_cycles.py": "cf86acdfed8a4683dd44896e5465a8a4f903fc3f680301a5a6c46a6c27ace262",
       "apps/monitoring/event_families.py": "0908d65df415b7fdc96fb08f4f9e93127023dd7d07a5be005599a7cd48534fd6",
       "apps/monitoring/manual_end.py": "058c4fa392d68e297d91066940615a56f6574c3ac98a1dc66bfe77899215e6de"
@@ -230,14 +234,14 @@
       "knowledge": "management-project-knowledge@2",
       "score": "management-water-score@1",
       "events": {
-        "projection": "management-active-events@1",
+        "projection": "management-active-events@3",
         "monitoring": "FROZEN_TURN_DEVICE",
         "board": "OPTIONAL_PROCESS_APPROVED_BOUND_REPORT_DEVICE"
       },
       "instance": "EXPLICIT_READ_ONLY_SAME_INSTANCE"
     }
   },
-  "scope_sha256": "54a441b839ccac6b4dd3a29ce7f583a4470dba0f17d42a98d16b984f31934a57",
+  "scope_sha256": "fcd8cea18745243856082cd05c40a8dec40712d3d7f59f0aaa89d0411efe74ae",
   "old_approvals_accepted": false,
   "real_execution_requires": "CURRENT_PROCESS_WEB_AGENT_OPERATOR_CONSENT"
 }

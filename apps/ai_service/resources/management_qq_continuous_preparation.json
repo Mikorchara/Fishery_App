@@ -113,10 +113,10 @@
       "ai_service/hybrid_presentation.py": "02bc2768e456ac2aa69537140eb07803e47ff436f9b582785e61bddc33a04034",
       "ai_service/hybrid_trial_presentation.py": "9a2338b359be43d356f6e7dece1f8e2cb9a06a73b9089d6a2762bc3b57177f76",
       "ai_service/management_policy.py": "d2cc3c81e48a752690b43c56e09158850c0bdb7395ab6ff93f2b5877835e5b51",
-      "ai_service/runtime/assistant.py": "b0ab65c22cc9b4853f3dc0f9c86c3a52eea3b9ea4c00dfb104c0e6f8baed0cc5",
+      "ai_service/runtime/assistant.py": "1f0a8f73707b85655b217eb08720f5e1cc13869544b844da7309998d1f6c50ff",
       "ai_service/runtime/resources/presets.json": "30aa3ce86c42ffaf6e50adee6fbe3e3ab44cc5dccd2adfef7dd4d4d4207fce19",
       "ai_service/runtime/sources.py": "3e8cfbd0526c044c4c76de187ac49cee82b0b3d89ec4e3ceacfb532910052f9a",
-      "ai_service/service.py": "815e0ed6f3f9a8c8bdbd050d8a705a8d2fe83d89aae3b370700884c2a062c46c",
+      "ai_service/service.py": "478fc76824e27ffe352a88e8cdc90b2a547cdfc0359e6726421a9b8b2d0450bd",
       "qq_bot/__init__.py": "6ce26d450305863fa4bb3681c707c6d11b09b039ae28f4bc31c49d4a890664dc",
       "qq_bot/__main__.py": "4af4fdf3c9709c5459c3632be53094cff5bbd9ea0060e72d869fc726539ba78d",
       "qq_bot/adapter.py": "1a6057beab784dee3e95861d27544c6615b1591444b1b877dfd4e52ede43fcf6",
@@ -197,7 +197,7 @@
       "apps/qq_bot/management_configuration_bridge.py": "343e4e9361f7df778f84c2d7477957e89ce8bacd024cf17d3892d9f6c4be89ca"
     }
   },
-  "scope_sha256": "89ecf98d3c5d36703523af571bd22d227e4995a8514912c595d5d5466fb723b6",
+  "scope_sha256": "081b611f734780ce5fd384a8447f42955648fb197640ea6d0313e7c11c9a9f26",
   "old_approvals_accepted": false,
   "real_execution_requires": "CURRENT_PROCESS_CONTINUOUS_OPERATOR_CONSENT"
 }

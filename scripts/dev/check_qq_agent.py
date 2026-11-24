@@ -7,7 +7,7 @@ history is labelled as such; it is never a QQ delivery receipt or qualification.
 import argparse
 from collections import Counter, deque
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from decimal import Decimal
 import hashlib
@@ -26,7 +26,10 @@ if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 
 from apps.ai_service.runtime.release_contracts import _hash
 from apps.qq_bot.conversations import ConversationOptions
-from scripts.dev.qq_agent_cases import CASES, CURATED_OXYGEN_SCENARIO, RAG_CASES, create_fixture, refresh_fixture
+from scripts.dev.qq_agent_cases import (CASES, CURATED_OXYGEN_SCENARIO, EVENT_NOTICE_CASES,
+    EVENT_NOTICE_SELECTED_TOOLS, EVENT_RESTRICTED_SCENARIO, EVENT_SCOPE_BOARD_ID, EVENT_SCOPE_CASES,
+    RAG_CASES, create_fixture,
+    event_notice_fixture_metadata, refresh_fixture)
 
 CONTRACT='management-qq-agent-provider-research@1'
 HISTORY_CONTRACT='local-research-context-not-qq-delivery@1'
@@ -82,7 +85,7 @@ def _case_id(case):return case.id
 
 def _selected(ids):
     names=tuple(ids)
-    lookup={_case_id(c):c for c in (*CASES, *RAG_CASES)}
+    lookup={_case_id(c):c for c in (*CASES, *RAG_CASES, *EVENT_NOTICE_CASES, *EVENT_SCOPE_CASES)}
     if not names or len(set(names))!=len(names) or any(n not in lookup for n in names):
         raise ValueError('RESEARCH_CASES_INVALID')
     return tuple(lookup[n] for n in names)
@@ -125,6 +128,11 @@ def build_plan(cases=None, repeats=1, output_tokens=2048):
             'version': CURATED_KNOWLEDGE_VERSION,
             'sha256': hashlib.sha256(corpus.read_bytes()).hexdigest(),
         }
+    if any(case.scenario == EVENT_RESTRICTED_SCENARIO for case in selected):
+        plan['event_notice_fixture'] = event_notice_fixture_metadata()
+    if any(case in EVENT_SCOPE_CASES for case in selected):
+        plan['event_scope_fixture'] = dict(board_device_id=EVENT_SCOPE_BOARD_ID,
+            board_observations='NO_REPORTS_IN_NEW_INSTANCE', simulator_observations='WATER_ONLY')
     return plan
 
 
@@ -181,6 +189,9 @@ def _configure(fixture,directory,output_tokens):
     root,cfg,access,ai=_configuration_inputs(fixture.root,config,
         app_id='123456789',group_id='local-research-group',members=('local-research-member',),
         continuous=True,output_tokens=output_tokens,ai_enabled=True,agent_mode='web')
+    if fixture.scenario == EVENT_RESTRICTED_SCENARIO:
+        # The production writer uses this new grant to initialize the matching policy.
+        ai = replace(ai, grants=(replace(ai.grants[0], tools=EVENT_NOTICE_SELECTED_TOOLS),))
     request_path=_write_configuration(root,cfg,access=access,ai=ai,members=('local-research-member',),
         enable=True,continuous=True,agent_mode='web')
     return load_request(request_path)
@@ -354,15 +365,22 @@ def execute_experiment(plan,directory,*,factory=None,approval_source=None,author
                 for case in selected:
                     _check_plan(plan)
                     if time.monotonic()>=deadline:stop='RESEARCH_DURATION_REACHED';break
-                    key=(repeat,case.scenario)
+                    event_scope = case in EVENT_SCOPE_CASES
+                    key=(repeat,case.scenario,event_scope)
                     if key not in hosts:
-                        group=directory/f'repeat-{repeat}-{case.scenario}';group.mkdir()
+                        suffix = '-event-scope' if event_scope else ''
+                        group=directory/f'repeat-{repeat}-{case.scenario}{suffix}';group.mkdir()
                         fixture=create_fixture(group/'instance',case.scenario,lambda:datetime.now(timezone.utc))
                         request=_configure(fixture,group,plan['output_tokens_per_request'])
                         run=group/'run';run.mkdir()
-                        host=ManagementRun(request,run,async_client_factory=factory)
+                        board_id = EVENT_SCOPE_BOARD_ID if event_scope else None
+                        host=ManagementRun(request,run,async_client_factory=factory, event_board_device_id=board_id)
+                        approval = host.plan()
+                        if approval.get('agent_event_board_device_id') != board_id:
+                            host.close()
+                            raise ValueError('RESEARCH_EVENT_BOARD_SCOPE_MISMATCH')
                         host.store.close();host.store=_local_store(host.options)
-                        host.approve(host.plan(),confirmed=True)
+                        host.approve(approval,confirmed=True)
                         coordinator=QQAICoordinator(host.access,host.monitoring,host.base_service,
                             config=host.config,conversations=host.store,session_run=host)
                         owner=object();coordinator._mention_owner=owner

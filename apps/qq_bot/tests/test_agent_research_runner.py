@@ -13,7 +13,8 @@ from openai import AsyncOpenAI
 from apps.ai_backend.credentials import CredentialStore
 from apps.qq_bot.management_config import ROOT
 from scripts.dev import check_qq_agent as driver
-from scripts.dev.qq_agent_cases import CASES, CURRENT, HISTORY, KNOWLEDGE, RAG_CASES, SCORE
+from scripts.dev.qq_agent_cases import (ACTIVE_EVENTS, CASES, CURRENT, EVENT_SCOPE_BOARD_ID,
+    EVENT_SCOPE_CASES, HISTORY, KNOWLEDGE, RAG_CASES, SCORE)
 
 
 class AgentResearchRunnerTests(unittest.TestCase):
@@ -51,7 +52,7 @@ class AgentResearchRunnerTests(unittest.TestCase):
             body=json.loads(request.content)
             self.http.append(body)
             question=next(m['content'] for m in reversed(body['messages']) if m['role']=='user')
-            case=next(c for c in (*CASES, *RAG_CASES) if c.question==question or c.question in question)
+            case=next(c for c in (*CASES, *RAG_CASES, *EVENT_SCOPE_CASES) if c.question==question or c.question in question)
             if self.mode=='timeout' and case.id=='C01':
                 raise httpx.ReadTimeout('synthetic timeout',request=request)
             if self.mode == 'auth_rejected' and case.id == 'R01':
@@ -151,6 +152,19 @@ class AgentResearchRunnerTests(unittest.TestCase):
             with self.subTest(tokens=tokens),self.assertRaises(Exception):driver.build_plan(['G01'],output_tokens=tokens)
         self.assertEqual(self.http,[])
         self.assertFalse((self.root/'tampered').exists())
+
+    def test_event_scope_case_binds_board_in_approved_readonly_tool(self):
+        self.factory_plans['O01'] = ((ACTIVE_EVENTS, {}),)
+        plan = driver.build_plan(['O01'])
+        self.assertEqual(plan['event_scope_fixture']['board_device_id'], EVENT_SCOPE_BOARD_ID)
+        self.assertNotIn('event_scope_fixture', driver.build_plan(['G01']))
+        report = self.execute(['O01'])
+        self.assertTrue(report['completed'], report['code'])
+        self.assertEqual(report['qq_network_requests'], 0)
+        self.assertTrue(report['cases'][0]['expected_tool_match'])
+        payload, = [json.loads(m['content']) for m in self.http[-1]['messages'] if m['role'] == 'tool']
+        self.assertEqual([(item['device_id'], item['state']) for item in payload['observation_scope']],
+            [('sim-pond-1', 'ASSESSED'), ('sim-pond-1', 'MISSING'), (EVENT_SCOPE_BOARD_ID, 'MISSING')])
 
     def test_four_tools_and_comparison_have_real_handler_receipts_without_qq_claims(self):
         report=self.execute(['G01','C01','H01','K01','S01','X01'])

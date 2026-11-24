@@ -150,8 +150,11 @@ class FoundationTests(unittest.TestCase):
                 summary = result.to_dict()["activity"]["steps"][1]
                 self.assertEqual(summary["display_name"], "活动事件查询")
                 self.assertEqual(summary["evaluated_at"], STAMP)
-                public = json.dumps(result.to_dict(), ensure_ascii=False)
-                self.assertNotIn("fictional-private-device", public)
+                body = result.to_dict()
+                if not hit:
+                    self.assertIn("模拟水质（fictional-private-device）", body["final_text"])
+                public = json.dumps(body, ensure_ascii=False)
+                self.assertNotIn("fictional-private-device", json.dumps(body["activity"], ensure_ascii=False))
                 self.assertNotIn("fictional-raw-event-text", public)
                 self.assertNotIn("OXYGEN_LOW", public)
 

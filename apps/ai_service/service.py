@@ -6,6 +6,7 @@ import secrets
 import threading
 
 from .runtime.assistant import AssistantRequest, AssistantService, assistant_profile
+from .runtime.event_notice import EventAccess
 from apps.ai_backend.assistant_activity import safe_code
 from apps.ai_backend.credentials import CredentialStore
 from apps.ai_backend.execution import RequestHandle, request_scope, turn_deadline_scope, current_handle
@@ -42,7 +43,7 @@ from .score_execution import ScoreTrialConfig,load_score_config,resolve_score_tr
 from .business_tools.registry import WATER_QUALITY_SCORE
 from .business_tools.active_events import ACTIVE_EVENTS
 from .active_event_execution import (ActiveEventTrialConfig,
-    ACTIVE_EVENT_TOOL_NAMES, requires_active_events, resolve_active_event_trial)
+    ACTIVE_EVENT_TOOL_NAMES, event_notice_for_turn, requires_active_events, resolve_active_event_trial)
 
 PRESETS = ("dashscope-qwen38-flash-r1", "ollama-qwen35-4b-r1")
 
@@ -176,6 +177,13 @@ class ManagementAssistantService:
         self.management_policy.save(value['selected_tools'],expected_revision=value['revision'])
         return self.tool_authorization()
 
+    def _web_event_unavailable_reason(self, preset_id, execution_profile):
+        if self.knowledge is None or preset_id != UNIFIED_PRESET or execution_profile is not None:
+            return EventAccess.UNSUPPORTED_MODE
+        if not self._active_event_config.enabled:
+            return EventAccess.DISABLED
+        return None
+
     def _configuration(self, preset_id, device_id, *, transport=ToolModelTransport.NORMAL,
                        policy_snapshot=None, execution_profile=None, budget_document=None, knowledge_question=None):
         if not isinstance(transport, ToolModelTransport):
@@ -199,8 +207,8 @@ class ManagementAssistantService:
                 epoch=self.epoch,policy_revision=snapshot.revision),registry
         scoring=(not historical and not candidate and self._scoring_config.enabled and
                  WATER_QUALITY_SCORE in snapshot.selected_tools)
-        active_events=(not historical and not candidate and preset_id==UNIFIED_PRESET
-                       and self._active_event_config.enabled and ACTIVE_EVENTS in snapshot.selected_tools)
+        active_events = (self._web_event_unavailable_reason(preset_id, execution_profile) is None
+                         and ACTIVE_EVENTS in snapshot.selected_tools)
         unified_available = (self._unified_config.streaming_enabled if transport==ToolModelTransport.STREAMING
                              else self._unified_config.normal_enabled)
         unified=(not active_events and not scoring and not historical and not candidate and preset_id==UNIFIED_PRESET
@@ -301,6 +309,10 @@ class ManagementAssistantService:
         if (turn.source_requirement == SourceRequirement.AUTO
                 and SEARCH_FISHERY_KNOWLEDGE in policy.exposed_tools and requires_project_lookup(turn.question)):
             turn = replace(turn, source_requirement=SourceRequirement.PROJECT_KNOWLEDGE_SEARCH)
+        reason = self._web_event_unavailable_reason(turn.preset_id, execution_profile) or EventAccess.NOT_AUTHORIZED
+        notice = event_notice_for_turn(turn.question, policy, reason)
+        if notice is not None:
+            turn = replace(turn, event_notice=notice)
         if value.get("confirm_network") is not True:
             raise GatewayError("NETWORK_CONFIRMATION_REQUIRED")
         if value.get("revision") != execution.profile.revision:
@@ -482,6 +494,11 @@ class ManagementAssistantService:
             return SourceRequirement.PROJECT_KNOWLEDGE_SEARCH
         return SourceRequirement.AUTO if self._channel_agent or self._hybrid_channel() else SourceRequirement.CURRENT_OBSERVATION_QUERY
 
+    def _channel_event_notice(self, question, policy):
+        if self._channel_agent:
+            return event_notice_for_turn(question, policy, EventAccess.NOT_AUTHORIZED)
+        return None
+
     def prepare_channel_turn(self, question, authorization, *, history_snapshot=None):
         """Server API: exact Fake provider or separately approved one-turn Qwen trial."""
         if type(authorization) is not ChannelAuthorization:
@@ -500,7 +517,9 @@ class ManagementAssistantService:
         decision = self._history_decision(profile, policy, registry, authorization, history_snapshot, snapshot.revision) if history_snapshot is not None else self._channel_trial.decision(profile, policy, registry, authorization, epoch=self.epoch, policy_revision=snapshot.revision) if self._channel_trial is not None else candidate_decision(profile, policy, registry, device_id=authorization.device_id, epoch=self.epoch, policy_revision=snapshot.revision, authorization=authorization)
         if history_snapshot is not None and question != history_snapshot.question:
             raise GatewayError('INVALID_CHANNEL_HISTORY')
-        request = AssistantRequest(authorization.preset_id, question, history_snapshot.history if history_snapshot else (), source_requirement=self._channel_source_requirement(question, tools))
+        request = AssistantRequest(authorization.preset_id, question, history_snapshot.history if history_snapshot else (),
+            source_requirement=self._channel_source_requirement(question, tools),
+            event_notice=self._channel_event_notice(question, policy))
         return PreparedAssistantTurn(request, authorization.device_id, self.epoch, profile, policy, registry, decision, snapshot.revision, snapshot.source, authorization, history_snapshot)
 
     def _channel_registry(self, authorization, snapshot, *, knowledge_question=None):
@@ -542,6 +561,8 @@ class ManagementAssistantService:
             raise GatewayError('CHANNEL_AUTHORIZATION_REQUIRED')
         authorization = prepared.channel_authorization
         self._check_channel(authorization, prepared.policy_revision)
+        if prepared.request.event_notice != self._channel_event_notice(prepared.request.question, prepared.policy):
+            raise GatewayError('INVALID_CHANNEL_CANDIDATE')
         history = prepared.channel_history
         expected = self._history_decision(prepared.profile, prepared.policy, prepared.registry, authorization, history, prepared.policy_revision) if history is not None else self._channel_trial.decision(prepared.profile, prepared.policy, prepared.registry, authorization, epoch=self.epoch, policy_revision=prepared.policy_revision) if self._channel_trial is not None else candidate_decision(prepared.profile, prepared.policy, prepared.registry, device_id=prepared.device_id, epoch=self.epoch, policy_revision=prepared.policy_revision, authorization=authorization)
         if prepared.execution != expected or prepared.profile != assistant_profile(authorization.preset_id) or prepared.device_id != authorization.device_id or (prepared.request.preset_id != authorization.preset_id) or (prepared.request.history if history is None else prepared.request.history != history.history or prepared.request.question != history.question) or (prepared.request.source_requirement != self._channel_source_requirement(prepared.request.question, prepared.policy.exposed_tools)) or (not self._channel_agent and prepared.registry.registered_names() != (CURRENT_WATER_QUALITY,)) or (prepared.policy.exposed_tools != prepared.registry.registered_names()):

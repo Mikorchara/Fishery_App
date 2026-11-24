@@ -104,8 +104,8 @@ class ChannelAgentTests(unittest.TestCase):
     def test_event_empty_query_distinguishes_absent_observation_and_no_match(self):
         evaluated = '2026-11-10T14:36:00+00:00'
         for status, tool_status, observed, note in (
-                ('NO_DATA', ToolStatus.NO_DATA, None, '没有可用观测'),
-                ('NO_ACTIVE_EVENTS', ToolStatus.NO_MATCH, evaluated, '未查到符合条件的事件')):
+                ('NO_DATA', ToolStatus.NO_DATA, None, '尚无观测'),
+                ('NO_ACTIVE_EVENTS', ToolStatus.NO_MATCH, evaluated, '22:36:00（新鲜）')):
             with self.subTest(status=status):
                 receipt = TurnSourceReceipt(tool_name=ACTIVE_EVENTS, tool_status=tool_status,
                     evaluated_at=evaluated, active_events_query_completed=True,
@@ -115,3 +115,5 @@ class ChannelAgentTests(unittest.TestCase):
                     'observed_at': observed, 'freshness': 'fresh' if observed else 'unknown'}]}]}
                 notes = source_notes([SimpleNamespace(result=SimpleNamespace(payload=payload))], [receipt])
                 self.assertIn(note, notes[0])
+                self.assertNotIn('活动 0 条', notes[0])
+                self.assertNotIn('未查到符合条件的事件', notes[0])

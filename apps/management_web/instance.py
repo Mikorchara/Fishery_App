@@ -1,5 +1,6 @@
 """Explicit empty-instance creation and read-only startup validation; no migration."""
 from contextlib import closing
+from functools import partial
 import os
 import json
 from pathlib import Path
@@ -100,17 +101,20 @@ def validate_instance(paths):
 
 def initialize_instance(paths, *, initial_knowledge=False, knowledge_seed=None):
     """Publish a new instance and return its count of bundled knowledge records."""
-    from apps.knowledge.initial import (CURATED_KNOWLEDGE_SEED, CURATED_KNOWLEDGE_VERSION,
-        INITIAL_KNOWLEDGE_VERSION, LEGACY_KNOWLEDGE_SEED, initialize_curated_knowledge,
+    from apps.knowledge.initial import (COMBINED_KNOWLEDGE_SEED, COMBINED_KNOWLEDGE_VERSION,
+        CURATED_KNOWLEDGE_SEED, CURATED_KNOWLEDGE_VERSION, INITIAL_KNOWLEDGE_VERSION,
+        KNOWLEDGE_SEEDS, LEGACY_KNOWLEDGE_SEED, initialize_curated_knowledge,
         initialize_initial_knowledge)
 
-    if knowledge_seed not in (None, LEGACY_KNOWLEDGE_SEED, CURATED_KNOWLEDGE_SEED):
+    if knowledge_seed is not None and knowledge_seed not in KNOWLEDGE_SEEDS:
         raise InstanceError('INVALID_KNOWLEDGE_SEED')
     if initial_knowledge and knowledge_seed is None:
         knowledge_seed = LEGACY_KNOWLEDGE_SEED
     seeds = {
         LEGACY_KNOWLEDGE_SEED: (initialize_initial_knowledge, INITIAL_KNOWLEDGE_VERSION),
         CURATED_KNOWLEDGE_SEED: (initialize_curated_knowledge, CURATED_KNOWLEDGE_VERSION),
+        COMBINED_KNOWLEDGE_SEED: (partial(initialize_curated_knowledge, include_legacy=True),
+                                  COMBINED_KNOWLEDGE_VERSION),
     }
     root = paths.data_root
     if root is None:

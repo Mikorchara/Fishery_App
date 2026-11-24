@@ -3,7 +3,6 @@
 from dataclasses import asdict, dataclass, field
 import hashlib
 from pathlib import Path
-import re
 
 from apps.ai_backend.history_projection import DEFAULT_HISTORY_PROJECTION, TRANSCRIPT_NOTICE
 from apps.ai_backend.model_gateway import GatewayError
@@ -14,6 +13,7 @@ from .business_tools import active_events
 from .execution import ExecutionDecision, management_scope
 from .normal_selection import UNIFIED_PRESET
 from .runtime.assistant import assistant_profile
+from .runtime.event_notice import EventNotice, event_metric_query, requires_active_events
 from .runtime.release_contracts import AssistantExecutionProfile, _hash
 from .runtime.sources import HISTORY_SOURCE_CONTRACT_VERSION
 from .runtime.streaming_contracts import streaming_scope
@@ -24,17 +24,6 @@ CONTRACT = 'management-active-event-tool-trial@1'
 ACTIVE_EVENT_TOOL_NAMES = (*SCORE_TOOL_NAMES, active_events.ACTIVE_EVENTS)
 
 
-_EVENT_NOUN = r'(?:(?:(?:还在|正在)发生的|未结束的)?事件|活动事件|活跃事件|异常事件|告警|异常)'
-_CURRENT = r'(?:当前|现在|目前)'
-_CURRENT_EVENT_QUESTION = re.compile(
-    rf'(?:请问|帮我看看|帮我查一下)?{_CURRENT}(?:鱼塘|养殖池|设备)?(?:还)?'
-    rf'(?:有什么|有哪些|是否有|有没有|有无|有){_EVENT_NOUN}(?:还没有结束|还在发生|吗)?'
-    rf'|(?:请问)?{_CURRENT}(?:的)?{_EVENT_NOUN}(?:有哪些|有什么)'
-    rf'|(?:请|帮我)?(?:查看|查询|检查|查一下|看看){_CURRENT}(?:的)?{_EVENT_NOUN}'
-    rf'|{_CURRENT}(?:还在|正在)发生的事件'
-    rf'|(?:请问)?{_CURRENT}发生(?:了)?(?:什么|哪些)事件(?:了)?(?:吗)?'
-)
-
 _APP_ROOT = Path(__file__).resolve().parents[1]
 _IMPLEMENTATION = (
     'ai_service/active_event_execution.py',
@@ -42,6 +31,9 @@ _IMPLEMENTATION = (
     'ai_service/business_tools/registry.py',
     'ai_service/management_policy.py',
     'ai_service/runtime/assistant.py',
+    'ai_service/runtime/event_notice.py',
+    'ai_service/runtime/history_selection.py',
+    'ai_service/runtime/history_summary.py',
     'ai_service/runtime/sources.py',
     'ai_service/service.py',
     'monitoring/device_events.py',
@@ -57,11 +49,14 @@ _IMPLEMENTATION = (
 )
 
 
-def requires_active_events(question):
-    """Recognize explicit current event queries for the mandatory source gate."""
-    return isinstance(question, str) and bool(
-        _CURRENT_EVENT_QUESTION.fullmatch(question.strip().rstrip('？?。！!').rstrip())
-    )
+def event_notice_for_turn(question, policy, access):
+    """Project an event denial only for an explicit event request in this turn."""
+    if policy.allows(active_events.ACTIVE_EVENTS) or not isinstance(question, str):
+        return None
+    if requires_active_events(question):
+        return EventNotice(access)
+    metric = event_metric_query(question)
+    return EventNotice(access, metric) if metric is not None else None
 
 
 def _implementation():

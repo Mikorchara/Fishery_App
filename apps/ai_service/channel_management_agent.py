@@ -53,9 +53,13 @@ def prepared_scope(options, output_tokens=2048):
     runtime.update(prompt_id=PROMPT_ID, prompt_sha256=_hash(INSTRUCTION))
     root = Path(__file__).resolve().parents[2]
     paths = ('apps/ai_service/channel_management_agent.py', 'apps/ai_service/channel_agent_presentation.py',
+             'apps/ai_service/service.py',
              'apps/ai_backend/tool_conversation.py', 'apps/ai_backend/tools/contracts.py',
              'apps/ai_service/runtime/assistant.py', 'apps/ai_service/runtime/sources.py',
              'apps/ai_service/runtime/oxygen_history.py',
+             'apps/ai_service/runtime/event_notice.py',
+             'apps/ai_service/runtime/history_selection.py',
+             'apps/ai_service/runtime/history_summary.py',
              'apps/ai_service/business_tools/registry.py', 'apps/ai_service/business_tools/fishery_knowledge.py',
              'apps/ai_service/business_tools/water_quality_history.py', 'apps/ai_service/business_tools/water_quality_score.py',
              'apps/knowledge/repository.py', 'apps/knowledge/service.py', 'apps/knowledge/retrieval.py',

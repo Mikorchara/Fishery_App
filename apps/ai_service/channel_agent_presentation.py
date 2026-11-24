@@ -21,20 +21,16 @@ _EVENT_LOOKUP_CLAIM = re.compile(
 def _event_note(payload, receipt):
     summaries = []
     for source in payload['sources']:
-        label = 'SIMULATOR' if source['source_kind'] == 'simulator' else '设备报告'
+        board = source['source_kind'] == 'device_report'
+        label = '设备报告' if board else 'SIMULATOR'
         counts = f"活动 {source['active_count']} 条、待核实 {source['uncertain_count']} 条、待复核 {source['review_count']} 条"
         observations = source['observations']
-        coverage = '、'.join(('水质' if item['channel'] == 'water' else '视觉') +
+        coverage = '、'.join(('报告窗口' if board else '水质' if item['channel'] == 'water' else '视觉') +
             (f" {_time(item['observed_at'])}（{STATES[item['freshness']]}）" if item['observed_at'] else ' 尚无观测')
             for item in observations)
-        summaries.append(f"{label} · {source['device_id']}：{counts}；观测 {coverage}。")
+        counted = counts + '；' if any(source[key] for key in ('active_count', 'uncertain_count', 'review_count')) else ''
+        summaries.append(f"{label} · {source['device_id']}：{counted}{coverage}。")
     note = f'事件查询 · 评估 {_time(receipt.evaluated_at)}：' + ''.join(summaries)
-    if receipt.active_events_status == 'NO_DATA':
-        note += '没有可用观测，无法判断当前状态。'
-    elif receipt.active_events_status == 'NO_ACTIVE_EVENTS':
-        note += '已查询范围内未查到符合条件的事件。'
-    else:
-        note += '检测信号需人工核查。'
     if receipt.active_events_omitted_count:
         note += f'另有 {receipt.active_events_omitted_count} 条未展开。'
     return note

@@ -22,12 +22,15 @@ INITIAL_KNOWLEDGE_VERSION = 'management-initial-knowledge@1'
 RESOURCE_SHA256 = '6aa00314094b3660bb3ef62bf856976c9e7cfb85ead88a7a8f4c388a636c012e'
 LEGACY_KNOWLEDGE_SEED = 'legacy'
 CURATED_KNOWLEDGE_SEED = 'curated-oxygen'
+COMBINED_KNOWLEDGE_SEED = 'legacy-plus-curated-oxygen'
 CURATED_KNOWLEDGE_VERSION = 'eel-oxygen-feeding@2'
+COMBINED_KNOWLEDGE_VERSION = 'management-initial-knowledge-combined@1'
 CURATED_KNOWLEDGE_METADATA = 'curated_oxygen'
 INITIAL_RESOURCES = {
     LEGACY_KNOWLEDGE_SEED: 'resources/eel_knowledge_v1.json',
     CURATED_KNOWLEDGE_SEED: 'resources/eel_oxygen_feeding_v2.json',
 }
+KNOWLEDGE_SEEDS = (*INITIAL_RESOURCES, COMBINED_KNOWLEDGE_SEED)
 
 
 def initialize_initial_knowledge(path):
@@ -141,8 +144,8 @@ def _read_curated_corpus():
     return corpus, rows
 
 
-def initialize_curated_knowledge(path):
-    """Publish the reference corpus to a new SQLite file without opening any existing target."""
+def initialize_curated_knowledge(path, *, include_legacy=False):
+    """Publish the curated corpus and optional bundled background to a new SQLite file."""
     target = Path(path)
     if os.path.lexists(target):
         raise KnowledgeError('KNOWLEDGE_INITIAL_TARGET_EXISTS')
@@ -150,21 +153,33 @@ def initialize_curated_knowledge(path):
     try:
         with TemporaryDirectory(prefix='.curated-knowledge-', dir=target.parent) as directory:
             stage = Path(directory) / 'knowledge.sqlite3'
-            repository = KnowledgeRepository(stage)
+            if include_legacy:
+                initialize_initial_knowledge(stage)
+            repository = KnowledgeRepository(stage, require_existing=include_legacy)
+            _, background, metadata_before = repository.snapshot()
+            if (len(background) + len(rows) > MAX_IMPORTED_RECORDS
+                    or sum(len(row['body']) for row in (*background, *rows)) > MAX_TOTAL_BODY_CHARS):
+                raise KnowledgeError('KNOWLEDGE_LIMIT')
+            if include_legacy:
+                offset = len(background)
+                rows = [{**row, 'ordinal': offset + row['ordinal']} for row in rows]
+            expected = background + rows
             with repository.connection(write=True) as db:
                 for row in rows:
                     repository.insert(db, row)
-                db.executemany('INSERT INTO knowledge_metadata VALUES (?,?)', [
-                    ('migration_version', 'unified-knowledge@2'),
-                    (CURATED_KNOWLEDGE_METADATA, json.dumps(corpus, ensure_ascii=False, allow_nan=False)),
-                ])
+                if not include_legacy:
+                    db.execute('INSERT INTO knowledge_metadata VALUES (?,?)',
+                               ('migration_version', 'unified-knowledge@2'))
+                db.execute('INSERT INTO knowledge_metadata VALUES (?,?)',
+                           (CURATED_KNOWLEDGE_METADATA, json.dumps(corpus, ensure_ascii=False, allow_nan=False)))
             # Reopen as a normal read-only instance before no-replace publication.
             _, actual, metadata = KnowledgeRepository(stage, read_only=True).snapshot()
-            if actual != rows or json.loads(metadata[CURATED_KNOWLEDGE_METADATA]) != corpus:
+            if (actual != expected or json.loads(metadata[CURATED_KNOWLEDGE_METADATA]) != corpus
+                    or any(metadata[key] != value for key, value in metadata_before.items())):
                 raise KnowledgeError('KNOWLEDGE_CURATED_VERIFY_FAILED')
             os.link(stage, target)
     except FileExistsError:
         raise KnowledgeError('KNOWLEDGE_INITIAL_TARGET_EXISTS') from None
     except OSError:
         raise KnowledgeError('KNOWLEDGE_STORAGE_ERROR') from None
-    return {'builtin_count': len(rows)}
+    return {'builtin_count': len(expected)}
