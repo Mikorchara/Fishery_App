@@ -7,7 +7,7 @@ from apps.ai_backend.model_gateway import GatewayError
 from apps.ai_backend.execution import TERMINAL
 from apps.ai_service.business_tools.active_events import ACTIVE_EVENTS
 from apps.ai_service.business_tools.current_water_quality import CURRENT_WATER_QUALITY
-from apps.ai_service.runtime.history_selection import current_oxygen_for_turn
+from apps.ai_service.runtime.history_selection import current_oxygen_for_turn, current_water_alert_for_turn
 from apps.ai_service.runtime.history_summary import history_summary_for_turn
 from apps.ai_service.runtime.sources import SourceRequirement
 
@@ -19,6 +19,7 @@ def stream_response(prepared,handle,execute,epoch):
         and prepared.request.event_notice is None
         and history_summary_for_turn(prepared.request, prepared.policy) is None
         and not current_oxygen_for_turn(prepared.request, water_allowed=prepared.policy.allows(CURRENT_WATER_QUALITY))
+        and not current_water_alert_for_turn(prepared.request, water_allowed=prepared.policy.allows(CURRENT_WATER_QUALITY))
         and prepared.request.source_requirement != SourceRequirement.PROJECT_KNOWLEDGE_SEARCH)
     try:
         handle._event_channel=channel

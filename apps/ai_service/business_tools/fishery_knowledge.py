@@ -7,9 +7,8 @@ from apps.ai_backend.model_gateway import ModelToolDefinition
 SEARCH_FISHERY_KNOWLEDGE = "search_fishery_knowledge"
 
 KNOWLEDGE_DESCRIPTION = (
-    "只读检索项目内鳗鲡养殖背景知识；用于用户明确要求查询项目资料，或回答依赖项目特有资料的问题。"
-    "query应表达要检索的主题。返回有限背景证据及来源，不代表当前水质或现场事实，不诊断现场疾病，不负责当前评分。"
-    "NO_MATCH表示检索正常完成但无合格命中，不是执行错误；不得编造命中内容。"
+    "只读检索鳗鲡养殖项目资料。用户明确要查项目资料，或回答依赖项目特有资料时使用。"
+    "query 保留所问物种、主题和条件（如浓度、单位）。返回资料条目和出处，仅可作为背景证据。"
 )
 
 KNOWLEDGE_PARAMETERS = {
@@ -23,8 +22,9 @@ KNOWLEDGE_DEFINITION = ModelToolDefinition(SEARCH_FISHERY_KNOWLEDGE, KNOWLEDGE_D
 RESULT_INSTRUCTION = (
     "先回答项目资料能支持的结论。仅引用 evidence 中直接相关的条目及其 source，保留适用对象、条件和不确定性。"
     "用户询问资料版本时，引用 source_version 原值。只匹配部分问题时，分别说明资料支持的结论和尚缺的证据。"
+    "有实验测点时保留其数值、单位和条件。单个测点不能代表整个区间，空气饱和度与 mg/L 不混用。"
     "只有相邻主题时，说明本轮未找到直接支持所问结论的资料，省略无关条目。"
-    "NO_MATCH 表示本轮检索未找到符合条件的条目。结论限于本次检索，不编造内容或来源。"
+    "NO_MATCH 表示本轮检索未找到符合条件的条目。结论限于本次检索，不断言库中必然没有，也不补估计值或编造出处。"
     "项目资料只作背景。判断当前池塘的水质、摄食变化或疾病须有相应的本轮现场证据，模拟记录只说明其模拟对象。"
     "仅在用户询问处置时引用相关建议。"
 )

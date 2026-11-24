@@ -6,7 +6,8 @@ import unittest
 from uuid import uuid4
 
 from apps.ai_service.business_tools.active_events import (
-    active_events_payload, behavior_event_evidence_kind, render_behavior_event_evidence, result_metadata,
+    active_events_payload, behavior_event_evidence_kind, render_behavior_event_evidence,
+    render_positive_event_scope_if_board_limited, result_metadata,
 )
 from apps.monitoring.device_events import APPEARANCE, BEHAVIOR, GAP
 from apps.monitoring.tests import test_device_events as fixtures
@@ -64,6 +65,20 @@ class ActiveEventsToolTests(unittest.TestCase):
         fake = deepcopy(fresh)
         fake['observation_scope'][-1]['observed_at'] = (self.now-timedelta(seconds=122)).isoformat()
         self.assertIsNone(result_metadata(fake))
+
+    def test_positive_scope_override_only_applies_to_limited_board(self):
+        self.assertIsNone(render_positive_event_scope_if_board_limited(self.query('board-1')))
+        self.oxygen(2.2)
+        local = self.query()
+        self.assertEqual(local['status'], 'OK')
+        self.assertIsNone(render_positive_event_scope_if_board_limited(local))
+        missing = self.query('board-1')
+        self.assertIn('暂时无法核实外观和行为异常', render_positive_event_scope_if_board_limited(missing))
+        self.assertEqual(self.submit_peak(1)['status'], 'no_signal')
+        report_only = self.query('board-1')
+        self.assertEqual(report_only['status'], 'OK')
+        self.assertEqual(report_only['observation_scope'][-1]['state'], 'REPORT_ONLY')
+        self.assertIsNone(render_positive_event_scope_if_board_limited(report_only))
 
     def test_selected_simulator_device_includes_visual_and_one_water_risk_cycle(self):
         self.oxygen(4.2)

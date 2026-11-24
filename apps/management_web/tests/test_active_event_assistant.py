@@ -110,8 +110,8 @@ class ActiveEventAssistantTests(unittest.TestCase):
                 event_definition = next(item['function'] for item in first['tools']
                                         if item['function']['name'] == ACTIVE_EVENTS)
                 self.assertTrue(event_definition['description'].startswith(
-                    '用户问当前有哪些事件、异常或告警，且未限定为水质时，优先用本工具。'
-                    '只问当前水质读数或水质告警时，用已授权的 get_current_water_quality。'))
+                    '问当前事件、异常或告警，且未限定为水质时，优先用本工具。'
+                    '只问当前水质读数或告警时用获准的当前水质工具。'))
                 self.assertEqual(event_definition['parameters']['properties'], {})
                 self.assertEqual(second['messages'][0]['role'], 'system')
                 self.assertTrue(second['messages'][0]['content'].startswith(MULTI_ROUND_SYSTEM_INSTRUCTION))
@@ -284,7 +284,10 @@ class ActiveEventAssistantTests(unittest.TestCase):
                        selection=_WATER_TOOLS)
         result, _ = self.send_case('帮我看看目前的水质有哪些告警。', streaming=False)
         first, final = self.sdk.bodies
-        self.assertEqual(first['messages'][0]['content'], MULTI_ROUND_SYSTEM_INSTRUCTION)
+        instruction = first['messages'][0]['content']
+        self.assertTrue(instruction.startswith(MULTI_ROUND_SYSTEM_INSTRUCTION))
+        self.assertIn('本轮只问当前水质告警', instruction)
+        self.assertNotIn('未获授权', instruction)
         self.assertIn(RESULT_INSTRUCTIONS[CURRENT_WATER_QUALITY], final['messages'][0]['content'])
         self.assertNotIn('未获授权', result['final_text'])
         self.assertEqual(result['activity']['counts']['tools_executed'], 1)
@@ -356,19 +359,39 @@ class ActiveEventAssistantTests(unittest.TestCase):
                 self.assertNotIn('所有设备都正常', json.dumps(rows, ensure_ascii=False))
                 self.assertFalse(any(row['kind'] == 'preview' for row in rows))
 
-    def test_positive_simulator_event_and_missing_board_remain_distinct_in_tool_result(self):
-        answer = '模拟水质有严重低氧事件。板端视觉缺少观测，外观和行为暂时无法核实。'
-        self.configure([sdk_tool(ACTIVE_EVENTS, model=self.profile.model), sdk_final(answer, model=self.profile.model)],
-            board_device_id='board-1')
-        result, _ = self.send_case(_EVENT_QUESTION, streaming=False)
-        payload = json.loads(self.sdk.bodies[-1]['messages'][-1]['content'])
-        self.assertEqual(payload['status'], 'OK')
-        self.assertTrue(any(row['code'].startswith('OXYGEN_') and row['source_kind'] == 'simulator'
-                            for row in payload['items']))
-        board_scope, = [row for row in payload['observation_scope'] if row['source_kind'] == 'device_report']
-        self.assertEqual((board_scope['device_id'], board_scope['channel'], board_scope['state']),
-                         ('board-1', 'visual', 'MISSING'))
-        self.assertIn(answer, result['final_text'])
+    def test_positive_simulator_event_and_limited_board_remain_distinct_in_published_reply(self):
+        wrong = '模拟水质有严重低氧事件。板端未查到匹配事件。'
+        for board_state, streaming in (('MISSING', False), ('MISSING', True), ('STALE', False), ('STALE', True)):
+            with self.subTest(board_state=board_state, streaming=streaming):
+                if board_state == 'STALE' and not streaming:
+                    report = board_fixtures.DeviceEventTests.report(self, positive=False)
+                    receipt = self.monitoring.repository.import_device_report(report,
+                        received_at=self.now, inbox_cursor=1, now=self.now)
+                    self.assertEqual(receipt['status'], 'no_signal')
+                    self.now += timedelta(seconds=121)
+                    simulator = Simulator(device_id='pond-a', scenario='low_oxygen',
+                        start=self.now - timedelta(seconds=30), session_id='event-board-stale-water')
+                    for _ in range(3):
+                        batch = simulator.advance()
+                        batch['water']['metrics']['dissolved_oxygen_mg_l'].update(mean=2.2, min=2.2, max=2.2, latest=2.2)
+                        self.monitoring.ingest(batch)
+                plans = ([tool_chunks(ACTIVE_EVENTS), final_chunks(wrong)] if streaming else
+                    [sdk_tool(ACTIVE_EVENTS, model=self.profile.model), sdk_final(wrong, model=self.profile.model)])
+                self.configure(plans, board_device_id='board-1')
+                result, rows = self.send_case(_EVENT_QUESTION, streaming=streaming)
+                payload = json.loads(self.sdk.bodies[-1]['messages'][-1]['content'])
+                self.assertEqual(payload['status'], 'OK')
+                risk = next(row for row in payload['items']
+                            if row['code'].startswith('OXYGEN_') and row['source_kind'] == 'simulator')
+                board_scope, = [row for row in payload['observation_scope'] if row['source_kind'] == 'device_report']
+                self.assertEqual((board_scope['device_id'], board_scope['channel'], board_scope['state']),
+                                 ('board-1', 'visual', board_state))
+                reply = result['final_text']
+                self.assertIn(f"在模拟设备 pond-a的记录中查到{risk['title']}（活动）", reply)
+                limit = '缺少观测' if board_state == 'MISSING' else '观测已过期'
+                self.assertIn(f'设备报告 board-1的视觉{limit}，暂时无法核实外观和行为异常', reply)
+                self.assertNotIn('板端未查到匹配事件', reply)
+                self.assertFalse(any(row['kind'] == 'preview' for row in rows))
 
     def test_explicit_mixed_empty_event_and_reading_uses_both_receipts(self):
         question = '先查现在有哪些活动事件，再告诉我当前的溶解氧读数。'

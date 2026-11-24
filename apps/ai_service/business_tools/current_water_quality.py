@@ -1,4 +1,4 @@
-"""Current water Tool: unchanged definition, single capture and detached Monitoring DTO."""
+"""Current water Tool with one capture and a detached Monitoring DTO."""
 from dataclasses import asdict
 from apps.ai_backend.model_gateway import ModelToolDefinition
 
@@ -8,14 +8,13 @@ WATER_TOOL_PROJECTION = "management-current-water@1"
 
 WATER_DEFINITION = ModelToolDefinition(
     name=CURRENT_WATER_QUALITY,
-    description=("只读查询当前水质数值、状态、告警；用于确认当前系统水质及其追问，不负责评分、等级或分项评分。"
-                 "返回当前快照的水质观测、数据质量、新鲜度、观测与评估时间及确定性诊断。"
-                 "NO_DATA表示查询完成但无快照；存在快照时OK不代表数据一定有效、完整或新鲜，须按quality/freshness说明INVALID、PARTIAL或STALE。"
-                 "查询不等于重新采样。"),
+    description=("只读查询绑定设备的最新水质快照。问当前水温、pH、溶解氧、水质状态或明确的水质告警时用本工具。"
+                 "返回读数、数据质量、新鲜度、观测时间和规则结果。无需重新采样，参数传 {}。"),
     parameters={"type": "object", "properties": {}, "additionalProperties": False},
 )
 RESULT_INSTRUCTION = (
-    "先回答所问指标。取 water_quality 的对应值、metrics 的单位和单项质量，注明来源、设备和观测时间（带时区）。"
+    "先回答所问指标或水质告警。取 water_quality 的对应值、metrics 的单位和单项质量，注明来源、设备和观测时间（带时区）。"
+    "只问当前水质数值、状态或告警时，本工具已返回所需范围，直接回答，即使结果缺测或过期也不要转查项目资料。"
     "observed_at 是观测时间，勿以 last_reported_at 或 evaluated_at 代替。"
     "NO_DATA 表示暂无观测。缺测、无效、过期或离线导致无法核实当前值时，先说明限制；"
     "过期读数按旧观测标明时间，勿用对话中的旧值补足。部分有效时只报告可用指标并说明缺口。"

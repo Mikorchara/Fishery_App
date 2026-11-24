@@ -231,6 +231,8 @@ EVENT_SCOPE_CASES = (
         'fresh', ((ACTIVE_EVENTS,),), expectation='区分板端未取得行为证据和零个异常视频，说明上报时间未提供。'),
     ResearchCase('O05', 'comparison', '先查当前事件，再查过去30分钟的溶解氧。请分别说明结论，历史部分给出时段和可靠窗口总体均值。',
         'fresh', ((ACTIVE_EVENTS, HISTORY),), expectation='保留事件的观测范围和两项视觉缺测，说明整个历史时段的总体均值未取得。'),
+    ResearchCase('O06', 'general', '当前发生了什么事件？', 'no_data', ((ACTIVE_EVENTS,),),
+        expectation='没有水质或视觉观测时说明无法核实当前事件，保留来源范围，不能改述为已排查无异常。'),
 )
 
 

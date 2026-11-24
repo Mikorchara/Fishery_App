@@ -26,15 +26,14 @@ from .runtime.sources import TurnSourceReceipt
 from .channel_agent_presentation import present, CONTRACT as PRESENTATION_CONTRACT
 
 CONTRACT = 'management-qq-web-agent-run@1'
-PROMPT_ID = 'QQ_MANAGEMENT_WEB_AGENT@4'
+PROMPT_ID = 'QQ_MANAGEMENT_WEB_AGENT@5'
 _DEFINITIONS = (WATER_DEFINITION, KNOWLEDGE_DEFINITION, HISTORY_DEFINITION, SCORE_DEFINITION, ACTIVE_EVENTS_DEFINITION)
 TOOLS = tuple(definition.name for definition in _DEFINITIONS)
 INSTRUCTION = MULTI_ROUND_SYSTEM_INSTRUCTION + (
-    '你以鳗鲡养殖智能体的身份在QQ群交流，自然、直接地回答问题，可用简短分段。'
-    '不要求JSON、固定报告或General/Water标签。普通概念和养殖解释可直接回答。'
+    '\n\n你以鳗鲡养殖智能体的身份在QQ群交流。直接回答，可用简短分段。'
     '按本轮可用工具的说明选择工具并传参，无参数的工具传 {}，设备由服务器固定。'
     '按实际返回的时间区分当前观测和历史资料。需要比较两者时，分别获取对应证据。'
-    '需要的来源超出本轮预算时说明尚缺信息，不编造。系统会附本轮实际查询来源，不必复述全部技术字段。'
+    '系统会附本轮实际查询来源。'
     '只能读取，不执行ACK、删除、规则修改、设备控制或通过聊天切换设备和权限。')
 
 

@@ -25,15 +25,15 @@
           },
           "thinking": "off",
           "response_mode": "streaming",
-          "prompt_id": "ASSISTANT_BOUNDED_MULTI_ROUND@1",
-          "prompt_sha256": "51906f193e00749e4a6cf6c1f067e65798252b49c9a352ddf1b44139cd54b066",
+          "prompt_id": "ASSISTANT_BOUNDED_MULTI_ROUND@2",
+          "prompt_sha256": "15aa458f8b72c90533b62f8068a3819c676c8660f59862ca07f06abf79a9ef27",
           "history_projection": "UNTRUSTED_TRANSCRIPT_V1",
           "history_version": "1",
           "tools": [
             "get_current_water_quality",
             "search_fishery_knowledge"
           ],
-          "tool_definitions_sha256": "bb314a4fb720e55a17d49b303cb0449d16ead06731802f098afc2c546306fb1d",
+          "tool_definitions_sha256": "aec83b93a1e4e1a6ad6b724eaee1047ee3f41aca14939ef4d3768173b3896466",
           "model_transport": "STREAMING",
           "assembler_version": "openai-tool-stream-assembler@1"
         },

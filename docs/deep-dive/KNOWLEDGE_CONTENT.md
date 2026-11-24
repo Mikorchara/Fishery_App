@@ -29,11 +29,43 @@ $fisheryReviewRoot = Join-Path (Get-Location).Path 'outputs/rag-oxygen-v2-review
 .\.venv\Scripts\python.exe -I -m apps.management_web --data-root $fisheryReviewRoot --port 8767
 ```
 
-已经建好的专题实例可直接运行最后一条命令，把 `$fisheryReviewRoot` 改为该实例的绝对路径。专题的首次初始化要求一个新目录。日常实例若要采用专题版，先确认要保留的用户知识，再安排独立迁移。Web 和 QQ 使用同一个检索服务。QQ 保护范围包含本次修改的文件，升级后的首次 QQ 启动可能要求核对并保存现有设置。[QQ 代码指纹与恢复启动](QQ_BOT.md#代码指纹与恢复启动)
+已经建好的专题实例可直接运行最后一条命令，把 `$fisheryReviewRoot` 改为该实例的绝对路径。专题的首次初始化要求一个新目录。Web 和 QQ 使用同一个检索服务。升级后的首次 QQ 启动可能要求核对并保存现有设置。[QQ 代码指纹与恢复启动](QQ_BOT.md#代码指纹与恢复启动)
+
+### 当前知识库已补齐溶氧专题（2026-11-24）
+
+三个演示入口绑定的 `outputs/qq-m3-real-test/knowledge.sqlite3` 已补入 12 条带出处的溶解氧专题资料，共 43 条。沿用同一个知识库。原 31 条资料、状态和来源逐字段核对一致，原元数据保留，索引修订号由 0 增至 1。补录前通过 SQLite 的在线备份接口保存原库，补录后完整性检查通过。[本机备份](../../outputs/qq-m3-real-test/backups/before-oxygen-topic-20261124T061225Z-bc7d23daeadf/previous-knowledge.sqlite3)
+
+补录时验证了 7.26 mg/L 对应论文测点 12.4%/日，9–10 mg/L 在专题中无匹配。原背景资料的最新状态见下节。
+
+### 原有 31 条资料的质量审查（2026-11-24）
+
+这批条目只标注了旧项目文件与版本，缺少可回查的原始出处。审查按单条资料的完整正文进行。条目作为 Agent 的检索证据时，数值和处置建议需要有可核对的来源以及物种、阶段和养殖条件。
+
+| 涉及条目 | 数量 | 停用依据 |
+| --- | ---: | --- |
+| 水质 | 6 | 溶氧、温度、氨和亚硝酸盐等阈值的适用条件缺失。例：旧文把 1–3 mg/L 概括为停止摄食，日本鳗鲡原始实验在 2.11 mg/L 测到了摄食。 [溶氧论文表 1](https://www.jstage.jst.go.jp/article/suisan1932/49/9/49_9_1335/_pdf/-char/en) |
+| 生长阶段、投喂、养殖环境 | 14 | 自然生活史与养殖规格混写。投喂率、换水量、密度和分级周期缺少工艺与阶段依据，部分重叠规格的密度范围彼此不一致。 [FAO 日本鳗鲡养殖资料](https://www.fao.org/fishery/docs/DOCUMENT/aquaculture/CulturedSpecies/file/en/en_japaneseeel.htm) |
+| 病害与常见问题 | 10 | 把相似症状、潜在病因和固定处置放进同一条。部分给出药物浓度或剂量，缺少确诊、适用范围、处方和休药条件。 [水产养殖用药明白纸（2026 年 2 号）](https://nync.zs.gov.cn/attachment/0/576/576437/2645629.pdf) |
+| 水质关系 | 1 | 部分机理有外部依据，但整条同时包含无来源的最适温度、病原高发温度和管理结论。可将经核对的机理单独写成有来源的条目。 [美国 EPA 氨资料](https://www.epa.gov/caddis/ammonia) |
+
+审查后先停用原有 31 条，索引修订从 1 增至 2。验证旧水温、密度和病害资料返回无匹配，溶氧专题仍正常检索。该批停用条目后续按下节记录删除。 [停用前备份](../../outputs/qq-m3-real-test/backups/before-legacy-review-20261124T064946Z-47e8846725/previous-knowledge.sqlite3) · [停用复验](../../outputs/qq-m3-real-test/backups/before-legacy-review-20261124T064946Z-47e8846725/review.json)
+
+### 删除旧资料并补入首批新条目（2026-11-24）
+
+经授权，已从当前实例的 SQLite 删除已审查且停用的 31 条旧资料，并清除该批资料用于旧索引的病名词表。原 12 条溶氧专题逐字段保持一致。下面 4 条作为当前库的可编辑条目加入，每条在来源字段记录原始链接和出处位置。
+
+| 新条目 | 资料范围与原始出处 |
+| --- | --- |
+| 日本鳗鲡玻璃鳗初期检疫的水温 | FAO 2009 年物种资料中约 0.2 g/尾、80–100 m³ 水槽的初期检疫记录，水温 25–29 °C。 [FAO，Production → Nursery](https://www.fao.org/fishery/docs/DOCUMENT/aquaculture/CulturedSpecies/file/en/en_japaneseeel.htm) |
+| 日本鳗鲡玻璃鳗初期检疫的放养密度 | 同一初期检疫条件下的体积生物量密度为 0.3–0.5 kg/m³。记录保留体积单位，便于与后续阶段的面积密度区分。 [FAO，Production → Nursery](https://www.fao.org/fishery/docs/DOCUMENT/aquaculture/CulturedSpecies/file/en/en_japaneseeel.htm) |
+| 总氨氮、非离子氨与 pH 的关系 | 水体中氨的形态及测量口径，说明 pH、水温和离子强度与形态判读的关系。 [美国 EPA，CADDIS Ammonia](https://www.epa.gov/caddis/ammonia) |
+| 水产养殖病害信号复核和异常报告 | 适用于我国水产养殖的一般流程，项目记录规范另行标识。条目覆盖监测、依据、档案和异常报告。 [农业农村部，农渔养函〔2022〕116号](https://yyj.moa.gov.cn/scyz/202212/t20221209_6416911.htm) |
+
+删除和补录在同一个事务内完成，索引修订从 2 增至 3，当前共 16 条启用资料。隔离副本和当前库均通过 SQLite 完整性检查。逐题验证四条新资料排在各自的查询首位且返回外部出处。旧专题的 7.26 mg/L 仍精确命中，9–10 mg/L 仍无匹配。 [删除前 SQLite 备份](../../outputs/qq-m3-real-test/backups/before-knowledge-refresh-20261124T065813Z-eec6bd0f6a/previous-knowledge.sqlite3) · [当前库复验](../../outputs/qq-m3-real-test/backups/before-knowledge-refresh-20261124T065813Z-eec6bd0f6a/refresh-result.json)
 
 ### 使用背景资料与溶氧专题的新实例
 
-在项目根目录可显式选择 `legacy-plus-curated-oxygen`，将原有 31 条背景资料和 12 条带出处的溶氧专题一并初始化到新目录。普通项目资料走常规检索。明确查阅项目资料且命中溶氧专题条件时，使用结构化检索结果。初始化会拒绝已有目标目录。现有日常库采用专题资料前，先核对已有条目和定制内容，再单独安排迁移。
+在项目根目录可显式选择 `legacy-plus-curated-oxygen`，将原有 31 条背景资料和 12 条带出处的溶氧专题一并初始化到新目录。普通项目资料走常规检索。明确查阅项目资料且命中溶氧专题条件时，使用结构化检索结果。此初始化只适用于新目录。
 
 ```powershell
 $fisheryRagReview = Join-Path (Get-Location).Path 'outputs/rag-combined-review'
@@ -245,7 +277,7 @@ R06 正确引用论文 `2.11 mg/L → 8.9%/日`。把本次历史回执的结束
 
 修正先用五轮基线的相同 SQLite 证据按回执时刻只读重放，五轮均与预期一致。两批使用相同题、模型、模型参数、公共提示词、工具说明和专题版本。修正版从问句提取论文测点供专题检索，并用两项回执组装正文。各轮重新生成合成监测，因此窗口时间略有不同。修正后保存的五份正文均与只读重放结果一致。两批各 15 次模型请求和 10 次工具执行，Qwen 用量合计输入 98,335、输出 4,001 Token，按项目静态单价估算 0.0894707 元，QQ 请求为 0。修正版报告为 `outputs/agent-research/experiment-20261123T162056Z-46e9e0ffa78e/result.json`。
 
-程序答复已接入 Web 普通、Web 流式和 QQ 共用运行时，在已装入结构化专题资料的实例生效。既有日常数据库采用专题资料前，仍按本页的实例与迁移说明处理。QQ 代码指纹已刷新，升级后按现有流程核对和保存 QQ 设置。[QQ 代码指纹与恢复启动](QQ_BOT.md#代码指纹与恢复启动)
+程序答复已接入 Web 普通、Web 流式和 QQ 共用运行时，在已装入结构化专题资料的实例生效。本机当前实例后来完成了专题补录，见本页「当前知识库已补齐溶氧专题」。QQ 代码指纹已刷新，升级后按现有流程核对和保存 QQ 设置。[QQ 代码指纹与恢复启动](QQ_BOT.md#代码指纹与恢复启动)
 
 152 项 Python 和 5 项前端离线回归通过。覆盖精确对比、历史时长或指标不匹配、普通混合问法、流式预览、QQ 授权与启动预检，以及旧版打包范围。
 

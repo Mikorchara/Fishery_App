@@ -163,7 +163,7 @@ class WaterScoreTests(unittest.TestCase):
         self.assertIn('observed_at 是观测时间，勿以 last_reported_at 或 evaluated_at 代替。', water_guidance)
         self.assertIn('首句直接说明本轮能否评分。有评分时使用 score 与 grade_label 原值。', score_guidance)
         self.assertIn('\n若被问加权分与总分为什么不同且确有封顶', score_guidance)
-        self.assertIn('回答依据时将 source_kind、device_id 与 water_quality.observed_at 放在同一句', score_guidance)
+        self.assertIn('正文只在用户明确询问时间时引用 water_quality.observed_at', score_guidance)
         water_system = f'{base}\n\nTool result guidance ({WATER}):\n{water_guidance}'
         score_system = f'{water_system}\n\nTool result guidance ({SCORE}):\n{score_guidance}'
         self.assertEqual(initial['messages'][0], {'role': 'system', 'content': base})

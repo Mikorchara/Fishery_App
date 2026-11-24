@@ -28,7 +28,7 @@ class ManagementExecutionTests(unittest.TestCase):
             self.assertTrue(release.runtime.release_id.startswith('management-'))
             self.assertEqual(release.runtime.status,'local_experimental')
             self.assertIsNone(release.runtime.qualification_id);self.assertIsNone(release.runtime.validated_at)
-            self.assertEqual(scope['prompt_id'],'ASSISTANT_BOUNDED_MULTI_ROUND@1')
+            self.assertEqual(scope['prompt_id'],'ASSISTANT_BOUNDED_MULTI_ROUND@2')
             self.assertEqual(scope['thinking'],'off');self.assertEqual(scope['response_mode'],'normal')
             self.assertEqual(scope['tools'],['get_current_water_quality','search_fishery_knowledge'])
 

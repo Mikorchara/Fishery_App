@@ -23,14 +23,14 @@
       },
       "thinking": "off",
       "response_mode": "normal",
-      "prompt_id": "ASSISTANT_V2@1",
-      "prompt_sha256": "4452b6353dd3a20d34e0c2d741601ebdcfb155427e49245dcf48ac64ed8b60e8",
+      "prompt_id": "ASSISTANT_V2@2",
+      "prompt_sha256": "9f517846cf912c9ae7a8cb4f0a900957569735e238f47175404a56cdb6d979d8",
       "history_projection": "UNTRUSTED_TRANSCRIPT_V1",
       "history_version": "1",
       "tools": [
         "get_water_quality_history"
       ],
-      "tool_definitions_sha256": "e8ccddb9fb9ac861058c7f55985cadfd2d6ee00596346482a6129fa6662b7e5b"
+      "tool_definitions_sha256": "217cdeacf708ffe39f8c0488fca777012a40a43579d8d332f59ae16555430982"
     },
     "transport": "NORMAL",
     "history_framing_sha256": "4f81ca3cb5d86125435bb263fbd182b97ed4f7307855ba48687532281964259b",

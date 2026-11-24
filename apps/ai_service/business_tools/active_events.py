@@ -18,25 +18,29 @@ MAX_ACTIVE_EVENT_CYCLES = 512  # Two repository snapshots of at most 256 records
 MAX_ACTIVE_EVENT_RESULT_BYTES = 8192
 ACTIVE_EVENTS_DEFINITION = ModelToolDefinition(
     ACTIVE_EVENTS,
-    '用户问当前有哪些事件、异常或告警，且未限定为水质时，优先用本工具。'
-    '只问当前水质读数或水质告警时，用已授权的 get_current_water_quality。'
-    '返回已绑定来源的活动事件、待核实与待复核记录，以及各通道的观测范围和限制。'
-    '板端外观、行为和报告中断仅在相应设备报告已获授权时纳入。设备由服务端固定，参数必须为 {}。',
+    '问当前事件、异常或告警，且未限定为水质时，优先用本工具。只问当前水质读数或告警时用获准的当前水质工具。'
+    '只读返回活动风险、待核实与待复核事件、观测范围及证据。板端报告仅在获授权时纳入。参数传 {}。',
     {'type': 'object', 'properties': {}, 'additionalProperties': False},
 )
 RESULT_INSTRUCTION = (
-    "先答用户问的事件或证据。只把 ACTIVE 计为活动风险，INDETERMINATE 写作待核实，NEEDS_REVIEW 写作行为待复核。"
-    "空结果先读 observation_scope。有 ASSESSED 通道时，结论句用「本次在〔有效观测的实际来源和通道〕范围内未查到匹配事件」。"
-    "结论句必须含该范围，只写一次。NO_DATA 或没有 ASSESSED 通道的空结果，说明缺少足够的有效观测，暂时无法核实。"
+    "首句直接回答所问。只问证据时给该证据及其来源。问当前事件时先写活动风险，再写待核实与待复核。"
+    "只有 ACTIVE 算活动风险。有一项时首句写具体名称，有多项时报数量再列全名称。"
+    "INDETERMINATE 是当前状态待核实，NEEDS_REVIEW 是行为模型信号待复核。只有这两类时先写实际信号和状态，每项名称只写一次。\n"
+    "空结果先读 observation_scope。有 ASSESSED 时，写「本次在〔有效观测的实际来源和通道〕范围内未查到匹配事件」。"
+    "结论句带上该范围，只写一次。NO_DATA 或没有 ASSESSED 的空结果，说明缺少足够的有效观测，暂时无法核实。"
     "PARTIAL 表示覆盖不完整，MISSING 表示缺测，STALE 表示过期，UNUSABLE 表示无法用于当前判断。逐项保留会影响结论的限制。"
+    "没有 ASSESSED 通道的来源只报告观测限制和明确返回的留存证据。即使其他来源有活动风险，也不要补写该来源「没有异常」或「未查到事件」。"
     "REPORT_ONLY 表示板端较新报告可查，外观与行为的完整观测范围仍未知。"
     "simulator 的 visual 是模拟视觉，只有 device_report 才是板端报告。只陈述本轮列出的来源。"
     "通道无匹配、缺测或过期，不能推断其他通道正常、风险消退或鱼群健康。"
+    "问旧异常是否恢复而相关观测缺失或过期时，先说无法核实恢复，再说明所问来源的观测限制。\n"
     "同时问当前读数等其他事实时，继续获取获准且必要的来源，分别回答；历史只用于理解所指内容。"
-    "用中文说明来源和设备。事件工具的时刻已是北京时间（UTC+08:00），直接引用年月日与钟点，勿再换算。"
-    "同一时间只写一次。last_observed_at 是事件观测时间，evaluated_at 是查询评估时间。"
+    "分开注明模拟设备与设备报告，逐字引用相关来源的 device_id。"
+    "事件查询时间和观测时间已是北京时间（UTC+08:00），直接引用年月日与钟点。"
+    "分别标明各时间的含义。occurred_at 是本事件首次记录时间，last_observed_at 是最近观测，evaluated_at 是查询评估时间。"
     "用户未问内部字段时，省略字段名、状态码和规则码。"
-    "行为 result_timestamp 是结果版本时间，abnormal_video_count 是被模型标为异常的视频数；结果未提供行为上报时间。"
+    "行为 result_timestamp 是结果版本时间，按实际偏移标时区；abnormal_video_count 是被模型标为异常的视频数。"
+    "所问时间缺失时说明未提供，行为结果未包含行为上报时间。"
     "报告中断只表示报告未更新，设备连接情况需另有证据。外观和行为信号用于人工核查，不能确诊疾病。结果截断时交代未展开条数。"
     "查询只读。确认、删除、结束事件和操作设备需另行处理。"
 )
@@ -57,6 +61,10 @@ _APPEARANCE_LABELS = {
 }
 _STATE_COUNTS = {'ACTIVE': 'active_count', 'NEEDS_REVIEW': 'review_count', 'INDETERMINATE': 'uncertain_count'}
 _STATE_PRIORITY = {'ACTIVE': 2, 'NEEDS_REVIEW': 1, 'INDETERMINATE': 0}
+_EVENT_STATE_LABELS = {'ACTIVE': '活动', 'INDETERMINATE': '待核实', 'NEEDS_REVIEW': '待复核'}
+_SCOPE_LIMITS = {'MISSING': '缺少观测', 'STALE': '观测已过期', 'UNUSABLE': '观测不可用于当前判断',
+                 'PARTIAL': '观测覆盖不全', 'REPORT_ONLY': '有较新的报告，完整观测范围仍未知'}
+_BOARD_UNVERIFIABLE_STATES = frozenset(('MISSING', 'STALE', 'UNUSABLE'))
 _SEVERITIES = ('unknown', 'info', 'warning', 'critical')
 _FRESHNESS = ('unknown', 'stale', 'fresh')
 _BEIJING = timezone(timedelta(hours=8))
@@ -184,6 +192,40 @@ def render_empty_event_scope(payload):
     else:
         verdict = '本次缺少足够的有效观测，暂时无法核实当前事件。'
     return '\n\n'.join((verdict, *limits))
+
+
+def render_positive_event_scope(payload, *, explain_board_limit=False):
+    """Render findings and observation limits from a validated positive event receipt."""
+    lines = []
+    for source in payload['sources']:
+        board = source['source_kind'] == 'device_report'
+        device_id = source['device_id']
+        label = f"{'设备报告' if board else '模拟设备'} {device_id}"
+        items = [f"{item['title']}（{_EVENT_STATE_LABELS[item['state']]}）"
+                 for item in payload['items'] if item['device_id'] == device_id]
+        if items:
+            lines.append(f'在{label}的记录中查到{"、".join(items)}。')
+        for scope in payload['observation_scope']:
+            state = scope['state']
+            if scope['device_id'] == device_id and state in _SCOPE_LIMITS:
+                channel = '视觉' if scope['channel'] == 'visual' else '水质'
+                limit = _SCOPE_LIMITS[state]
+                if explain_board_limit and board and state in _BOARD_UNVERIFIABLE_STATES:
+                    limit += '，暂时无法核实外观和行为异常'
+                lines.append(f'{label}的{channel}{limit}。')
+    if payload['omitted_count']:
+        lines.append(f"另有 {payload['omitted_count']} 条匹配事件未展开。")
+    return '\n'.join(lines)
+
+
+def render_positive_event_scope_if_board_limited(payload):
+    """Protect the board coverage boundary when other findings can be reported."""
+    if payload['status'] == 'OK' and any(
+        row['source_kind'] == 'device_report' and row['state'] in _BOARD_UNVERIFIABLE_STATES
+        for row in payload['observation_scope']
+    ):
+        return render_positive_event_scope(payload, explain_board_limit=True)
+    return None
 
 
 def _title(source, channel, code):

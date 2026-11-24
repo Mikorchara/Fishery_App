@@ -2,7 +2,7 @@
 
 import re
 
-from ..business_tools.active_events import ACTIVE_EVENTS, render_empty_event_scope
+from ..business_tools.active_events import ACTIVE_EVENTS, render_empty_event_scope, render_positive_event_scope
 from ..business_tools.water_quality_history import WATER_QUALITY_HISTORY
 from .event_notice import requires_active_events
 from .history_summary import HistorySummary, render_history_summary
@@ -18,9 +18,6 @@ _HISTORY = re.compile(
 )
 _HISTORY_FOLLOWUP = re.compile(rf'(?:历史部分)?(?:请)?(?:给出|说明)(?:(?:时段|时间范围)和)?{_MEAN}')
 _SEPARATOR = re.compile(r'[,，。！!？?；;]')
-_EVENT_STATES = {'ACTIVE': '活动', 'INDETERMINATE': '待核实', 'NEEDS_REVIEW': '待复核'}
-_SCOPE_LIMITS = {'MISSING': '缺少观测', 'STALE': '观测已过期', 'UNUSABLE': '观测不可用于当前判断',
-    'PARTIAL': '观测覆盖不全', 'REPORT_ONLY': '有较新的报告，完整观测范围仍未知'}
 
 
 def event_history_query(question):
@@ -61,25 +58,6 @@ def event_history_instruction(summary):
             '各报告本轮范围和证据。历史工具未返回可靠窗口总体均值时，说明缺项，勿用代表窗口或首末值估算。')
 
 
-def _positive_events(payload):
-    lines = []
-    for source in payload['sources']:
-        board = source['source_kind'] == 'device_report'
-        device_id = source['device_id']
-        label = f"{'设备报告' if board else '模拟设备'} {device_id}"
-        items = [f"{item['title']}（{_EVENT_STATES[item['state']]}）"
-                 for item in payload['items'] if item['device_id'] == device_id]
-        if items:
-            lines.append(f'在{label}的记录中查到{"、".join(items)}。')
-        for scope in payload['observation_scope']:
-            if scope['device_id'] == device_id and scope['state'] in _SCOPE_LIMITS:
-                channel = '视觉' if scope['channel'] == 'visual' else '水质'
-                lines.append(f"{label}的{channel}{_SCOPE_LIMITS[scope['state']]}。")
-    if payload['omitted_count']:
-        lines.append(f"另有 {payload['omitted_count']} 条匹配事件未展开。")
-    return '\n'.join(lines)
-
-
 def render_event_history(summary, execution, ledger):
     """Return a combined answer only with both matching, executed Tool receipts."""
     event = next((entry for entry in ledger.entries if entry.receipt.active_events_query_completed), None)
@@ -93,5 +71,5 @@ def render_event_history(summary, execution, ledger):
     history_reply = render_history_summary(summary, execution, history)
     if history_reply is None:
         return None
-    event_reply = render_empty_event_scope(events) or _positive_events(events)
+    event_reply = render_empty_event_scope(events) or render_positive_event_scope(events)
     return f'{event_reply}\n\n本轮历史查询未提供可靠窗口总体均值。\n{history_reply}'

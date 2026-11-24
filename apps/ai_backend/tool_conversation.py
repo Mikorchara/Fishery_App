@@ -265,11 +265,12 @@ class ToolCallingService:
     def run_request(self, request: ModelRequest, runtime: RuntimeSnapshot, *,
                     request_id: str | None = None, trace_id: str | None = None,
                     final_response_instruction: str | None = None,
+                    final_after_tool: str | None = None,
                     on_progress: Callable[[str], None] | None = None,
                     on_steps: Callable[[tuple], None] | None = None) -> ToolConversationResult:
         if not isinstance(request, ModelRequest) or not isinstance(runtime, RuntimeSnapshot):
             raise TypeError("new Backend request and runtime required")
-        options = dict(request_id=request_id, trace_id=trace_id,
+        options = dict(request_id=request_id, trace_id=trace_id, final_after_tool=final_after_tool,
             final_response_instruction=final_response_instruction, on_progress=on_progress, on_steps=on_steps)
         if self.model_transport == ToolModelTransport.STREAMING:
             with turn_deadline_scope(runtime.total_timeout_s):
@@ -278,7 +279,7 @@ class ToolCallingService:
 
     def _run_request(self, request: ModelRequest, runtime: RuntimeSnapshot, *,
                      request_id=None, trace_id=None, final_response_instruction=None,
-                     on_progress=None, on_steps=None) -> ToolConversationResult:
+                     final_after_tool=None, on_progress=None, on_steps=None) -> ToolConversationResult:
         """Shared bounded execution; caller owns context, Registry owns definitions."""
         started_at, start_tick = self.clock(), time.monotonic()
         handle = current_handle()
@@ -428,11 +429,12 @@ class ToolCallingService:
                 check_cancelled()
                 if tool_result.status == ToolStatus.ERROR:
                     raise GatewayError(tool_result.error_code.value)
-                final_only = (tool_attempts >= budget.max_tool_calls
+                name = tool_result.tool_name
+                final_only = (name == final_after_tool
+                              or tool_attempts >= budget.max_tool_calls
                               or tool_attempts >= budget.max_tool_rounds
                               or index + 2 >= budget.max_model_requests)
                 messages = request.messages
-                name = tool_result.tool_name
                 instruction = self.registry.lookup(name).result_instruction
                 if instruction and name not in result_instructions:
                     result_instructions[name] = instruction

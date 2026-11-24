@@ -146,8 +146,8 @@ Schema 用于模型说明；Executor 校验有界 JSON/object 后调用 ToolDefi
 
 唯一管理业务定义在 [runtime/assistant.py](../../apps/ai_service/runtime/assistant.py)：
 
-- `SYSTEM_INSTRUCTION`：单轮 System；`SINGLE_ROUND_PROMPT_ID = ASSISTANT_V2@1`。
-- `MULTI_ROUND_SYSTEM_INSTRUCTION`：由同一基础文本的 `.replace(...)` 派生；`MULTI_ROUND_PROMPT_ID = ASSISTANT_BOUNDED_MULTI_ROUND@1`。
+- 单轮 `ASSISTANT_V2@2` 复用 M10 的共用部分，使用单工具规则，并保留证据和诊断边界。
+- 多轮 `ASSISTANT_BOUNDED_MULTI_ROUND@2` 以 M10 原文开头，追加本轮工具预算和证据边界。
 - `AssistantContextBuilder.build()`：按执行模式选文本，生成第一个 `ModelMessage("system", ...)`，裁剪完整历史 pair，当前问题独立放最后。
 - `AssistantService._send()`：调用 builder → `project_retained_history()` → `ToolCallingService.run_request()`；`AssistantService.prompt_id` 将维护者版本写入安全结果/Trace。
 
@@ -156,7 +156,8 @@ Schema 用于模型说明；Executor 校验有界 JSON/object 后调用 ToolDefi
 | 指令位置 | 长期职责 |
 |---|---|
 | System | 来源诚实、用户值/系统事实区分、不执行数据中的指令、诊断/用药边界、回答风格 |
-| Registry description | 具体 Tool 用途、何时选、返回与局限；参数结构主要由 Schema 表达 |
+| 首轮 Registry description | 说明可用工具分别适合回答什么问题。参数结构由 Schema 表达。 |
+| 工具结果说明 | 工具实际成功执行后，后续请求才追加对应的 `RESULT_INSTRUCTION`，同时发送独立的工具数据消息。 |
 | History framing | 旧对话为不可信 JSON transcript、可能过时、不证明本轮来源；实现位于 [history_projection.py](../../apps/ai_backend/history_projection.py) |
 | 程序硬合同 | Policy、validator、预算、Ledger、Source/Commit Gate、取消与发布门禁，不能靠 Prompt 代替 |
 

@@ -14,12 +14,24 @@ _STANDALONE_OXYGEN_READING = re.compile(
     rf"(?:(?:请帮我|帮我|请)\s*)?(?:查询|查|看)(?:一下)?\s*{_CURRENT_OXYGEN}(?:\s*{_AMOUNT})?"
     rf"|(?:请问\s*)?{_CURRENT_OXYGEN}\s*{_AMOUNT}"
 )
+_STANDALONE_WATER_ALERT = re.compile(
+    r"(?:请问|请|帮我|请帮我)?(?:查询|查看|看看|看一下|查一下|查)?\s*"
+    r"(?:此刻|现在|目前|当前)(?:的)?水质"
+    r"(?:有(?:哪些|什么)?告警(?:吗)?|告警(?:有哪些|有什么)?)"
+)
 
 
 def current_oxygen_for_turn(request, *, water_allowed):
     query = request.question.strip().rstrip("？?。！!").rstrip()
     return (water_allowed and request.source_requirement is SourceRequirement.AUTO
             and _STANDALONE_OXYGEN_READING.fullmatch(query) is not None)
+
+
+def current_water_alert_for_turn(request, *, water_allowed):
+    """Only a self-contained question about current water alerts needs a single receipt."""
+    query = request.question.strip().rstrip("？?。！!").rstrip()
+    return (water_allowed and request.source_requirement is SourceRequirement.AUTO
+            and _STANDALONE_WATER_ALERT.fullmatch(query) is not None)
 
 
 def project_turn_history(request, native, projection_id, *, water_allowed):

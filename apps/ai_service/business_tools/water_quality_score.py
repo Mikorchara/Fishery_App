@@ -17,10 +17,8 @@ POINTS = {'clear':100,'warning':60,'critical':20,'extreme':0}
 CAPS = {'clear':100,'warning':79,'critical':39,'extreme':19}
 LIMITATION = 'EXPERIMENTAL / NOT PROFESSIONAL STANDARD：仅汇总本窗口已评估水质规则；不是鱼群健康、疾病、长期趋势或养殖适宜性保证。'
 SCORE_DEFINITION = ModelToolDefinition(name=WATER_QUALITY_SCORE,
-    description=('只读计算当前绑定设备的实验水质评分、等级和分项依据；内部只读取一次当前水质，不必再调用当前水质查询。'
-        '溶解氧50%，水温25%，pH25%；复用Monitoring规则结果，严重异常限制总分。'
-        '必须完整、有效、新鲜且正常上报；缺测、无效、过期或离线返回NOT_SCORABLE，不补正常分、不用旧历史。'
-        'NO_DATA为没有观测。评分由程序计算，不允许模型自创分数或阈值；必须说明来源、时间和非专业标准。'),
+    description=('问当前实验水质总分、等级、分项或封顶依据时使用。本工具只读，直接使用绑定设备当前快照，'
+        '返回程序评分或不可评分原因。仅问评分时无需另查当前水质。参数传 {}。'),
     parameters={'type':'object','properties':{},'additionalProperties':False})
 RESULT_INSTRUCTION = (
     "首句直接说明本轮能否评分。有评分时使用 score 与 grade_label 原值。"
@@ -28,12 +26,12 @@ RESULT_INSTRUCTION = (
     "区分 weighted_score 加权分与 score 最终分，只引用程序已给出的分数、等级和上限。"
     "NOT_SCORABLE 时明确当前不可评分，依据 unscorable_reasons 解释原因，"
     "过期观测可与设备在线并存，不把旧观测当作当前依据，也不估算分数或等级。"
-    "NO_DATA 时说明本轮没有观测。存在观测时，根据实际字段交代来源、设备和观测时间，"
-    "说明评分仅是本窗口已评估水质规则的实验汇总，为非专业标准。\n"
+    "NO_DATA 时说明本轮没有观测。存在观测时，根据实际字段交代来源和设备。"
+    "说明评分仅是本窗口已评估水质规则的实验汇总，为非专业标准。等级不能用于判断现场鱼群是否健康或水质是否长期适宜。\n"
     "若被问加权分与总分为什么不同且确有封顶，按顺序说明加权分、触发封顶的最严重分项及其命中规则、"
     "程序上限与最终分。components 的最严重 level 决定上限；rule_codes 相应规则用于说明具体风险。"
-    "回答依据时将 source_kind、device_id 与 water_quality.observed_at 放在同一句，"
-    "观测时间不使用 evaluated_at；数据过期时仍用设备标识说明是哪次旧观测。"
+    "界面或消息的来源区会显示观测时间。正文只在用户明确询问时间时引用 water_quality.observed_at，"
+    "原样保留年月日、时间和偏移，不换算，不使用 evaluated_at 代替。过期时明确这是旧观测。"
 )
 
 

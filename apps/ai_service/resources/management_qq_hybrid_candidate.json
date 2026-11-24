@@ -34,7 +34,7 @@
       "tools": [
         "get_current_water_quality"
       ],
-      "tool_definitions_sha256": "d54f8935a103602673149f7e7078bfd197b4c282a734984254938424d3996e28"
+      "tool_definitions_sha256": "87ad69a0619fc9d009c8329ea2b54ade9d2d9d7780ec4d89945d582ddb385452"
     },
     "sdk": {
       "adapter": "apps.ai_backend.openai_compatible_adapter.OpenAICompatibleAdapter",
@@ -103,7 +103,7 @@
     "history": "qq-hybrid-history@1",
     "commit": "API_ACCEPTED_SAFE_TEXT_CAS@1",
     "implementation": {
-      "ai_service/business_tools/current_water_quality.py": "f1b31161109da344191b0eafd4b102680ef9cf9cbd7555a12370aa5ee7c588fa",
+      "ai_service/business_tools/current_water_quality.py": "41da1f63ea31c2d39cbef939160a7952cc21bf6d14e4dfcb7495b43583e7d808",
       "ai_service/business_tools/registry.py": "492976534bd72c7b073f6b3188fb68835ff547c123b8411144e09d3be85033ea",
       "ai_service/channel.py": "5105132b9dcfec2aa8e8a70ef66ffa0ebdb74e6a1c87506a70d86b9f3bccd716",
       "ai_service/channel_chat_presentation.py": "98d5581cf8211fd011cd95ee37ceed4797a439100aa1f0196e4d12a4ccb41fd3",
@@ -119,7 +119,7 @@
       "ai_service/hybrid_presentation.py": "02bc2768e456ac2aa69537140eb07803e47ff436f9b582785e61bddc33a04034",
       "ai_service/hybrid_trial_presentation.py": "9a2338b359be43d356f6e7dece1f8e2cb9a06a73b9089d6a2762bc3b57177f76",
       "ai_service/management_policy.py": "d2cc3c81e48a752690b43c56e09158850c0bdb7395ab6ff93f2b5877835e5b51",
-      "ai_service/runtime/assistant.py": "59b3ba79ab008712417509559404c7de010f6fa9d15e5868d04a6ee6f5c60263",
+      "ai_service/runtime/assistant.py": "e8f7218125ba17c3c229d378f409e9009d656e6c1d61203291be2dce88635be5",
       "ai_service/runtime/resources/presets.json": "30aa3ce86c42ffaf6e50adee6fbe3e3ab44cc5dccd2adfef7dd4d4d4207fce19",
       "ai_service/runtime/sources.py": "3e8cfbd0526c044c4c76de187ac49cee82b0b3d89ec4e3ceacfb532910052f9a",
       "ai_service/service.py": "439ad1f0900a07a6a69b91b370dce2af266ff8eb2f7b95f45719c208cf34a6fb",
@@ -169,7 +169,7 @@
     "deployment": "fishery-management",
     "publication": "FAKE_GATEWAY_ONLY_NO_REAL_GENERAL_APPROVAL"
   },
-  "scope_sha256": "1bda8a334aad1a7401c8ee10a15c7acaaee4b86bd9e5b4aef7c817c6fccb85b8",
+  "scope_sha256": "e8f467caddb34deba8b496956caa638e633ac200a32d5a7dcae7cc93bb07d250",
   "qualification_id": null,
   "can_execute_real": false,
   "can_deliver_real": false

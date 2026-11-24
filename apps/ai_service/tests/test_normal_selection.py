@@ -116,7 +116,7 @@ class NormalSelectionTests(unittest.TestCase):
         scope = normal_selection_scope(p, registry, self.backend.knowledge)
         self.assertEqual(_json(scope), load_normal_selection_candidate())
         self.assertEqual(scope['runtime']['tools'], list(HISTORY_CANDIDATE_TOOL_NAMES))
-        self.assertEqual(scope['runtime']['prompt_id'], 'ASSISTANT_BOUNDED_MULTI_ROUND@1')
+        self.assertEqual(scope['runtime']['prompt_id'], 'ASSISTANT_BOUNDED_MULTI_ROUND@2')
         self.assertEqual(scope['budget'], dict(calls=2, rounds=2, requests=3, retry=0,
                                             deadline_s=120, max_output_tokens=1024))
         self.assertEqual(decision.profile.release_status, 'candidate')

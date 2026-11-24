@@ -18,8 +18,8 @@ from .runtime.assistant import SYSTEM_INSTRUCTION
 from .runtime.release_contracts import _hash
 
 CONTRACT = 'management-qq-continuous-run@1'
-PROMPT_ID = 'QQ_MANAGEMENT_NATURAL_DIALOGUE@1'
-INSTRUCTION = SYSTEM_INSTRUCTION + INTRODUCTION + (
+PROMPT_ID = 'QQ_MANAGEMENT_NATURAL_DIALOGUE@2'
+INSTRUCTION = SYSTEM_INSTRUCTION + '\n\n' + INTRODUCTION + (
     '当前渠道是QQ群聊天，请直接回答用户真正问的问题，使用自然简洁的中文，通常不超过600字。'
     '不要求JSON，不输出General/Water标签、解释计划、合同或Receipt。'
     '一般概念和季节性养殖知识可以直接解释，缺少地区、时间或对象信息时简短澄清。'

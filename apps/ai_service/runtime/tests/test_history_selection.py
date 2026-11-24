@@ -16,7 +16,7 @@ from apps.ai_service.runtime.assistant import (
     AssistantHistoryTurn,
     AssistantRequest,
 )
-from apps.ai_service.runtime.history_selection import project_turn_history
+from apps.ai_service.runtime.history_selection import current_water_alert_for_turn, project_turn_history
 from apps.ai_service.runtime.sources import SourceRequirement
 from apps.management_web.tests import test_active_event_assistant as web_fixtures
 
@@ -78,11 +78,37 @@ class TurnHistorySelectionTests(unittest.TestCase):
                 _, baseline, candidate = self.project("当前溶解氧是多少？", **option)
                 self.assertEqual(baseline, candidate)
 
+    def test_current_water_alert_does_not_match_mixed_or_unauthorized_requests(self):
+        question = "帮我看看目前的水质有哪些告警。"
+        request, *_ = self.project(question)
+        self.assertTrue(current_water_alert_for_turn(request, water_allowed=True))
+        self.assertFalse(current_water_alert_for_turn(request, water_allowed=False))
+        mixed, *_ = self.project("帮我看看目前的水质有哪些告警，再查项目资料。")
+        self.assertFalse(current_water_alert_for_turn(mixed, water_allowed=True))
+
 
 class TurnHistorySelectionWebTests(unittest.TestCase):
     setUp = web_fixtures.ActiveEventAssistantTests.setUp
     configure = web_fixtures.ActiveEventAssistantTests.configure
     body = web_fixtures.ActiveEventAssistantTests.body
+    send_case = web_fixtures.ActiveEventAssistantTests.send_case
+
+    def test_current_water_alert_finishes_after_attested_current_lookup(self):
+        question = "帮我看看目前的水质有哪些告警。"
+        answer = "本轮模拟水质观测有溶氧偏低风险。"
+        for streaming in (False, True):
+            with self.subTest(streaming=streaming):
+                plans = ([tool_chunks(CURRENT_WATER_QUALITY), final_chunks(answer)] if streaming else
+                    [sdk_tool(CURRENT_WATER_QUALITY, model=self.profile.model), sdk_final(answer, model=self.profile.model)])
+                self.configure(plans)
+                result, rows = self.send_case(question, streaming=streaming)
+                before, after = self.sdk.bodies
+                self.assertEqual(before["tool_choice"], "auto")
+                self.assertEqual(after["tool_choice"], "none")
+                self.assertEqual(before["tools"], after["tools"])
+                self.assertIn("Tool result guidance (get_current_water_quality)", after["messages"][0]["content"])
+                self.assertEqual(result["final_text"], answer)
+                self.assertFalse(any(row["kind"] == "preview" for row in rows))
 
     def test_normal_and_sse_keep_prior_value_only_for_the_followup(self):
         history = [{"user": "我记得上次的溶解氧是 5.9 mg/L。", "assistant": "记下了你当时的读数。",

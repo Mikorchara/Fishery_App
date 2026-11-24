@@ -11,24 +11,23 @@ from apps.monitoring.history import (HISTORY_VERSION, LOOKBACK_MINUTES, MAX_HIST
 WATER_QUALITY_HISTORY = "get_water_quality_history"
 HISTORY_DEFINITION = ModelToolDefinition(
     WATER_QUALITY_HISTORY,
-    "只读查询本轮绑定设备最近10、30或60分钟已留存的历史水质窗口，可选择温度、pH、溶解氧。"
-    "用于回顾历史变化、窗口均值极值、数据质量及覆盖缺口；返回全部合格记录的基础统计和有限代表明细。"
-    "数值是历史窗口有效样本均值，不是瞬时采样或当前观测。NO_DATA表示查询完成但无完整匹配窗口；"
-    "PARTIAL表示覆盖、质量、Session或重叠歧义存在限制，不代表正常。"
-    "不判断持续低氧、恢复、设备离线原因，不负责评分或知识检索。"
-    "历史末值不能证明当前状态；需要当前事实时使用当前水质查询工具。",
+    "只读回顾绑定设备最近 10、30 或 60 分钟已留存的水温、pH、溶解氧窗口。"
+    "用于历史变化、窗口均值极值、覆盖与缺口，返回可靠窗口统计及代表明细。"
+    "按所问范围填写 lookback_minutes，可用 metrics 限定指标。需要当前读数时另查当前水质。",
     {"type": "object", "properties": {
         "lookback_minutes": {"type": "integer", "enum": list(LOOKBACK_MINUTES)},
         "metrics": {"type": "array", "items": {"type": "string", "enum": list(METRICS)},
                     "minItems": 1, "maxItems": 3, "uniqueItems": True}},
      "required": ["lookback_minutes"], "additionalProperties": False})
 RESULT_INSTRUCTION = (
-    "注明绑定设备、requested_range 和来源。用 metrics 中实际返回的可靠窗口统计说明变化和单位。"
-    "首末值与极值均为历史观测窗口的均值。details 仅是代表窗口，不能按它重新计算全范围统计。"
-    "PARTIAL 时说明相关的覆盖缺口、数据质量或 Session 限制。NO_DATA 表示没有完整匹配的历史窗口。"
-    "历史末值无法证明当前状态，也无法直接判断持续低氧或恢复。"
-    "若用户问整个查询范围的总体均值，且工具结果没有提供该统计量，应明确说明未取得总体均值。"
-    "可报告首末窗口均值和极值，但不要用代表窗口、首末值或极值代替总体均值。"
+    "先答所问指标，用 metrics 中实际返回的可靠窗口统计和单位，注明设备、来源和 requested_range。"
+    "首末、极值都是历史窗口均值，首末差值用 last_minus_first。区分查询范围和实际可靠覆盖。"
+    "details 只列代表窗口。所问总体均值缺失时明确说明未取得，勿从代表窗口、首末值或极值估算总体均值或推断全程。\n"
+    "PARTIAL 时说明相关覆盖缺口、数据质量或会话限制，再给可靠部分。NO_DATA 表示无完整匹配窗口。"
+    "问持续低氧或恢复时逐项引用 analysis，NOT_EVALUATED 表示未评估。除非结果给出原因，勿将覆盖缺口或阈值归为原因。"
+    "历史末值不能证明当前状态。\n"
+    "起止、缺口和窗口时刻使用同一时区并明确标注。保留原时间偏移，+00:00 直接标 UTC，"
+    "+08:00 直接标北京时间。只给回答需要的时刻和数值。"
 )
 
 
